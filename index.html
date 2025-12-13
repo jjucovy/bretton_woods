@@ -491,6 +491,224 @@
           );
         }
 
+        // Command Economy Policy Form (USSR, Communist China)
+        function CommandEconomyPolicyForm({ currentYear, playerId, socket, roomId, country }) {
+          const [fiveYearPlanTarget, setFiveYearPlanTarget] = useState(8); // % growth target
+          const [heavyIndustryAllocation, setHeavyIndustryAllocation] = useState(60); // % of resources
+          const [foreignTradeOrientation, setForeignTradeOrientation] = useState(50); // COMECON vs West trade
+          const [planFulfillmentPriority, setPlanFulfillmentPriority] = useState(70); // Credit allocation rigor
+          const [militarySpending, setMilitarySpending] = useState(15);
+          const [militarySize, setMilitarySize] = useState(3000000);
+
+          const handleSubmit = () => {
+            socket.emit('submitPolicy', {
+              roomId,
+              playerId,
+              policy: { 
+                fiveYearPlanTarget,
+                heavyIndustryAllocation,
+                foreignTradeOrientation,
+                planFulfillmentPriority,
+                militarySpending,
+                militarySize,
+                isCommandEconomy: true
+              }
+            });
+          };
+
+          return (
+            <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px', border: '3px solid #a855f7' }}>
+              <h2 style={{ marginTop: 0, marginBottom: '10px', color: '#7c3aed' }}>
+                🏭 Set Five-Year Plan Targets for {currentYear}
+              </h2>
+              <div style={{ padding: '12px', background: '#f3e8ff', borderRadius: '6px', marginBottom: '25px', borderLeft: '4px solid #a855f7' }}>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: '#6b21a8' }}>
+                  <strong>Command Economy:</strong> GOSPLAN determines production targets. Gosbank controls credit allocation. 
+                  Ministry of Foreign Trade manages all international transactions through state monopoly.
+                </p>
+              </div>
+
+              <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#6b21a8', borderBottom: '2px solid #a855f7', paddingBottom: '8px' }}>
+                📋 Central Planning (GOSPLAN)
+              </h3>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Five-Year Plan Growth Target</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#7c3aed' }}>{fiveYearPlanTarget}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="3"
+                  max="15"
+                  step="1"
+                  value={fiveYearPlanTarget}
+                  onChange={(e) => setFiveYearPlanTarget(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 <strong>GOSPLAN directive:</strong> Higher targets = rapid industrialization but risks bottlenecks. 
+                  Stalin's 5-Year Plans targeted 10-12% growth
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Heavy Industry Allocation</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#7c3aed' }}>{heavyIndustryAllocation}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="30"
+                  max="80"
+                  step="5"
+                  value={heavyIndustryAllocation}
+                  onChange={(e) => setHeavyIndustryAllocation(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 <strong>Resource allocation:</strong> Heavy industry (steel, machinery) vs consumer goods. 
+                  Stalin's "Socialism in One Country" prioritized 65-70% heavy industry
+                </p>
+              </div>
+
+              <h3 style={{ marginTop: '30px', marginBottom: '20px', color: '#0891b2', borderBottom: '2px solid #06b6d4', paddingBottom: '8px' }}>
+                🌍 Foreign Trade (Ministry of Foreign Trade)
+              </h3>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Foreign Trade Orientation</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0891b2' }}>
+                    {foreignTradeOrientation < 30 ? 'COMECON' : foreignTradeOrientation < 70 ? 'Balanced' : 'Western'}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="10"
+                  value={foreignTradeOrientation}
+                  onChange={(e) => setForeignTradeOrientation(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
+                  <span>Socialist Bloc</span>
+                  <span>Western Markets</span>
+                </div>
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 <strong>FTO (Foreign Trade Organizations) directive:</strong> Low = bilateral barter with COMECON (oil/machinery for goods). 
+                  High = trade oil/gas for Western hard currency and technology. Self-sufficiency vs selective engagement.
+                </p>
+              </div>
+
+              <h3 style={{ marginTop: '30px', marginBottom: '20px', color: '#059669', borderBottom: '2px solid #10b981', paddingBottom: '8px' }}>
+                🏦 Credit Allocation (GOSBANK)
+              </h3>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Plan Fulfillment Priority</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#059669' }}>
+                    {planFulfillmentPriority}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="40"
+                  max="100"
+                  step="5"
+                  value={planFulfillmentPriority}
+                  onChange={(e) => setPlanFulfillmentPriority(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 <strong>Gosbank credit policy:</strong> High = strict allocation to meet plan targets (fixed low rates for priority industries). 
+                  Low = more flexibility for enterprises. Credit channels funds to fulfill physical production targets, not market demand.
+                </p>
+              </div>
+
+              <h3 style={{ marginTop: '30px', marginBottom: '20px', color: '#7c2d12', borderBottom: '2px solid #dc2626', paddingBottom: '8px' }}>
+                ⚔️ Military-Industrial Complex
+              </h3>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Military Spending (% of GDP)</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#dc2626' }}>{militarySpending}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max="30"
+                  step="1"
+                  value={militarySpending}
+                  onChange={(e) => setMilitarySpending(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 Command economies can allocate resources to military-industrial complex directly. USSR Cold War: 15-20%
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Military Size (Active Personnel)</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#dc2626' }}>
+                    {(militarySize / 1000000).toFixed(1)}M
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1000000"
+                  max="6000000"
+                  step="500000"
+                  value={militarySize}
+                  onChange={(e) => setMilitarySize(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 Conscription + state labor allocation. USSR maintained 3-5M troops during Cold War
+                </p>
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                style={{
+                  width: '100%',
+                  padding: '18px',
+                  background: '#7c3aed',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = '#6d28d9'}
+                onMouseOut={(e) => e.currentTarget.style.background = '#7c3aed'}
+              >
+                📋 Submit Five-Year Plan to Politburo
+              </button>
+
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                background: '#fef3c7',
+                borderRadius: '6px',
+                fontSize: '0.85rem',
+                color: '#78350f',
+                borderLeft: '3px solid #f59e0b'
+              }}>
+                <strong>Note:</strong> Exchange rates (ruble non-convertible, set by Gosbank via artificial official rates + internal coefficients) 
+                and interest rates (fixed administrative rates by industry, not market-based) are automatically managed by the state. 
+                Foreign exchange strictly controlled via valuta rubles and FTOs.
+              </div>
+            </div>
+          );
+        }
+
         // Policy Submission Form Component for Phase 2
         function PolicySubmissionForm({ currentYear, playerId, socket, roomId }) {
           const [centralBankRate, setCentralBankRate] = useState(3.0);
@@ -1819,12 +2037,23 @@
                             </div>
                           ) : !hasSubmitted ? (
                             <>
-                              <PolicySubmissionForm 
-                                currentYear={currentYear}
-                                playerId={playerId}
-                                socket={socket}
-                                roomId={SINGLE_ROOM_ID}
-                              />
+                              {/* Show Command Economy form for USSR and Communist China */}
+                              {(playerCountry === 'USSR' || (playerCountry === 'China' && currentYear >= 1949)) ? (
+                                <CommandEconomyPolicyForm 
+                                  currentYear={currentYear}
+                                  playerId={playerId}
+                                  socket={socket}
+                                  roomId={SINGLE_ROOM_ID}
+                                  country={playerCountry}
+                                />
+                              ) : (
+                                <PolicySubmissionForm 
+                                  currentYear={currentYear}
+                                  playerId={playerId}
+                                  socket={socket}
+                                  roomId={SINGLE_ROOM_ID}
+                                />
+                              )}
                               <TroopDeploymentInterface 
                                 playerCountry={playerCountry}
                                 gameState={gameState}
@@ -2061,6 +2290,84 @@
                               ))}
                           </div>
                         </div>
+
+                        {/* Phase 2 Score Breakdown */}
+                        {gameState.phase2?.scoreBreakdowns && (
+                          <div className="card" style={{ marginTop: '20px' }}>
+                            <h2 style={{ marginTop: 0, marginBottom: '20px' }}>📊 Phase 2: Economic Performance Breakdown</h2>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                              {Object.entries(gameState.phase2.scoreBreakdowns).map(([country, breakdown]) => (
+                                <div key={country} style={{
+                                  padding: '20px',
+                                  background: country === playerCountry ? '#eff6ff' : '#f8fafc',
+                                  borderRadius: '8px',
+                                  border: '2px solid #e2e8f0'
+                                }}>
+                                  <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '1.1rem' }}>
+                                    {countries[country]?.name || country}
+                                    {country === playerCountry && <span style={{ color: '#3b82f6', fontSize: '0.9rem' }}> (You)</span>}
+                                  </h3>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+                                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #3b82f6' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>GDP Growth</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.gdp > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {breakdown.gdp > 0 ? '+' : ''}{breakdown.gdp} pts
+                                      </div>
+                                    </div>
+                                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #f59e0b' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Inflation Control</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.inflation > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {breakdown.inflation > 0 ? '+' : ''}{breakdown.inflation} pts
+                                      </div>
+                                    </div>
+                                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Employment</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.unemployment > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {breakdown.unemployment > 0 ? '+' : ''}{breakdown.unemployment} pts
+                                      </div>
+                                    </div>
+                                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #10b981' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Trade Balance</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.trade > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {breakdown.trade > 0 ? '+' : ''}{breakdown.trade} pts
+                                      </div>
+                                    </div>
+                                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #8b5cf6' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Stability</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.stability > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {breakdown.stability > 0 ? '+' : ''}{breakdown.stability} pts
+                                      </div>
+                                    </div>
+                                    <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '6px', borderLeft: '3px solid #f59e0b' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#78350f', marginBottom: '4px', fontWeight: 'bold' }}>Bretton Woods</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.brettonWoods > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {breakdown.brettonWoods > 0 ? '+' : ''}{breakdown.brettonWoods} pts
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{
+                              marginTop: '20px',
+                              padding: '16px',
+                              background: '#f8fafc',
+                              borderRadius: '8px',
+                              fontSize: '0.9rem',
+                              color: '#64748b'
+                            }}>
+                              <strong>Scoring Categories:</strong>
+                              <ul style={{ marginTop: '8px', marginBottom: 0, lineHeight: '1.6' }}>
+                                <li><strong>GDP Growth:</strong> 10 pts per % average growth (1947-1952)</li>
+                                <li><strong>Inflation Control:</strong> Up to 50 pts for low inflation (&lt;3%)</li>
+                                <li><strong>Employment:</strong> Up to 40 pts for low unemployment (&lt;2%)</li>
+                                <li><strong>Trade Balance:</strong> 8 pts per year with positive balance</li>
+                                <li><strong>Stability:</strong> Up to 30 pts for consistent growth (low variance)</li>
+                                <li><strong>Bretton Woods:</strong> Bonus for voting with majority on trade/loans/IMF issues</li>
+                              </ul>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Admin can reset */}
                         {userRole === 'superadmin' && (

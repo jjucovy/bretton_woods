@@ -255,19 +255,59 @@ function calculateAgreementBonus(roomId) {
   const bonus = {};
   const roundHistory = room.roundHistory || [];
   
-  // Countries that voted with winning options get bonuses
+  // Analyze each country's Bretton Woods positions
   Object.values(room.players).forEach(player => {
     const country = player.country;
-    let alignmentCount = 0;
+    let gdpBonus = 0;
+    let tradeBonus = 0;
+    let cooperationBonus = 0;
     
-    roundHistory.forEach(round => {
-      if (round.winningOption && room.votes[player.playerId] === round.winningOption) {
-        alignmentCount++;
+    roundHistory.forEach((round, idx) => {
+      const playerVote = room.votes[player.playerId];
+      const winningOption = round.winningOption;
+      
+      if (!playerVote || !winningOption) return;
+      
+      // Issue-specific bonuses based on historical outcomes
+      const issueTitle = round.issueTitle || '';
+      
+      // Voted with majority = cooperation benefit
+      if (playerVote === winningOption) {
+        cooperationBonus += 0.3; // GDP bonus for being part of consensus
+        
+        // Specific issue bonuses
+        if (issueTitle.includes('IMF') || issueTitle.includes('loans')) {
+          // Supporting IMF/loans = better access to capital
+          tradeBonus += 200; // Million USD trade balance improvement
+        }
+        
+        if (issueTitle.includes('tariff') || issueTitle.includes('trade')) {
+          // Supporting free trade = trade benefits
+          gdpBonus += 0.4;
+          tradeBonus += 300;
+        }
+        
+        if (issueTitle.includes('gold') || issueTitle.includes('currency')) {
+          // Supporting gold standard = monetary stability
+          gdpBonus += 0.2;
+        }
+        
+        if (issueTitle.includes('World Bank') || issueTitle.includes('development')) {
+          // Supporting development aid = reconstruction benefits
+          gdpBonus += 0.3;
+        }
+      } else {
+        // Voted against majority = isolation penalty
+        cooperationBonus -= 0.1;
       }
     });
     
-    // 0.5% GDP bonus per aligned vote
-    bonus[country] = alignmentCount * 0.5;
+    // Store detailed bonuses
+    bonus[country] = {
+      gdpBonus: gdpBonus + cooperationBonus,
+      tradeBonus: tradeBonus,
+      description: `Bretton Woods alignment: ${cooperationBonus > 0 ? 'cooperative' : 'isolated'}`
+    };
   });
   
   return bonus;
@@ -288,7 +328,7 @@ function calculateYearEconomics(roomId) {
   room.phase2.yearlyData[nextYear] = {};
   
   // Get Bretton Woods agreements impact
-  const agreementBonus = calculateAgreementBonus(roomId);
+  const agreementBonuses = calculateAgreementBonus(roomId);
   
   // STEP 1: Calculate average global economic conditions
   const allCountries = Object.values(room.players).map(p => p.country);
@@ -332,7 +372,23 @@ function calculateYearEconomics(roomId) {
     }
     
     // Economic calculation model with DYNAMIC CROSS-COUNTRY EFFECTS
-    const { centralBankRate, exchangeRate, tariffRate, militarySpending, militarySize } = policy;
+    const isCommandEconomy = policy.isCommandEconomy || false;
+    
+    // Extract policy variables based on economy type
+    let centralBankRate, exchangeRate, tariffRate;
+    if (isCommandEconomy) {
+      // Command economies don't use market mechanisms
+      centralBankRate = 0; // No independent central bank
+      exchangeRate = 1.0; // Fixed by state
+      tariffRate = 50; // High barriers, autarky
+    } else {
+      centralBankRate = policy.centralBankRate || 3.0;
+      exchangeRate = policy.exchangeRate || 1.0;
+      tariffRate = policy.tariffRate || 10;
+    }
+    
+    const militarySpending = policy.militarySpending || 5;
+    const militarySize = policy.militarySize || 500000;
     
     // Base growth rate (post-war boom)
     let gdpGrowth = 4.0;
@@ -461,21 +517,127 @@ function calculateYearEconomics(roomId) {
       tradeBalance -= 300; // Capital outflows
     }
     
-    // Bretton Woods agreement bonus
-    gdpGrowth += agreementBonus[country] || 0;
+    // Bretton Woods agreement bonuses
+    const bwBonus = agreementBonuses[country] || { gdpBonus: 0, tradeBonus: 0 };
+    gdpGrowth += bwBonus.gdpBonus;
+    tradeBalance += bwBonus.tradeBonus;
     
     // Country-specific modifiers
-    if (country === 'USSR' && currentYear >= 1948) {
-      gdpGrowth -= 1.0; // Isolation from Marshall Plan
-      tradeBalance -= 800; // Cut off from Western trade
+    if (country === 'USSR') {
+      // USSR command economy effects
+      if (policy.isCommandEconomy) {
+        // Five-Year Plan effects
+        const planTarget = policy.fiveYearPlanTarget || 8;
+        const heavyIndustry = policy.heavyIndustryAllocation || 60;
+        const foreignTrade = policy.foreignTradeOrientation || 50; // 0=COMECON, 100=West
+        const planPriority = policy.planFulfillmentPriority || 70;
+        
+        // Five-Year Plan ambitious targets
+        if (planTarget > 10) {
+          gdpGrowth += (planTarget - 10) * 0.3; // Rapid industrialization
+          inflation += (planTarget - 10) * 0.5; // But creates shortages/inflation
+        }
+        
+        // Heavy industry focus
+        if (heavyIndustry > 60) {
+          industrialOutput *= 1.01 + ((heavyIndustry - 60) / 100); // Strong industrial growth
+        }
+        
+        // Foreign Trade Orientation (replaces tariffs)
+        // Ministry of Foreign Trade controls via state monopoly
+        if (foreignTrade < 30) {
+          // COMECON-oriented (bilateral barter with socialist bloc)
+          tradeBalance -= 400; // Limited hard currency, barter inefficiency
+          gdpGrowth += 0.3; // But political solidarity benefits
+        } else if (foreignTrade > 70) {
+          // Western-oriented (oil/gas for hard currency + technology)
+          tradeBalance += 600; // Export energy for hard currency
+          gdpGrowth += 0.5; // Technology imports boost productivity
+          // But political vulnerability
+        } else {
+          // Balanced approach
+          tradeBalance += 100; // Modest hard currency earnings
+        }
+        
+        // Plan Fulfillment Priority (replaces interest rates)
+        // Gosbank credit allocation rigor
+        if (planPriority > 80) {
+          // Strict credit allocation to meet plan targets
+          gdpGrowth += 0.4; // Strong plan fulfillment
+          inflation += 1.0; // But bottlenecks create shortages
+        } else if (planPriority < 60) {
+          // More enterprise flexibility
+          gdpGrowth -= 0.3; // Weaker coordination
+          inflation -= 0.5; // But less pressure = fewer shortages
+        }
+      }
+      
+      // Marshall Plan isolation (from 1948)
+      if (currentYear >= 1948) {
+        gdpGrowth -= 1.0; // Isolation from Marshall Plan
+        tradeBalance -= 400; // Additional Western trade cutoff
+      }
     }
-    if (country === 'China' && currentYear >= 1949) {
-      gdpGrowth -= 3.0; // Civil war chaos
-      tradeBalance -= 500; // Trade disruption
+    
+    if (country === 'China') {
+      // Chinese Civil War (1946-1949) - intensifying effects
+      if (currentYear <= 1949) {
+        const warIntensity = {
+          1946: -1.0,  // War resumes after WWII
+          1947: -1.5,  // Escalation
+          1948: -2.5,  // Major battles
+          1949: -4.0   // Final decisive campaigns
+        };
+        
+        gdpGrowth += (warIntensity[currentYear] || -1.0); // Negative growth from civil war
+        tradeBalance -= (currentYear - 1945) * 200; // Worsening trade disruption
+        unemployment += (currentYear - 1945) * 0.5; // Rising unemployment
+        
+        // Agricultural disruption
+        if (currentYear >= 1948) {
+          inflation += 3.0; // Severe shortages
+        }
+      }
+      
+      // Communist China (post-1949) - command economy
+      if (currentYear >= 1949 && policy.isCommandEconomy) {
+        const planTarget = policy.fiveYearPlanTarget || 8;
+        const foreignTrade = policy.foreignTradeOrientation || 40; // More COMECON-oriented initially
+        const planPriority = policy.planFulfillmentPriority || 75;
+        
+        // Great Leap Forward preparation / early industrialization
+        if (planTarget > 12) {
+          gdpGrowth += (planTarget - 12) * 0.2; // Aggressive targets
+          inflation += (planTarget - 12) * 0.8; // But creates chaos
+        }
+        
+        // Foreign trade orientation
+        if (foreignTrade < 30) {
+          // Heavy COMECON reliance (Soviet aid)
+          tradeBalance -= 200; // Barter inefficiency
+          gdpGrowth += 0.2; // Soviet technical assistance
+        } else if (foreignTrade > 70) {
+          // Attempting Western trade (difficult post-1949)
+          tradeBalance += 200; // Some hard currency
+          // But Western embargo limits this
+        }
+        
+        // Strict plan fulfillment
+        if (planPriority > 80) {
+          gdpGrowth += 0.3; // Mobilization
+          inflation += 1.2; // Severe bottlenecks in recovering economy
+        }
+        
+        // Post-civil war recovery penalty
+        gdpGrowth -= 1.5; // Still recovering from devastation
+        tradeBalance -= 200; // Limited foreign trade capacity
+      }
     }
+    
     if (country === 'India' && currentYear >= 1947) {
       gdpGrowth += 1.0; // Independence boost
     }
+    
     if (country === 'USA') {
       // USA benefits from being reserve currency
       tradeBalance += 400; // Dollar demand
@@ -562,13 +724,23 @@ function calculatePhase2Scores(roomId) {
   if (!room) return;
   
   const phase2Scores = {};
+  const scoreBreakdowns = {};
   
   Object.values(room.players).forEach(player => {
     const country = player.country;
     let score = 0;
+    const breakdown = {
+      gdp: 0,
+      inflation: 0,
+      unemployment: 0,
+      trade: 0,
+      stability: 0,
+      brettonWoods: 0
+    };
     
     // Calculate average performance
     let totalGDP = 0, totalInflation = 0, totalUnemployment = 0, yearsCount = 0;
+    let positiveTradeYears = 0;
     
     for (let year = 1947; year <= 1952; year++) {
       const data = room.phase2.yearlyData[year]?.[country];
@@ -576,6 +748,7 @@ function calculatePhase2Scores(roomId) {
         totalGDP += data.gdpGrowth;
         totalInflation += data.inflation;
         totalUnemployment += data.unemployment;
+        if (data.tradeBalance > 0) positiveTradeYears++;
         yearsCount++;
       }
     }
@@ -585,30 +758,80 @@ function calculatePhase2Scores(roomId) {
       const avgInflation = totalInflation / yearsCount;
       const avgUnemployment = totalUnemployment / yearsCount;
       
-      // GDP Growth: 5 pts per %
-      score += avgGDP * 5;
+      // GDP Growth: 10 pts per % (increased importance)
+      breakdown.gdp = Math.round(avgGDP * 10);
+      score += breakdown.gdp;
       
-      // Low inflation bonus
-      if (avgInflation < 5) score += 30;
-      else if (avgInflation < 10) score += 20;
-      else if (avgInflation < 20) score += 10;
+      // Inflation control (inverse scoring)
+      if (avgInflation < 3) {
+        breakdown.inflation = 50; // Excellent price stability
+      } else if (avgInflation < 5) {
+        breakdown.inflation = 40;
+      } else if (avgInflation < 10) {
+        breakdown.inflation = 25;
+      } else if (avgInflation < 20) {
+        breakdown.inflation = 10;
+      } else {
+        breakdown.inflation = -10; // Hyperinflation penalty
+      }
+      score += breakdown.inflation;
       
-      // Low unemployment bonus
-      if (avgUnemployment < 3) score += 20;
-      else if (avgUnemployment < 5) score += 10;
+      // Unemployment (inverse scoring)
+      if (avgUnemployment < 2) {
+        breakdown.unemployment = 40; // Full employment
+      } else if (avgUnemployment < 4) {
+        breakdown.unemployment = 30;
+      } else if (avgUnemployment < 6) {
+        breakdown.unemployment = 15;
+      } else if (avgUnemployment < 10) {
+        breakdown.unemployment = 5;
+      } else {
+        breakdown.unemployment = -5; // High unemployment penalty
+      }
+      score += breakdown.unemployment;
       
-      // Final year trade balance bonus
-      const finalData = room.phase2.yearlyData[1952]?.[country];
-      if (finalData && finalData.tradeBalance > 0) {
-        score += 10;
+      // Trade balance consistency
+      breakdown.trade = positiveTradeYears * 8; // 8 pts per year with positive balance
+      score += breakdown.trade;
+      
+      // Economic stability bonus (low variance)
+      let gdpVariance = 0;
+      for (let year = 1947; year <= 1952; year++) {
+        const data = room.phase2.yearlyData[year]?.[country];
+        if (data) {
+          gdpVariance += Math.abs(data.gdpGrowth - avgGDP);
+        }
+      }
+      const avgVariance = gdpVariance / yearsCount;
+      if (avgVariance < 1.5) {
+        breakdown.stability = 30; // Very stable growth
+      } else if (avgVariance < 3) {
+        breakdown.stability = 15;
+      } else if (avgVariance < 5) {
+        breakdown.stability = 5;
+      }
+      score += breakdown.stability;
+      
+      // Bretton Woods cooperation bonus
+      const agreementBonuses = calculateAgreementBonus(roomId);
+      const bwBonus = agreementBonuses[country];
+      if (bwBonus) {
+        // Award points for being part of Bretton Woods system
+        breakdown.brettonWoods = Math.round((bwBonus.gdpBonus + bwBonus.tradeBonus / 100) * 5);
+        score += breakdown.brettonWoods;
       }
     }
     
     phase2Scores[country] = Math.round(score);
+    scoreBreakdowns[country] = breakdown;
     room.scores[country] = (room.scores[country] || 0) + phase2Scores[country];
   });
   
+  // Store breakdowns for display
+  room.phase2.scoreBreakdowns = scoreBreakdowns;
+  
   console.log(`Phase 2 final scores:`, phase2Scores);
+  console.log(`Score breakdowns:`, scoreBreakdowns);
   return phase2Scores;
 }
 
@@ -1118,12 +1341,24 @@ io.on('connection', (socket) => {
       room.phase2.policies[currentYear] = {};
     }
     
-    room.phase2.policies[currentYear][player.country] = {
-      centralBankRate: policy.centralBankRate,
-      exchangeRate: policy.exchangeRate,
-      tariffRate: policy.tariffRate,
+    room.phase2.policies[currentYear][player.country] = policy.isCommandEconomy ? {
+      // Command economy policy
+      fiveYearPlanTarget: policy.fiveYearPlanTarget || 8,
+      heavyIndustryAllocation: policy.heavyIndustryAllocation || 60,
+      foreignTradeOrientation: policy.foreignTradeOrientation || 50, // 0=COMECON, 100=West
+      planFulfillmentPriority: policy.planFulfillmentPriority || 70, // Gosbank credit rigor
+      militarySpending: policy.militarySpending || 15,
+      militarySize: policy.militarySize || 3000000,
+      isCommandEconomy: true,
+      submittedAt: Date.now()
+    } : {
+      // Market economy policy
+      centralBankRate: policy.centralBankRate || 3.0,
+      exchangeRate: policy.exchangeRate || 1.0,
+      tariffRate: policy.tariffRate || 10,
       militarySpending: policy.militarySpending || 5,
       militarySize: policy.militarySize || 500000,
+      isCommandEconomy: false,
       submittedAt: Date.now()
     };
     
