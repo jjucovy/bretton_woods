@@ -591,7 +591,7 @@ function calculateYearEconomics(roomId) {
         
         gdpGrowth += (warIntensity[currentYear] || -1.0); // Negative growth from civil war
         tradeBalance -= (currentYear - 1945) * 200; // Worsening trade disruption
-        unemployment += (currentYear - 1945) * 0.5; // Rising unemployment
+        // Note: Unemployment increase handled later in unemployment calculation section
         
         // Agricultural disruption
         if (currentYear >= 1948) {
@@ -671,6 +671,12 @@ function calculateYearEconomics(roomId) {
     
     // === UNEMPLOYMENT ===
     let unemployment = prevData.unemployment;
+    
+    // China civil war effect on unemployment
+    if (country === 'China' && currentYear <= 1949) {
+      unemployment += (currentYear - 1945) * 0.5; // Rising unemployment from civil war
+    }
+    
     if (gdpGrowth > 3.0) {
       unemployment -= (gdpGrowth - 3.0) * 0.3;
     } else if (gdpGrowth < 2.0) {
