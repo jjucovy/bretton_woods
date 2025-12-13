@@ -1,0 +1,2332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bretton Woods 1944</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""/>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""></script>
+    
+    <style>
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(300%); }
+            100% { transform: translateX(-100%); }
+        }
+        
+        /* Leaflet popup customization */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .leaflet-popup-content {
+            margin: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="container">
+            <div class="card">
+                <div style="text-align: center; padding: 40px;">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">⏳</div>
+                    <h2>Loading Bretton Woods...</h2>
+                    <p style="color: #64748b; margin-top: 10px;">
+                        Connecting to server and loading game data
+                    </p>
+                    <div style="margin-top: 20px;">
+                        <div style="width: 100%; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+                            <div style="width: 30%; height: 100%; background: #3b82f6; animation: loading 1.5s ease-in-out infinite;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script type="text/babel">
+        let gameData = null;
+        let militaryData = null;
+        let loadAttempts = 0;
+        const MAX_ATTEMPTS = 3;
+        const SINGLE_ROOM_ID = 'main-game'; // Fixed room ID for single-room mode
+        
+        function loadGameData() {
+          console.log('Loading game data... (attempt ' + (loadAttempts + 1) + ')');
+          
+          Promise.all([
+            fetch('/game-data.json').then(r => r.json()),
+            fetch('/military-deployments.json').then(r => r.json())
+          ])
+            .then(([gData, mData]) => {
+              console.log('Game data loaded successfully!');
+              gameData = gData;
+              militaryData = mData.militaryDeployments;
+              initializeApp();
+            })
+            .catch(err => {
+              console.error('Error loading game data:', err);
+              loadAttempts++;
+              
+              if (loadAttempts < MAX_ATTEMPTS) {
+                console.log('Retrying in 2 seconds...');
+                setTimeout(loadGameData, 2000);
+              } else {
+                console.error('Failed to load game data after ' + MAX_ATTEMPTS + ' attempts');
+                document.getElementById('root').innerHTML = `
+                  <div class="container">
+                    <div class="card">
+                      <h2 style="color: #dc2626;">❌ Error Loading Game</h2>
+                      <p>Could not load game-data.json. Please check:</p>
+                      <ul style="text-align: left; margin: 20px 0;">
+                        <li>Server is running properly</li>
+                        <li>game-data.json file exists</li>
+                        <li>File is valid JSON</li>
+                      </ul>
+                      <button onclick="location.reload()" class="btn-primary">
+                        Retry
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }
+            });
+        }
+        
+        // Start loading
+        loadGameData();
+
+        const socket = io();
+        const { useState, useEffect } = React;
+
+        // Military Map Component using Leaflet.js
+        function MilitaryMap({ currentYear, gameState }) {
+          const [militaryData, setMilitaryData] = useState(null);
+          const [selectedBase, setSelectedBase] = useState(null);
+          const mapRef = React.useRef(null);
+          const leafletMapRef = React.useRef(null);
+
+          useEffect(() => {
+            fetch('/military-deployments.json')
+              .then(r => r.json())
+              .then(data => setMilitaryData(data.militaryDeployments));
+          }, []);
+
+          useEffect(() => {
+            if (!militaryData || !mapRef.current || leafletMapRef.current) return;
+
+            // Initialize Leaflet map
+            const map = L.map(mapRef.current, {
+              center: [20, 0],
+              zoom: 2,
+              minZoom: 2,
+              maxZoom: 8,
+              worldCopyJump: true,
+              zoomControl: true
+            });
+
+            // Add tile layer - using OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors',
+              noWrap: false
+            }).addTo(map);
+
+            leafletMapRef.current = map;
+
+            // Add markers for each military base
+            Object.entries(militaryData).forEach(([country, data]) => {
+              const countryColors = {
+                USA: '#3b82f6',
+                UK: '#ef4444',
+                USSR: '#a855f7',
+                France: '#f59e0b',
+                China: '#22c55e',
+                India: '#f97316',
+                Argentina: '#06b6d4'
+              };
+
+              data.bases.forEach(base => {
+                const color = countryColors[country] || '#64748b';
+                const size = base.troops > 1000000 ? 20 : 
+                            base.troops > 500000 ? 16 : 
+                            base.troops > 100000 ? 12 : 
+                            base.troops > 50000 ? 9 : 6;
+
+                // Create custom icon
+                const icon = L.divIcon({
+                  html: `
+                    <div style="
+                      width: ${size * 2}px;
+                      height: ${size * 2}px;
+                      background: ${color};
+                      border: 3px solid white;
+                      border-radius: 50%;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 0 ${size}px ${color}33;
+                      position: relative;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                    ">
+                      ${base.troops > 100000 ? `<div style="
+                        position: absolute;
+                        top: ${size * 2 + 4}px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: rgba(0,0,0,0.8);
+                        color: white;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        font-weight: bold;
+                        white-space: nowrap;
+                      ">${(base.troops / 1000).toFixed(0)}K</div>` : ''}
+                    </div>
+                  `,
+                  className: '',
+                  iconSize: [size * 2, size * 2],
+                  iconAnchor: [size, size]
+                });
+
+                const marker = L.marker([base.lat, base.lng], { icon })
+                  .addTo(map)
+                  .bindPopup(`
+                    <div style="min-width: 200px;">
+                      <h3 style="margin: 0 0 8px 0; color: ${color}; font-size: 1.1rem;">
+                        ${base.name}
+                      </h3>
+                      <div style="font-size: 0.9rem; line-height: 1.6;">
+                        <p style="margin: 4px 0;"><strong>Country:</strong> ${country}</p>
+                        <p style="margin: 4px 0;"><strong>Region:</strong> ${base.region}</p>
+                        <p style="margin: 4px 0;"><strong>Personnel:</strong> ${base.troops.toLocaleString()} troops</p>
+                        <p style="margin: 4px 0;"><strong>Type:</strong> ${base.type.replace(/_/g, ' ')}</p>
+                        <p style="margin: 8px 0 0 0; font-style: italic; color: #64748b; font-size: 0.85rem;">
+                          ${base.description}
+                        </p>
+                      </div>
+                    </div>
+                  `);
+              });
+            });
+
+            return () => {
+              if (leafletMapRef.current) {
+                leafletMapRef.current.remove();
+                leafletMapRef.current = null;
+              }
+            };
+          }, [militaryData]);
+
+          if (!militaryData) {
+            return (
+              <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
+                <h2 style={{ marginTop: 0, marginBottom: '20px' }}>🗺️ Global Military Deployments - {currentYear}</h2>
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🌍</div>
+                  Loading military deployment map...
+                </div>
+              </div>
+            );
+          }
+
+          // Get current military sizes from game state
+          const currentMilitary = {};
+          if (gameState?.phase2?.yearlyData?.[currentYear]) {
+            Object.entries(gameState.phase2.yearlyData[currentYear]).forEach(([country, data]) => {
+              currentMilitary[country] = data.militarySize || 500000;
+            });
+          }
+
+          return (
+            <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
+              <h2 style={{ marginTop: 0, marginBottom: '20px' }}>🗺️ Global Military Deployments - {currentYear}</h2>
+              
+              {/* Map container */}
+              <div 
+                ref={mapRef} 
+                style={{ 
+                  height: '500px', 
+                  borderRadius: '8px', 
+                  border: '2px solid #e2e8f0',
+                  marginBottom: '20px'
+                }}
+              />
+              
+              {/* Legend */}
+              <div style={{ marginTop: '20px', display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+                {Object.entries(militaryData).map(([country, data]) => {
+                  const countryColors = {
+                    USA: '#3b82f6',
+                    UK: '#ef4444',
+                    USSR: '#a855f7',
+                    France: '#f59e0b',
+                    China: '#22c55e',
+                    India: '#f97316',
+                    Argentina: '#06b6d4'
+                  };
+                  
+                  return (
+                    <div 
+                      key={country}
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '8px',
+                        padding: '8px 12px',
+                        background: '#f8fafc',
+                        borderRadius: '6px',
+                        border: '1px solid #e2e8f0'
+                      }}
+                    >
+                      <div style={{ 
+                        width: '16px', 
+                        height: '16px', 
+                        borderRadius: '50%', 
+                        background: countryColors[country] || '#64748b',
+                        border: '2px solid white',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                      }} />
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{country}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          {currentMilitary[country] ? 
+                            `${(currentMilitary[country] / 1000).toFixed(0)}K troops` : 
+                            `${(data.totalTroops / 1000).toFixed(0)}K troops`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Base type legend */}
+              <div style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '0.9rem' }}>💡 Tip:</div>
+                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                  Click on any marker to see detailed information about that military base. 
+                  Larger circles = more troops deployed. Zoom in/out and pan around the map to explore.
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // Troop Deployment Interface Component
+        function TroopDeploymentInterface({ playerCountry, gameState, socket, playerId, roomId }) {
+          const [selectedRegion, setSelectedRegion] = useState('');
+          const [troopCount, setTroopCount] = useState(50000);
+          const [deploymentLog, setDeploymentLog] = useState([]);
+
+          const handleDeploy = () => {
+            if (!selectedRegion) {
+              alert('Please select a region');
+              return;
+            }
+
+            const deployment = {
+              country: playerCountry,
+              region: selectedRegion,
+              troops: troopCount,
+              timestamp: Date.now()
+            };
+
+            socket.emit('deployTroops', {
+              roomId,
+              playerId,
+              deployment
+            });
+
+            setDeploymentLog([...deploymentLog, {
+              ...deployment,
+              time: new Date().toLocaleTimeString()
+            }]);
+
+            // Reset
+            setSelectedRegion('');
+            setTroopCount(50000);
+          };
+
+          const regions = [
+            'Western Europe', 'Eastern Europe', 'Middle East', 'North Africa',
+            'Sub-Saharan Africa', 'South Asia', 'East Asia', 'Southeast Asia',
+            'Pacific Islands', 'North America', 'Central America', 'South America',
+            'Caribbean', 'Arctic', 'Antarctic'
+          ];
+
+          return (
+            <div style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              marginBottom: '20px',
+              border: '2px solid #dc2626'
+            }}>
+              <h2 style={{ marginTop: 0, marginBottom: '20px', color: '#dc2626' }}>
+                ⚔️ Deploy Your Troops - {playerCountry}
+              </h2>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
+                  Deploy To Region
+                </label>
+                <select
+                  value={selectedRegion}
+                  onChange={(e) => setSelectedRegion(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '6px',
+                    border: '2px solid #e2e8f0',
+                    fontSize: '1rem'
+                  }}
+                >
+                  <option value="">Choose a region...</option>
+                  {regions.map(region => (
+                    <option key={region} value={region}>{region}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Troop Count Slider */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Number of Troops</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#dc2626' }}>
+                    {(troopCount / 1000).toFixed(0)}K troops
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="10000"
+                  max="500000"
+                  step="10000"
+                  value={troopCount}
+                  onChange={(e) => setTroopCount(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+              </div>
+
+              {/* Deploy Button */}
+              <button
+                onClick={handleDeploy}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  background: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  marginBottom: '20px'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = '#b91c1c'}
+                onMouseOut={(e) => e.currentTarget.style.background = '#dc2626'}
+              >
+                ⚔️ Deploy Troops
+              </button>
+
+              {/* Deployment Log */}
+              {deploymentLog.length > 0 && (
+                <div>
+                  <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '1rem', color: '#64748b' }}>
+                    Your Recent Deployments:
+                  </h3>
+                  <div style={{ maxHeight: '200px', overflow: 'auto' }}>
+                    {deploymentLog.slice().reverse().map((log, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '12px',
+                          background: '#dbeafe',
+                          borderLeft: '4px solid #3b82f6',
+                          marginBottom: '8px',
+                          borderRadius: '4px',
+                          fontSize: '0.9rem'
+                        }}
+                      >
+                        Deployed <strong>{(log.troops / 1000).toFixed(0)}K</strong> troops
+                        to <strong>{log.region}</strong>
+                        <div style={{ fontSize: '0.8rem', color: '#1e40af', marginTop: '4px' }}>
+                          {log.time}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Warning */}
+              <div style={{
+                marginTop: '20px',
+                padding: '16px',
+                background: '#fef3c7',
+                borderRadius: '8px',
+                border: '2px solid #f59e0b'
+              }}>
+                <h4 style={{ margin: '0 0 8px 0', color: '#92400e', fontSize: '0.95rem' }}>
+                  💡 Strategic Tip
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#78350f' }}>
+                  Deploying troops to contested regions (Eastern Europe, East Asia, Middle East) may create 
+                  tensions with other powers. Watch for conflict alerts and plan accordingly!
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        // Policy Submission Form Component for Phase 2
+        function PolicySubmissionForm({ currentYear, playerId, socket, roomId }) {
+          const [centralBankRate, setCentralBankRate] = useState(3.0);
+          const [exchangeRate, setExchangeRate] = useState(1.0);
+          const [tariffRate, setTariffRate] = useState(10);
+          const [militarySpending, setMilitarySpending] = useState(5); // % of GDP
+          const [militarySize, setMilitarySize] = useState(500000); // Number of troops
+
+          const handleSubmit = () => {
+            socket.emit('submitPolicy', {
+              roomId,
+              playerId,
+              policy: { 
+                centralBankRate, 
+                exchangeRate, 
+                tariffRate,
+                militarySpending,
+                militarySize
+              }
+            });
+          };
+
+          return (
+            <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
+              <h2 style={{ marginTop: 0, marginBottom: '25px' }}>Set Economic & Military Policy for {currentYear}</h2>
+
+              <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#1e40af', borderBottom: '2px solid #3b82f6', paddingBottom: '8px' }}>
+                💰 Economic Policy
+              </h3>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Central Bank Interest Rate</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>{centralBankRate}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  value={centralBankRate}
+                  onChange={(e) => setCentralBankRate(parseFloat(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 Lower rates stimulate growth but increase inflation. Optimal: ~3%
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Exchange Rate</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>{exchangeRate.toFixed(1)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.1"
+                  value={exchangeRate}
+                  onChange={(e) => setExchangeRate(parseFloat(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 &lt; 1.0 = Competitive (boosts exports), &gt; 1.0 = Strong (hurts exports)
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Tariff Rate</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>{tariffRate}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="50"
+                  step="5"
+                  value={tariffRate}
+                  onChange={(e) => setTariffRate(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 Protects domestic industry but reduces trade. Optimal: 10-15%
+                </p>
+              </div>
+
+              <h3 style={{ marginTop: '30px', marginBottom: '20px', color: '#7c2d12', borderBottom: '2px solid #dc2626', paddingBottom: '8px' }}>
+                ⚔️ Military Policy
+              </h3>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Military Spending (% of GDP)</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#dc2626' }}>{militarySpending}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  step="1"
+                  value={militarySpending}
+                  onChange={(e) => setMilitarySpending(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 Higher spending = stronger military but drains economy. Post-war avg: 5-8%
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'bold' }}>Military Size (Active Personnel)</label>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#dc2626' }}>
+                    {(militarySize / 1000).toFixed(0)}K
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="100000"
+                  max="5000000"
+                  step="100000"
+                  value={militarySize}
+                  onChange={(e) => setMilitarySize(parseInt(e.target.value))}
+                  style={{ width: '100%', height: '8px', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+                  💡 Large military = security but high costs. Peacetime: 200K-800K typical
+                </p>
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                style={{
+                  width: '100%',
+                  padding: '18px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
+                onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
+              >
+                📊 Submit Economic & Military Policy
+              </button>
+            </div>
+          );
+        }
+
+        // Error Boundary Component
+        class ErrorBoundary extends React.Component {
+          constructor(props) {
+            super(props);
+            this.state = { hasError: false, error: null, errorInfo: null };
+          }
+
+          static getDerivedStateFromError(error) {
+            return { hasError: true };
+          }
+
+          componentDidCatch(error, errorInfo) {
+            console.error('!!! REACT ERROR CAUGHT !!!');
+            console.error('Error:', error);
+            console.error('Error Info:', errorInfo);
+            this.setState({ error, errorInfo });
+          }
+
+          render() {
+            if (this.state.hasError) {
+              return (
+                <div className="container">
+                  <div className="card">
+                    <h2 style={{ color: '#dc2626' }}>⚠️ Something Went Wrong</h2>
+                    <p>The app encountered an error. Check the console for details.</p>
+                    <pre style={{ 
+                      background: '#f8fafc', 
+                      padding: '10px', 
+                      overflow: 'auto', 
+                      fontSize: '0.75rem',
+                      textAlign: 'left'
+                    }}>
+                      {this.state.error && this.state.error.toString()}
+                      {'\n\n'}
+                      {this.state.errorInfo && this.state.errorInfo.componentStack}
+                    </pre>
+                    <button 
+                      onClick={() => window.location.reload()} 
+                      className="btn-primary"
+                      style={{ marginTop: '20px' }}
+                    >
+                      Reload Page
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return this.props.children;
+          }
+        }
+
+        const BrettonWoodsSingleRoom = () => {
+          // Authentication state
+          const [isAuthenticated, setIsAuthenticated] = useState(false);
+          const [username, setUsername] = useState('');
+          const [playerId, setPlayerId] = useState('');
+          const [userRole, setUserRole] = useState('player');
+          const [showRegister, setShowRegister] = useState(false);
+          
+          // Game state
+          const [playerCountry, setPlayerCountry] = useState(null);
+          const [gameState, setGameState] = useState(null);
+          const [isReady, setIsReady] = useState(false);
+          const [connected, setConnected] = useState(false);
+
+          // Check for existing session
+          useEffect(() => {
+            const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
+            const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
+            const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
+            
+            if (savedUsername && savedPlayerId) {
+              setUsername(savedUsername);
+              setPlayerId(savedPlayerId);
+              setUserRole(savedUserRole || 'player');
+              setIsAuthenticated(true);
+            }
+          }, []);
+
+          // Socket connection and auto-join single room
+          useEffect(() => {
+            socket.on('connect', () => {
+              setConnected(true);
+              console.log('Connected to server');
+              
+              // Auto-join the single room when connected and authenticated
+              if (isAuthenticated && playerId) {
+                console.log('Auto-joining single room:', SINGLE_ROOM_ID);
+                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
+              }
+            });
+
+            socket.on('disconnect', () => {
+              setConnected(false);
+              console.log('Disconnected from server');
+            });
+
+            socket.on('stateUpdate', (state) => {
+              console.log('=== STATE UPDATE ===');
+              console.log('Game started:', state.gameStarted);
+              console.log('Game phase:', state.gamePhase);
+              console.log('Current round:', state.currentRound);
+              console.log('Players:', Object.keys(state.players).length);
+              
+              setGameState(state);
+              
+              // Check if we're in this room
+              if (state.players[playerId]) {
+                const myPlayer = state.players[playerId];
+                setPlayerCountry(myPlayer.country);
+                setIsReady(state.readyPlayers.includes(playerId));
+                
+                // Save country to session storage for persistence
+                sessionStorage.setItem('brettonWoodsCountry', myPlayer.country);
+                console.log('✓ Saved country to session:', myPlayer.country);
+              } else {
+                // Check if we have a saved country from previous session
+                const savedCountry = sessionStorage.getItem('brettonWoodsCountry');
+                if (savedCountry && state.gameStarted) {
+                  console.log('⚠️ Player not in game but has saved country:', savedCountry);
+                  console.log('   Attempting to rejoin as:', savedCountry);
+                  
+                  // Try to rejoin with saved country
+                  socket.emit('rejoinGame', { 
+                    roomId: SINGLE_ROOM_ID, 
+                    playerId, 
+                    country: savedCountry 
+                  });
+                }
+              }
+              
+              console.log('State updated in React');
+            });
+
+            socket.on('joinRoomResult', ({ success, roomId, message }) => {
+              if (success) {
+                console.log('Joined room:', roomId);
+              } else {
+                console.error('Failed to join room:', message);
+              }
+            });
+            
+            socket.on('startGameResult', ({ success, message }) => {
+              if (!success) {
+                alert(message || 'Failed to start game');
+              } else {
+                console.log('Game started successfully');
+              }
+            });
+            
+            socket.on('resetRoomResult', ({ success, message }) => {
+              if (!success) {
+                alert(message || 'Failed to reset room');
+              } else {
+                console.log('Room reset successfully');
+              }
+            });
+            
+            socket.on('joinResult', ({ success, message }) => {
+              if (!success) {
+                alert(message || 'Failed to join game');
+              }
+            });
+            
+            socket.on('rejoinResult', ({ success, message, country }) => {
+              if (success) {
+                console.log('✅ Successfully rejoined as:', country);
+                setPlayerCountry(country);
+              } else {
+                console.log('❌ Failed to rejoin:', message);
+                // Clear saved country if rejoin failed
+                sessionStorage.removeItem('brettonWoodsCountry');
+              }
+            });
+
+            return () => {
+              socket.off('connect');
+              socket.off('disconnect');
+              socket.off('stateUpdate');
+              socket.off('joinRoomResult');
+              socket.off('startGameResult');
+              socket.off('resetRoomResult');
+              socket.off('joinResult');
+              socket.off('rejoinResult');
+            };
+          }, [playerId, isAuthenticated]);
+
+          // Authentication handlers
+          const handleRegister = (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const username = formData.get('username');
+            const password = formData.get('password');
+
+            socket.emit('register', { username, password });
+            
+            socket.once('registerResult', ({ success, playerId: newPlayerId, role, message }) => {
+              if (success) {
+                setUsername(username);
+                setPlayerId(newPlayerId);
+                setUserRole(role || 'player');
+                setIsAuthenticated(true);
+                sessionStorage.setItem('brettonWoodsUsername', username);
+                sessionStorage.setItem('brettonWoodsPlayerId', newPlayerId);
+                sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
+                
+                // Auto-join single room after registration
+                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
+                
+                if (role === 'superadmin') {
+                  alert('🎉 Welcome, Administrator! You have full control over the game.');
+                }
+              } else {
+                alert(message);
+              }
+            });
+          };
+
+          const handleLogin = (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const username = formData.get('username');
+            const password = formData.get('password');
+
+            socket.emit('login', { username, password });
+            
+            socket.once('loginResult', ({ success, playerId: returnedPlayerId, role, message }) => {
+              console.log('=== LOGIN RESULT ===');
+              console.log('Success:', success);
+              console.log('Role received:', role);
+              console.log('Player ID:', returnedPlayerId);
+              
+              if (success) {
+                setUsername(username);
+                setPlayerId(returnedPlayerId);
+                setUserRole(role || 'player');
+                setIsAuthenticated(true);
+                sessionStorage.setItem('brettonWoodsUsername', username);
+                sessionStorage.setItem('brettonWoodsPlayerId', returnedPlayerId);
+                sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
+                
+                // Auto-join single room after login
+                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
+                
+                console.log('Stored in session:', {
+                  username: sessionStorage.getItem('brettonWoodsUsername'),
+                  playerId: sessionStorage.getItem('brettonWoodsPlayerId'),
+                  role: sessionStorage.getItem('brettonWoodsUserRole')
+                });
+                console.log('===================');
+              } else {
+                console.log('Login failed:', message);
+                alert(message || 'Login failed. If you recently registered but the server restarted, you may need to register again or click "Clear Saved Session" to start fresh.');
+              }
+            });
+          };
+
+          const handleClearSession = () => {
+            sessionStorage.clear();
+            localStorage.clear();
+            window.location.reload();
+          };
+
+          // Game handlers
+          const handleJoinGame = (country) => {
+            if (userRole === 'superadmin') {
+              alert('As administrator, you are an observer and cannot select a country.');
+              return;
+            }
+            
+            socket.emit('joinGame', { roomId: SINGLE_ROOM_ID, playerId, country });
+          };
+
+          const handleLeaveGame = () => {
+            socket.emit('leaveGame', { roomId: SINGLE_ROOM_ID, playerId });
+            setPlayerCountry(null);
+            setIsReady(false);
+          };
+
+          const handleReady = () => {
+            socket.emit('setReady', { roomId: SINGLE_ROOM_ID, playerId, ready: !isReady });
+          };
+
+          // Get countries and issues from game data
+          const countries = gameData?.countries || {};
+          const issues = gameData?.issues || [];
+          const economicData = gameData?.economicData || {};
+          const historicalEvents = gameData?.historicalEvents || {};
+          const currentIssue = gameState?.currentRound ? issues[gameState.currentRound - 1] : null;
+
+          // Login screen
+          if (!isAuthenticated) {
+            return (
+              <div className="container">
+                <div className="header">
+                  <h1>🌍 Bretton Woods 1944</h1>
+                  <p>International Economic Conference Simulation</p>
+                </div>
+
+                <div className="card">
+                  <h2>{showRegister ? 'Create Account' : 'Login'}</h2>
+                  
+                  <form onSubmit={showRegister ? handleRegister : handleLogin}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                        Username
+                      </label>
+                      <input
+                        type="text"
+                        name="username"
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          border: '2px solid #e2e8f0',
+                          borderRadius: '6px',
+                          fontSize: '1rem'
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        name="password"
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          border: '2px solid #e2e8f0',
+                          borderRadius: '6px',
+                          fontSize: '1rem'
+                        }}
+                      />
+                    </div>
+
+                    <button type="submit" className="btn-primary" style={{ width: '100%' }}>
+                      {showRegister ? 'Register' : 'Login'}
+                    </button>
+                  </form>
+
+                  <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => setShowRegister(!showRegister)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#3b82f6',
+                        cursor: 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      {showRegister ? 'Already have an account? Login' : "Don't have an account? Register"}
+                    </button>
+                  </div>
+
+                  {(sessionStorage.getItem('brettonWoodsUsername') || 
+                    sessionStorage.getItem('brettonWoodsPlayerId')) && (
+                    <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                      <button
+                        onClick={handleClearSession}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#dc2626',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        🗑️ Clear Saved Session
+                      </button>
+                      <p style={{ 
+                        fontSize: '0.75rem', 
+                        color: '#64748b', 
+                        marginTop: '8px' 
+                      }}>
+                        Use this if you're having login issues
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          // Main Game View
+          const playerList = gameState?.players ? Object.values(gameState.players) : [];
+          const availableCountries = Object.keys(countries).filter(
+            country => !playerList.some(p => p.country === country)
+          );
+
+          return (
+            <div className="container">
+              <div style={{ 
+                position: 'fixed', 
+                top: '10px', 
+                right: '10px', 
+                padding: '8px 16px',
+                background: connected ? '#dcfce7' : '#fee2e2',
+                color: connected ? '#166534' : '#991b1b',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                zIndex: 1000
+              }}>
+                {connected ? '🟢 Connected' : '🔴 Disconnected'}
+              </div>
+
+              <div className="header">
+                <h1>🌍 Bretton Woods 1944</h1>
+                <p style={{ marginTop: '8px', fontSize: '0.875rem', color: '#64748b' }}>
+                  Welcome, {username}!
+                  {userRole === 'superadmin' && (
+                    <span style={{
+                      marginLeft: '10px',
+                      padding: '4px 12px',
+                      background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                      color: 'white',
+                      borderRadius: '12px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 4px rgba(220, 38, 38, 0.3)'
+                    }}>
+                      🛡️ ADMINISTRATOR
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              <div className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                  <h2>{gameState?.gameStarted ? 'Game In Progress' : 'Game Lobby'}</h2>
+                  {userRole === 'superadmin' && (
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      {!gameState?.gameStarted && (
+                        <button
+                          onClick={() => {
+                            console.log('Start game button clicked');
+                            socket.emit('startGame', { roomId: SINGLE_ROOM_ID, playerId });
+                          }}
+                          className="btn-primary"
+                          style={{ padding: '8px 16px' }}
+                        >
+                          🎮 Start Game
+                        </button>
+                      )}
+                      {gameState?.gameStarted && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Reset the game? All progress will be lost.')) {
+                              socket.emit('resetRoom', { roomId: SINGLE_ROOM_ID, playerId });
+                            }
+                          }}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#f59e0b',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🔄 Reset Game
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {gameState?.gameStarted ? (
+                  <div>
+                    {/* DEBUG INFO */}
+                    <div style={{
+                      padding: '10px',
+                      background: '#f0f9ff',
+                      borderRadius: '6px',
+                      marginBottom: '20px',
+                      fontSize: '0.75rem',
+                      color: '#0369a1',
+                      fontFamily: 'monospace'
+                    }}>
+                      <strong>Debug Info:</strong> gameStarted={String(gameState.gameStarted)}, 
+                      gamePhase={gameState.gamePhase}, 
+                      currentRound={gameState.currentRound},
+                      userRole={userRole},
+                      playerCountry={playerCountry || 'none'},
+                      currentIssue={currentIssue ? 'exists' : 'null'}
+                    </div>
+
+                    {/* VOTING PHASE */}
+                    {gameState.gamePhase === 'voting' && (
+                      <div>
+                        {/* Round Header */}
+                        <div style={{
+                          padding: '20px',
+                          background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                          borderRadius: '8px',
+                          marginBottom: '20px',
+                          border: '2px solid #3b82f6'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <h2 style={{ color: '#1e40af', margin: 0, fontSize: '1.5rem' }}>
+                                Round {gameState.currentRound} of 10
+                              </h2>
+                              <p style={{ color: '#3b82f6', margin: '5px 0 0 0', fontSize: '0.875rem' }}>
+                                Phase 1: Conference Voting
+                              </p>
+                            </div>
+                            {userRole !== 'superadmin' && (
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
+                                  {gameState.scores?.[playerCountry] || 0} pts
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Observer View */}
+                        {userRole === 'superadmin' && (
+                          <div>
+                            <div style={{
+                              padding: '30px',
+                              background: '#fef3c7',
+                              borderRadius: '8px',
+                              border: '2px solid #f59e0b',
+                              marginBottom: '20px'
+                            }}>
+                              <h3 style={{ color: '#92400e', marginTop: 0 }}>👁️ Observer Mode</h3>
+                              <p style={{ color: '#78350f' }}>
+                                You are monitoring the game. Players are voting on issues.
+                              </p>
+                            </div>
+
+                            {/* Show current issue */}
+                            {currentIssue && (
+                              <div className="card" style={{ marginBottom: '20px' }}>
+                                <h3 style={{ marginTop: 0, color: '#1e293b' }}>{currentIssue.title}</h3>
+                                <p style={{ color: '#64748b', fontSize: '0.95rem' }}>
+                                  {currentIssue.description}
+                                </p>
+                                
+                                <div style={{ marginTop: '20px' }}>
+                                  <h4 style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '10px' }}>
+                                    Voting Progress:
+                                  </h4>
+                                  <div style={{ 
+                                    display: 'grid', 
+                                    gap: '8px'
+                                  }}>
+                                    {playerList.map((player) => (
+                                      <div key={player.id} style={{
+                                        padding: '10px',
+                                        background: gameState.votes?.[player.id] ? '#dcfce7' : '#f8fafc',
+                                        borderRadius: '6px',
+                                        borderLeft: '4px solid ' + (gameState.votes?.[player.id] ? '#16a34a' : '#cbd5e1')
+                                      }}>
+                                        <span style={{ fontWeight: 'bold' }}>
+                                          {countries[player.country]?.name || player.country}
+                                        </span>
+                                        <span style={{ 
+                                          marginLeft: '10px', 
+                                          color: gameState.votes?.[player.id] ? '#16a34a' : '#64748b',
+                                          fontSize: '0.875rem'
+                                        }}>
+                                          {gameState.votes?.[player.id] ? '✓ Voted' : '⏳ Waiting...'}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Player Voting Interface */}
+                        {userRole !== 'superadmin' && currentIssue && (
+                          <div>
+                            {/* Issue Card */}
+                            <div className="card" style={{ 
+                              marginBottom: '20px',
+                              background: 'white',
+                              border: '2px solid #e2e8f0'
+                            }}>
+                              <div style={{
+                                padding: '15px',
+                                background: '#f8fafc',
+                                borderRadius: '6px',
+                                marginBottom: '15px'
+                              }}>
+                                <h3 style={{ 
+                                  margin: 0, 
+                                  color: '#1e293b',
+                                  fontSize: '1.25rem' 
+                                }}>
+                                  {currentIssue.title}
+                                </h3>
+                              </div>
+                              
+                              <p style={{ 
+                                fontSize: '0.95rem', 
+                                lineHeight: '1.6',
+                                color: '#475569',
+                                marginBottom: '20px'
+                              }}>
+                                {currentIssue.description}
+                              </p>
+
+                              {/* Country-specific interests - show which option favors you */}
+                              {currentIssue.options && playerCountry && (
+                                <div style={{
+                                  padding: '15px',
+                                  background: '#eff6ff',
+                                  borderRadius: '6px',
+                                  borderLeft: '4px solid #3b82f6',
+                                  marginBottom: '20px'
+                                }}>
+                                  <h4 style={{ 
+                                    margin: '0 0 10px 0',
+                                    fontSize: '0.9rem',
+                                    color: '#1e40af'
+                                  }}>
+                                    Your Country's Interest:
+                                  </h4>
+                                  {currentIssue.options.map((option, idx) => {
+                                    const favorsYou = option.favors && option.favors.includes(playerCountry);
+                                    const opposesYou = option.opposes && option.opposes.includes(playerCountry);
+                                    
+                                    if (favorsYou) {
+                                      return (
+                                        <p key={idx} style={{ 
+                                          margin: 0,
+                                          fontSize: '0.875rem',
+                                          color: '#1e3a8a'
+                                        }}>
+                                          ✓ Option {String.fromCharCode(65 + idx)} favors {countries[playerCountry]?.name || playerCountry}
+                                        </p>
+                                      );
+                                    } else if (opposesYou) {
+                                      return (
+                                        <p key={idx} style={{ 
+                                          margin: 0,
+                                          fontSize: '0.875rem',
+                                          color: '#991b1b'
+                                        }}>
+                                          ✗ Option {String.fromCharCode(65 + idx)} opposes {countries[playerCountry]?.name || playerCountry}
+                                        </p>
+                                      );
+                                    }
+                                    return null;
+                                  }).filter(Boolean)}
+                                </div>
+                              )}
+
+                              {/* Options */}
+                              <div style={{ marginBottom: '15px' }}>
+                                <h4 style={{ 
+                                  fontSize: '0.9rem',
+                                  color: '#64748b',
+                                  marginBottom: '10px'
+                                }}>
+                                  Options:
+                                </h4>
+                                <div style={{ display: 'grid', gap: '8px' }}>
+                                  {currentIssue.options && currentIssue.options.map((option, idx) => (
+                                    <div key={idx} style={{
+                                      padding: '12px',
+                                      background: '#f8fafc',
+                                      borderRadius: '6px',
+                                      fontSize: '0.875rem',
+                                      color: '#475569',
+                                      border: '1px solid #e2e8f0'
+                                    }}>
+                                      <strong style={{ color: '#1e293b', fontSize: '0.95rem' }}>
+                                        Option {String.fromCharCode(65 + idx)}:
+                                      </strong>
+                                      <div style={{ marginTop: '4px' }}>
+                                        {option.text}
+                                      </div>
+                                      {option.favors && option.favors.length > 0 && (
+                                        <div style={{ 
+                                          marginTop: '8px', 
+                                          fontSize: '0.75rem',
+                                          color: '#16a34a',
+                                          display: 'flex',
+                                          gap: '4px',
+                                          flexWrap: 'wrap'
+                                        }}>
+                                          <span>Favors:</span>
+                                          {option.favors.map((c, i) => (
+                                            <span key={i} style={{ 
+                                              background: '#dcfce7', 
+                                              padding: '2px 6px', 
+                                              borderRadius: '3px'
+                                            }}>
+                                              {countries[c]?.name || c}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {option.opposes && option.opposes.length > 0 && (
+                                        <div style={{ 
+                                          marginTop: '4px', 
+                                          fontSize: '0.75rem',
+                                          color: '#dc2626',
+                                          display: 'flex',
+                                          gap: '4px',
+                                          flexWrap: 'wrap'
+                                        }}>
+                                          <span>Opposes:</span>
+                                          {option.opposes.map((c, i) => (
+                                            <span key={i} style={{ 
+                                              background: '#fee2e2', 
+                                              padding: '2px 6px', 
+                                              borderRadius: '3px'
+                                            }}>
+                                              {countries[c]?.name || c}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Voting Buttons */}
+                            {!gameState.votes?.[playerId] ? (
+                              <div style={{ marginBottom: '20px' }}>
+                                <h4 style={{ 
+                                  fontSize: '1rem',
+                                  color: '#1e293b',
+                                  marginBottom: '12px',
+                                  textAlign: 'center'
+                                }}>
+                                  Cast Your Vote:
+                                </h4>
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: currentIssue.options?.length === 3 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
+                                  gap: '12px'
+                                }}>
+                                  {currentIssue.options && currentIssue.options.map((option, idx) => {
+                                    const optionLetter = String.fromCharCode(65 + idx); // A, B, C
+                                    const favorsYou = option.favors && option.favors.includes(playerCountry);
+                                    const opposesYou = option.opposes && option.opposes.includes(playerCountry);
+                                    
+                                    return (
+                                      <button
+                                        key={idx}
+                                        onClick={() => {
+                                          socket.emit('vote', {
+                                            roomId: SINGLE_ROOM_ID,
+                                            playerId,
+                                            choice: option.id || optionLetter.toLowerCase()
+                                          });
+                                        }}
+                                        style={{
+                                          padding: '20px 15px',
+                                          background: favorsYou 
+                                            ? 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)'
+                                            : opposesYou
+                                            ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'
+                                            : 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                                          border: favorsYou
+                                            ? '3px solid #16a34a'
+                                            : opposesYou
+                                            ? '3px solid #dc2626'
+                                            : '2px solid #3b82f6',
+                                          borderRadius: '8px',
+                                          cursor: 'pointer',
+                                          fontSize: '0.95rem',
+                                          fontWeight: 'bold',
+                                          color: favorsYou
+                                            ? '#166534'
+                                            : opposesYou
+                                            ? '#991b1b'
+                                            : '#1e40af',
+                                          transition: 'all 0.2s',
+                                          position: 'relative'
+                                        }}
+                                        onMouseOver={(e) => {
+                                          e.currentTarget.style.transform = 'scale(1.05)';
+                                          e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.15)';
+                                        }}
+                                        onMouseOut={(e) => {
+                                          e.currentTarget.style.transform = 'scale(1)';
+                                          e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                      >
+                                        <div style={{ 
+                                          fontSize: '2.5rem', 
+                                          marginBottom: '8px',
+                                          fontWeight: 'bold'
+                                        }}>
+                                          {optionLetter}
+                                        </div>
+                                        <div style={{ 
+                                          fontSize: '0.75rem',
+                                          lineHeight: '1.3',
+                                          opacity: 0.9
+                                        }}>
+                                          {option.text.length > 50 
+                                            ? option.text.substring(0, 50) + '...'
+                                            : option.text}
+                                        </div>
+                                        {favorsYou && (
+                                          <div style={{
+                                            position: 'absolute',
+                                            top: '8px',
+                                            right: '8px',
+                                            fontSize: '1.2rem'
+                                          }}>
+                                            ✓
+                                          </div>
+                                        )}
+                                        {opposesYou && (
+                                          <div style={{
+                                            position: 'absolute',
+                                            top: '8px',
+                                            right: '8px',
+                                            fontSize: '1.2rem'
+                                          }}>
+                                            ✗
+                                          </div>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{
+                                padding: '30px',
+                                background: '#dcfce7',
+                                borderRadius: '8px',
+                                border: '2px solid #16a34a',
+                                textAlign: 'center',
+                                marginBottom: '20px'
+                              }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '10px' }}>✓</div>
+                                <h3 style={{ color: '#166534', margin: '0 0 10px 0' }}>
+                                  Vote Submitted
+                                </h3>
+                                <p style={{ color: '#14532d', margin: 0 }}>
+                                  You voted for: <strong style={{ 
+                                    textTransform: 'uppercase',
+                                    fontSize: '1.2rem',
+                                    display: 'inline-block',
+                                    padding: '4px 12px',
+                                    background: '#bbf7d0',
+                                    borderRadius: '6px',
+                                    marginLeft: '8px'
+                                  }}>
+                                    Option {gameState.votes[playerId].toUpperCase()}
+                                  </strong>
+                                </p>
+                                <p style={{ color: '#166534', marginTop: '15px', fontSize: '0.875rem' }}>
+                                  Waiting for other players to vote...
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* RESULTS PHASE */}
+                    {gameState.gamePhase === 'results' && (
+                      <div>
+                        <div style={{
+                          padding: '30px',
+                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                          borderRadius: '8px',
+                          border: '2px solid #f59e0b',
+                          marginBottom: '20px',
+                          textAlign: 'center'
+                        }}>
+                          <h2 style={{ color: '#92400e', marginTop: 0 }}>
+                            Round {gameState.currentRound} Results
+                          </h2>
+                          
+                          {/* Vote Outcome */}
+                          <div style={{
+                            padding: '20px',
+                            background: '#dcfce7',
+                            borderRadius: '8px',
+                            marginBottom: '20px'
+                          }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '10px' }}>
+                              🏆
+                            </div>
+                            <h3 style={{ 
+                              color: '#166534',
+                              margin: 0,
+                              fontSize: '1.5rem'
+                            }}>
+                              {gameState.roundOutcome || 'Results Calculated'}
+                            </h3>
+                          </div>
+
+                          {/* Vote Tally */}
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            gap: '15px',
+                            marginBottom: '20px'
+                          }}>
+                            <div style={{
+                              padding: '15px',
+                              background: gameState.winningOption === 'a' ? '#dcfce7' : 'white',
+                              borderRadius: '8px',
+                              border: gameState.winningOption === 'a' ? '2px solid #16a34a' : 'none'
+                            }}>
+                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
+                                Option A
+                              </div>
+                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                                {gameState.voteTally?.a || 0}
+                              </div>
+                              {gameState.winningOption === 'a' && (
+                                <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px' }}>
+                                  ✓ Winner
+                                </div>
+                              )}
+                            </div>
+                            <div style={{
+                              padding: '15px',
+                              background: gameState.winningOption === 'b' ? '#dcfce7' : 'white',
+                              borderRadius: '8px',
+                              border: gameState.winningOption === 'b' ? '2px solid #16a34a' : 'none'
+                            }}>
+                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
+                                Option B
+                              </div>
+                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                                {gameState.voteTally?.b || 0}
+                              </div>
+                              {gameState.winningOption === 'b' && (
+                                <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px' }}>
+                                  ✓ Winner
+                                </div>
+                              )}
+                            </div>
+                            <div style={{
+                              padding: '15px',
+                              background: gameState.winningOption === 'c' ? '#dcfce7' : 'white',
+                              borderRadius: '8px',
+                              border: gameState.winningOption === 'c' ? '2px solid #16a34a' : 'none'
+                            }}>
+                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
+                                Option C
+                              </div>
+                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                                {gameState.voteTally?.c || 0}
+                              </div>
+                              {gameState.winningOption === 'c' && (
+                                <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px' }}>
+                                  ✓ Winner
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Your score this round */}
+                          {userRole !== 'superadmin' && (
+                            <div style={{
+                              padding: '20px',
+                              background: 'white',
+                              borderRadius: '8px',
+                              marginBottom: '20px'
+                            }}>
+                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
+                                Your Score This Round
+                              </div>
+                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                                +{gameState.roundScores?.[playerCountry] || 0} pts
+                              </div>
+                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
+                                Total: {gameState.scores?.[playerCountry] || 0} pts
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Continue button - only admin can advance */}
+                          {userRole === 'superadmin' && (
+                            <button
+                              onClick={() => {
+                                socket.emit('advanceRound', {
+                                  roomId: SINGLE_ROOM_ID,
+                                  playerId
+                                });
+                              }}
+                              style={{
+                                padding: '15px 40px',
+                                background: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '1.1rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Continue to Next Round →
+                            </button>
+                          )}
+
+                          {userRole !== 'superadmin' && (
+                            <p style={{ color: '#78350f', fontSize: '0.875rem', fontStyle: 'italic' }}>
+                              Waiting for administrator to advance to next round...
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Leaderboard */}
+                        <div className="card">
+                          <h3 style={{ marginTop: 0 }}>Current Standings</h3>
+                          <div style={{ display: 'grid', gap: '10px' }}>
+                            {Object.entries(gameState.scores || {})
+                              .sort(([,a], [,b]) => b - a)
+                              .map(([country, score], idx) => (
+                                <div key={country} style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  padding: '12px',
+                                  background: country === playerCountry ? '#eff6ff' : '#f8fafc',
+                                  borderRadius: '6px',
+                                  borderLeft: '4px solid ' + (idx === 0 ? '#f59e0b' : '#cbd5e1')
+                                }}>
+                                  <div>
+                                    <span style={{ fontWeight: 'bold', marginRight: '10px' }}>
+                                      {idx + 1}.
+                                    </span>
+                                    <span style={{ fontWeight: 'bold' }}>
+                                      {countries[country]?.name || country}
+                                    </span>
+                                    {country === playerCountry && (
+                                      <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>
+                                        (You)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                    {score} pts
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PHASE 2: POST-WAR ECONOMIC MANAGEMENT */}
+                    {gameState.gamePhase === 'phase2' && (() => {
+                      const currentYear = gameState.phase2?.currentYear || 1946;
+                      const myData = gameState.phase2?.yearlyData?.[currentYear]?.[playerCountry];
+                      const hasSubmitted = gameState.readyPlayers?.includes(playerId);
+                      
+                      return (
+                        <div>
+                          <div style={{
+                            padding: '30px',
+                            background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                            borderRadius: '8px',
+                            marginBottom: '20px',
+                            textAlign: 'center'
+                          }}>
+                            <h1 style={{ margin: 0, marginBottom: '10px', color: '#3730a3' }}>
+                              🏛️ Post-War Economic Management
+                            </h1>
+                            <p style={{ fontSize: '1.25rem', color: '#4338ca', margin: 0 }}>
+                              Year {currentYear} ({currentYear - 1945} of 7)
+                            </p>
+                          </div>
+
+                          {/* Economic Dashboard - Only for Players */}
+                          {userRole !== 'superadmin' && (
+                            <div style={{
+                              background: 'white',
+                              borderRadius: '12px',
+                              padding: '24px',
+                              marginBottom: '20px'
+                            }}>
+                              <h2 style={{ marginTop: 0, marginBottom: '20px' }}>
+                                Economic Indicators - {countries[playerCountry]?.name}
+                              </h2>
+                              <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                                gap: '16px'
+                              }}>
+                                <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #3b82f6' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>GDP Growth</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0, color: myData?.gdpGrowth > 0 ? '#16a34a' : '#dc2626' }}>
+                                    {myData?.gdpGrowth?.toFixed(1) || '0.0'}%
+                                  </p>
+                                </div>
+                                <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #f59e0b' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Inflation</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>
+                                    {myData?.inflation?.toFixed(1) || '0.0'}%
+                                  </p>
+                                </div>
+                                <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #ef4444' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Unemployment</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>
+                                    {myData?.unemployment?.toFixed(1) || '0.0'}%
+                                  </p>
+                                </div>
+                                <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #10b981' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Trade Balance</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0, color: myData?.tradeBalance > 0 ? '#16a34a' : '#dc2626' }}>
+                                    ${myData?.tradeBalance || 0}M
+                                  </p>
+                                </div>
+                                <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #eab308' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Gold Reserves</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>
+                                    ${myData?.goldReserves || 0}M
+                                  </p>
+                                </div>
+                                <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Industrial Output</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>
+                                    {myData?.industrialOutput || 0}
+                                  </p>
+                                </div>
+                                <div style={{ padding: '16px', background: '#fee2e2', borderRadius: '8px', borderLeft: '4px solid #dc2626' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Military Spending</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>
+                                    {myData?.militarySpending || 5}% of GDP
+                                  </p>
+                                </div>
+                                <div style={{ padding: '16px', background: '#fee2e2', borderRadius: '8px', borderLeft: '4px solid #b91c1c' }}>
+                                  <h4 style={{ fontSize: '0.875rem', color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase' }}>Military Size</h4>
+                                  <p style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>
+                                    {((myData?.militarySize || 500000) / 1000).toFixed(0)}K troops
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Policy Submission or Waiting */}
+                          {userRole === 'superadmin' ? (
+                            <div style={{
+                              background: '#fef3c7',
+                              border: '3px solid #f59e0b',
+                              borderRadius: '12px',
+                              padding: '30px',
+                              textAlign: 'center',
+                              marginBottom: '20px'
+                            }}>
+                              <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🛡️</div>
+                              <h3 style={{ color: '#92400e', margin: '0 0 10px 0' }}>Administrator - Observer Mode</h3>
+                              <p style={{ color: '#78350f', margin: 0, fontSize: '1.1rem' }}>
+                                You are observing the game. Players are setting their policies and deploying troops.
+                              </p>
+                              <p style={{ color: '#78350f', margin: '10px 0 0 0', fontSize: '0.95rem' }}>
+                                Players ready: {gameState.readyPlayers?.length || 0} / {Object.keys(gameState.players).length}
+                              </p>
+                            </div>
+                          ) : !hasSubmitted ? (
+                            <>
+                              <PolicySubmissionForm 
+                                currentYear={currentYear}
+                                playerId={playerId}
+                                socket={socket}
+                                roomId={SINGLE_ROOM_ID}
+                              />
+                              <TroopDeploymentInterface 
+                                playerCountry={playerCountry}
+                                gameState={gameState}
+                                socket={socket}
+                                playerId={playerId}
+                                roomId={SINGLE_ROOM_ID}
+                              />
+                            </>
+                          ) : (
+                            <div style={{
+                              background: '#dcfce7',
+                              border: '3px solid #16a34a',
+                              borderRadius: '12px',
+                              padding: '30px',
+                              textAlign: 'center',
+                              marginBottom: '20px'
+                            }}>
+                              <div style={{ fontSize: '3rem', marginBottom: '15px' }}>✓</div>
+                              <h3 style={{ color: '#166534', margin: '0 0 10px 0' }}>Policy Submitted for {currentYear}</h3>
+                              <p style={{ color: '#15803d', margin: 0, fontSize: '1.1rem' }}>
+                                Waiting for other players... ({gameState.readyPlayers?.length || 0} / {Object.keys(gameState.players).length})
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Historical Events */}
+                          <div style={{
+                            background: 'white',
+                            borderRadius: '12px',
+                            padding: '24px',
+                            marginBottom: '20px'
+                          }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>📜 Historical Events - {currentYear}</h3>
+                            {historicalEvents && historicalEvents[currentYear] ? (
+                              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                {historicalEvents[currentYear].map((event, idx) => (
+                                  <li key={idx} style={{
+                                    padding: '12px',
+                                    background: '#f8fafc',
+                                    borderLeft: '4px solid #3b82f6',
+                                    marginBottom: '8px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.95rem'
+                                  }}>
+                                    • {event}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p style={{ color: '#64748b', margin: 0 }}>No major events recorded for this year.</p>
+                            )}
+                          </div>
+
+                          {/* Military Deployments & Conflicts */}
+                          {gameState.phase2?.deployments && gameState.phase2.deployments.filter(d => d.year === currentYear).length > 0 && (
+                            <div style={{
+                              background: 'white',
+                              borderRadius: '12px',
+                              padding: '24px',
+                              marginBottom: '20px'
+                            }}>
+                              <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#dc2626' }}>⚔️ Military Movements - {currentYear}</h3>
+                              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                {gameState.phase2.deployments
+                                  .filter(d => d.year === currentYear)
+                                  .sort((a, b) => b.timestamp - a.timestamp)
+                                  .map((deployment, idx) => (
+                                    <li key={idx} style={{
+                                      padding: '12px',
+                                      background: '#fef3c7',
+                                      borderLeft: '4px solid #f59e0b',
+                                      marginBottom: '8px',
+                                      borderRadius: '4px',
+                                      fontSize: '0.95rem'
+                                    }}>
+                                      ⚔️ <strong>{deployment.country}</strong> deployed {(deployment.troops / 1000).toFixed(0)}K troops to <strong>{deployment.region}</strong>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Conflict Alerts */}
+                          {gameState.phase2?.conflicts && gameState.phase2.conflicts.filter(c => c.year === currentYear).length > 0 && (
+                            <div style={{
+                              background: '#fee2e2',
+                              borderRadius: '12px',
+                              padding: '24px',
+                              marginBottom: '20px',
+                              border: '3px solid #dc2626'
+                            }}>
+                              <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#991b1b' }}>🔥 CONFLICT ALERTS - {currentYear}</h3>
+                              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                {gameState.phase2.conflicts
+                                  .filter(c => c.year === currentYear)
+                                  .map((conflict, idx) => (
+                                    <li key={idx} style={{
+                                      padding: '16px',
+                                      background: 'white',
+                                      borderLeft: '4px solid #dc2626',
+                                      marginBottom: '12px',
+                                      borderRadius: '4px'
+                                    }}>
+                                      <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>⚠️</div>
+                                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '8px', color: '#991b1b' }}>
+                                        TENSION IN {conflict.region.toUpperCase()}
+                                      </div>
+                                      <div style={{ fontSize: '0.95rem', color: '#7f1d1d' }}>
+                                        Multiple powers have deployed forces to {conflict.region}: {conflict.countries.join(', ')}
+                                      </div>
+                                      <div style={{ fontSize: '0.85rem', color: '#991b1b', marginTop: '8px', fontStyle: 'italic' }}>
+                                        This could escalate into armed conflict! Economic consequences may follow.
+                                      </div>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Military Deployment Map */}
+                          <MilitaryMap currentYear={currentYear} gameState={gameState} />
+
+                          {/* Admin Controls */}
+                          {userRole === 'superadmin' && (
+                            <div style={{
+                              background: 'white',
+                              borderRadius: '12px',
+                              padding: '24px',
+                              textAlign: 'center',
+                              border: '2px solid #dc2626'
+                            }}>
+                              <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#dc2626' }}>🛡️ Administrator Controls</h3>
+                              <button
+                                onClick={() => {
+                                  socket.emit('advanceYear', { roomId: SINGLE_ROOM_ID, playerId });
+                                }}
+                                style={{
+                                  padding: '15px 40px',
+                                  background: '#16a34a',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  fontSize: '1.1rem',
+                                  fontWeight: 'bold',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = '#15803d'}
+                                onMouseOut={(e) => e.currentTarget.style.background = '#16a34a'}
+                              >
+                                🎯 Advance to Year {currentYear + 1}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* GAME COMPLETE */}
+                    {gameState.gamePhase === 'complete' && (
+                      <div>
+                        <div style={{
+                          padding: '40px',
+                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                          borderRadius: '8px',
+                          border: '3px solid #f59e0b',
+                          textAlign: 'center',
+                          marginBottom: '20px'
+                        }}>
+                          <div style={{ fontSize: '4rem', marginBottom: '20px' }}>🏆</div>
+                          <h1 style={{ color: '#92400e', marginTop: 0, marginBottom: '10px' }}>
+                            Game Complete!
+                          </h1>
+                          <p style={{ color: '#78350f', fontSize: '1.1rem' }}>
+                            Bretton Woods Conference Concluded
+                          </p>
+                        </div>
+
+                        {/* Final Standings */}
+                        <div className="card">
+                          <h2 style={{ marginTop: 0, marginBottom: '20px' }}>Final Standings</h2>
+                          <div style={{ display: 'grid', gap: '12px' }}>
+                            {Object.entries(gameState.scores || {})
+                              .sort(([,a], [,b]) => b - a)
+                              .map(([country, score], idx) => (
+                                <div key={country} style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  padding: '15px',
+                                  background: idx === 0 
+                                    ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
+                                    : country === playerCountry ? '#eff6ff' : '#f8fafc',
+                                  borderRadius: '8px',
+                                  border: idx === 0 ? '2px solid #f59e0b' : 'none',
+                                  borderLeft: idx === 0 ? '4px solid #f59e0b' : '4px solid #cbd5e1'
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                    <div style={{ 
+                                      fontSize: '1.5rem', 
+                                      fontWeight: 'bold',
+                                      color: idx === 0 ? '#92400e' : '#64748b',
+                                      minWidth: '40px'
+                                    }}>
+                                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
+                                    </div>
+                                    <div>
+                                      <div style={{ 
+                                        fontWeight: 'bold',
+                                        fontSize: '1.1rem',
+                                        color: idx === 0 ? '#92400e' : '#1e293b'
+                                      }}>
+                                        {countries[country]?.name || country}
+                                      </div>
+                                      {country === playerCountry && (
+                                        <div style={{ 
+                                          fontSize: '0.875rem', 
+                                          color: '#3b82f6',
+                                          marginTop: '2px'
+                                        }}>
+                                          (You)
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ 
+                                    fontWeight: 'bold', 
+                                    fontSize: '1.5rem',
+                                    color: idx === 0 ? '#92400e' : '#1e293b'
+                                  }}>
+                                    {score} pts
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+
+                        {/* Admin can reset */}
+                        {userRole === 'superadmin' && (
+                          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Reset this game? All progress will be lost.')) {
+                                  socket.emit('resetRoom', {
+                                    roomId: SINGLE_ROOM_ID,
+                                    playerId
+                                  });
+                                }
+                              }}
+                              style={{
+                                padding: '15px 30px',
+                                background: '#f59e0b',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '1rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🔄 Start New Game
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* UNKNOWN PHASE - Debug Fallback */}
+                    {gameState.gamePhase !== 'voting' && 
+                     gameState.gamePhase !== 'results' && 
+                     gameState.gamePhase !== 'complete' && (
+                      <div style={{
+                        padding: '40px',
+                        background: '#fee2e2',
+                        borderRadius: '8px',
+                        border: '2px solid #dc2626',
+                        textAlign: 'center'
+                      }}>
+                        <h3 style={{ color: '#991b1b' }}>Unknown Game Phase</h3>
+                        <p style={{ color: '#7f1d1d' }}>
+                          Game phase: <strong>{gameState.gamePhase}</strong>
+                        </p>
+                        <p style={{ color: '#7f1d1d', fontSize: '0.875rem', marginTop: '15px' }}>
+                          This shouldn't happen. Check browser console for errors.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ marginBottom: '30px' }}>
+                      <h3>Players ({playerList.length}/7)</h3>
+                      <div style={{ display: 'grid', gap: '12px', marginTop: '12px' }}>
+                        {playerList.map((player) => (
+                          <div key={player.id} style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            padding: '12px',
+                            background: player.id === playerId ? '#eff6ff' : player.disconnected ? '#fef3c7' : '#f8fafc',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid ' + (player.id === playerId ? '#3b82f6' : player.disconnected ? '#f59e0b' : '#cbd5e1'),
+                            opacity: player.disconnected ? 0.7 : 1
+                          }}>
+                            <div>
+                              <span style={{ fontWeight: 'bold' }}>
+                                {countries[player.country]?.name || player.country}
+                              </span>
+                              {player.id === playerId && <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>(You)</span>}
+                              {player.disconnected && <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#d97706' }}>🔌 Disconnected</span>}
+                            </div>
+                            <div>
+                              {gameState?.readyPlayers?.includes(player.id) ? (
+                                <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓ Ready</span>
+                              ) : (
+                                <span style={{ color: '#64748b' }}>Not Ready</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {userRole === 'superadmin' && (
+                      <div style={{
+                        padding: '20px',
+                        background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+                        borderRadius: '8px',
+                        border: '2px solid #dc2626',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontSize: '2rem', marginBottom: '10px' }}>👁️</div>
+                        <h3 style={{ color: '#7f1d1d', marginBottom: '10px' }}>Observer Mode</h3>
+                        <p style={{ color: '#991b1b', margin: 0 }}>
+                          You are observing this game as administrator.<br />
+                          You cannot select a country or play.
+                        </p>
+                      </div>
+                    )}
+
+                    {userRole !== 'superadmin' && !playerCountry && (
+                      <div>
+                        <h3>Select Your Country</h3>
+                        <div className="country-grid">
+                          {availableCountries.map(key => {
+                            const country = countries[key];
+                            if (!country) return null;
+                            return (
+                              <div 
+                                key={key} 
+                                className={`country-card ${country.color}`}
+                                onClick={() => handleJoinGame(key)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <h3>{country.name}</h3>
+                                <p style={{ fontSize: '0.875rem', marginBottom: '12px', opacity: '0.9' }}>
+                                  {country.economicPosition}
+                                </p>
+                                <p style={{ fontSize: '0.75rem', opacity: '0.8' }}>
+                                  {country.role}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {userRole !== 'superadmin' && playerCountry && (
+                      <div>
+                        <div style={{
+                          padding: '16px',
+                          background: '#eff6ff',
+                          borderRadius: '8px',
+                          marginBottom: '20px'
+                        }}>
+                          <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>
+                            You are playing as: {countries[playerCountry]?.name || playerCountry}
+                          </p>
+                          <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                            You are committed to this country for the game.
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={handleReady}
+                          className="btn-primary"
+                          style={{ width: '100%' }}
+                        >
+                          {isReady ? '✓ Ready (Click to Unready)' : 'Mark as Ready'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {userRole === 'superadmin' && (
+                <div className="card" style={{ 
+                  marginTop: '20px', 
+                  background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+                  border: '2px solid #dc2626'
+                }}>
+                  <h3 style={{ margin: '0 0 15px 0', color: '#7f1d1d' }}>
+                    🛡️ Administrator Panel
+                  </h3>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Clear all data?\n\nThis will:\n• Reset the game\n• Remove all player countries\n• Delete all user accounts (except administrator)\n\nType CLEAR_ALL_DATA in the next prompt to confirm.')) {
+                          const confirmCode = prompt('Type CLEAR_ALL_DATA to confirm:');
+                          if (confirmCode === 'CLEAR_ALL_DATA') {
+                            socket.emit('clearAllData', { playerId, confirmCode });
+                            socket.once('clearDataResult', ({ success, message }) => {
+                              alert(message);
+                              if (success) {
+                                window.location.reload();
+                              }
+                            });
+                          }
+                        }
+                      }}
+                      style={{
+                        padding: '10px 16px',
+                        background: '#dc2626',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      🗑️ Clear All Data
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        // Initialize app when game data is loaded
+        function initializeApp() {
+          if (gameData) {
+            console.log('=== INITIALIZING APP ===');
+            console.log('Game data loaded:', {
+              countries: Object.keys(gameData.countries || {}).length,
+              issues: (gameData.issues || []).length
+            });
+            console.log('Single-room mode: Room ID =', SINGLE_ROOM_ID);
+
+              
+            try {
+              console.log('Creating React root...');
+              const root = ReactDOM.createRoot(document.getElementById('root'));
+              
+              console.log('Rendering component...');
+              root.render(
+                <ErrorBoundary>
+                  <BrettonWoodsSingleRoom />
+                </ErrorBoundary>
+              );
+              
+              console.log('✓ App initialized successfully!');
+            } catch (err) {
+              console.error('!!! ERROR INITIALIZING APP !!!');
+              console.error('Error name:', err.name);
+              console.error('Error message:', err.message);
+              console.error('Error stack:', err.stack);
+              
+              document.getElementById('root').innerHTML = `
+                <div class="container">
+                  <div class="card">
+                    <h2 style="color: #dc2626;">❌ Initialization Error</h2>
+                    <p>Failed to start the application. Check console for details.</p>
+                    <pre style="background: #f8fafc; padding: 10px; overflow: auto; text-align: left; font-size: 0.875rem;">
+${err.name}: ${err.message}
+
+Stack:
+${err.stack}
+                    </pre>
+                    <button onclick="location.reload()" class="btn-primary" style="margin-top: 20px;">
+                      Reload Page
+                    </button>
+                  </div>
+                </div>
+              `;
+            }
+          } else {
+            console.error('!!! Cannot initialize - no game data !!!');
+            document.getElementById('root').innerHTML = `
+              <div class="container">
+                <div class="card">
+                  <h2 style="color: #dc2626;">❌ No Game Data</h2>
+                  <p>Game data failed to load. Check console and ensure game-data.json exists.</p>
+                  <button onclick="location.reload()" class="btn-primary">
+                    Reload Page
+                  </button>
+                </div>
+              </div>
+            `;
+          }
+        }
+    </script>
+</body>
+</html>

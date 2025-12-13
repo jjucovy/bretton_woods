@@ -1,0 +1,428 @@
+{
+  "countries": {
+    "USA": {
+      "name": "United States",
+      "color": "bg-blue-600",
+      "textColor": "text-blue-600",
+      "objectives": [
+        "Establish dollar as primary reserve currency",
+        "Create stable exchange rates tied to gold",
+        "Ensure US dominance in international finance"
+      ],
+      "economicPosition": "Creditor nation with 70% of world's gold reserves"
+    },
+    "UK": {
+      "name": "United Kingdom",
+      "color": "bg-red-600",
+      "textColor": "text-red-600",
+      "objectives": [
+        "Preserve Sterling bloc and Commonwealth preferences",
+        "Secure reconstruction loans",
+        "Maintain some monetary independence"
+      ],
+      "economicPosition": "Heavily indebted, trade deficit, declining empire"
+    },
+    "USSR": {
+      "name": "Soviet Union",
+      "color": "bg-purple-600",
+      "textColor": "text-purple-600",
+      "objectives": [
+        "Obtain reconstruction aid without conditions",
+        "Maintain economic sovereignty",
+        "Limit Western financial control"
+      ],
+      "economicPosition": "War-devastated, suspicious of capitalist institutions"
+    },
+    "France": {
+      "name": "France",
+      "color": "bg-amber-600",
+      "textColor": "text-amber-600",
+      "objectives": [
+        "Secure reconstruction financing",
+        "Restore economic stability",
+        "Regain great power status"
+      ],
+      "economicPosition": "Occupied and devastated, weak negotiating position"
+    },
+    "China": {
+      "name": "China",
+      "color": "bg-green-600",
+      "textColor": "text-green-600",
+      "objectives": [
+        "Gain international recognition",
+        "Secure development aid",
+        "Establish modern financial institutions"
+      ],
+      "economicPosition": "Underdeveloped, civil war looming, minimal influence"
+    },
+    "India": {
+      "name": "India (British Raj)",
+      "color": "bg-orange-600",
+      "textColor": "text-orange-600",
+      "objectives": [
+        "Represent Indian interests despite colonial rule",
+        "Prepare economic foundation for independence (Aug 1947)",
+        "Secure favorable terms for future sovereign India"
+      ],
+      "economicPosition": "British colony in 1944-46, gains independence August 1947, transitions to sovereign democracy"
+    },
+    "Argentina": {
+      "name": "Argentina",
+      "color": "bg-cyan-600",
+      "textColor": "text-cyan-600",
+      "objectives": [
+        "Protect agricultural export interests",
+        "Maintain economic sovereignty from US influence",
+        "Secure fair terms for commodity exporters"
+      ],
+      "economicPosition": "Prosperous neutral during war, creditor nation, strong agriculture"
+    }
+  },
+  "economicData": {
+    "USA": {
+      "goldReserves": 20000,
+      "tradeBalance": 6800,
+      "gdp": 210000,
+      "warDebt": 250000,
+      "industrialOutput": 100
+    },
+    "UK": {
+      "goldReserves": 1800,
+      "tradeBalance": -2000,
+      "gdp": 61000,
+      "warDebt": 120000,
+      "industrialOutput": 35
+    },
+    "USSR": {
+      "goldReserves": 2500,
+      "tradeBalance": -1000,
+      "gdp": 126000,
+      "warDebt": 50000,
+      "industrialOutput": 60
+    },
+    "France": {
+      "goldReserves": 500,
+      "tradeBalance": -1500,
+      "gdp": 37000,
+      "warDebt": 45000,
+      "industrialOutput": 15
+    },
+    "China": {
+      "goldReserves": 300,
+      "tradeBalance": -800,
+      "gdp": 45000,
+      "warDebt": 35000,
+      "industrialOutput": 8
+    },
+    "India": {
+      "goldReserves": 800,
+      "tradeBalance": 400,
+      "gdp": 55000,
+      "warDebt": 20000,
+      "industrialOutput": 12
+    },
+    "Argentina": {
+      "goldReserves": 1200,
+      "tradeBalance": 1500,
+      "gdp": 32000,
+      "warDebt": 5000,
+      "industrialOutput": 18
+    }
+  },
+  "issues": [
+    {
+      "id": 1,
+      "title": "Reserve Currency System",
+      "description": "What should be the foundation of the new international monetary system?",
+      "options": [
+        {
+          "id": "a",
+          "text": "US Dollar backed by gold (White Plan)",
+          "favors": ["USA"],
+          "opposes": ["UK", "USSR"]
+        },
+        {
+          "id": "b",
+          "text": "International currency Bancor (Keynes Plan)",
+          "favors": ["UK", "France"],
+          "opposes": ["USA"]
+        },
+        {
+          "id": "c",
+          "text": "Multiple reserve currencies",
+          "favors": ["USSR", "UK", "France", "India", "Argentina"],
+          "opposes": ["USA"]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Exchange Rate System",
+      "description": "How should exchange rates be managed?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Fixed rates pegged to dollar",
+          "favors": ["USA"],
+          "opposes": ["China"]
+        },
+        {
+          "id": "b",
+          "text": "Adjustable pegs with flexibility",
+          "favors": ["UK", "France", "India", "Argentina"],
+          "opposes": ["USA"]
+        },
+        {
+          "id": "c",
+          "text": "National sovereignty over rates",
+          "favors": ["USSR", "China"],
+          "opposes": ["USA", "UK"]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Capital Controls",
+      "description": "Should countries control capital movements?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Free capital movement",
+          "favors": ["USA"],
+          "opposes": ["UK", "USSR", "France", "China"]
+        },
+        {
+          "id": "b",
+          "text": "Transitional capital controls",
+          "favors": ["UK", "USSR", "France", "China", "India", "Argentina"],
+          "opposes": []
+        },
+        {
+          "id": "c",
+          "text": "Permanent capital controls",
+          "favors": ["USSR", "China"],
+          "opposes": ["USA"]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "IMF Voting Power",
+      "description": "How to distribute voting power?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Weighted by gold and GDP",
+          "favors": ["USA"],
+          "opposes": ["UK", "USSR", "France", "China"]
+        },
+        {
+          "id": "b",
+          "text": "Major powers get substantial quotas",
+          "favors": ["UK", "France", "China"],
+          "opposes": ["USA"]
+        },
+        {
+          "id": "c",
+          "text": "More equal distribution",
+          "favors": ["USSR", "China", "India", "Argentina"],
+          "opposes": ["USA", "UK"]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Reconstruction Financing",
+      "description": "How to rebuild war-torn economies?",
+      "options": [
+        {
+          "id": "a",
+          "text": "World Bank with US conditions",
+          "favors": ["USA"],
+          "opposes": ["USSR"]
+        },
+        {
+          "id": "b",
+          "text": "Large unconditional grants",
+          "favors": ["UK", "USSR", "France", "China", "India"],
+          "opposes": ["USA"]
+        },
+        {
+          "id": "c",
+          "text": "Priority for most devastated",
+          "favors": ["France", "China"],
+          "opposes": []
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Currency Stabilization",
+      "description": "Address hyperinflation in war-torn nations?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Market-based reforms",
+          "favors": ["USA"],
+          "opposes": ["USSR", "France"]
+        },
+        {
+          "id": "b",
+          "text": "IMF stabilization loans",
+          "favors": ["UK", "France", "China", "India", "Argentina"],
+          "opposes": []
+        },
+        {
+          "id": "c",
+          "text": "State currency controls",
+          "favors": ["USSR"],
+          "opposes": ["USA", "UK"]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Trade Liberalization",
+      "description": "How should international trade be regulated?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Free trade with minimal barriers",
+          "favors": ["USA"],
+          "opposes": ["UK", "India", "Argentina"]
+        },
+        {
+          "id": "b",
+          "text": "Imperial preference systems maintained",
+          "favors": ["UK", "India"],
+          "opposes": ["USA", "USSR"]
+        },
+        {
+          "id": "c",
+          "text": "Gradual reduction of tariffs",
+          "favors": ["France", "China", "Argentina"],
+          "opposes": []
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Gold Standard vs Bretton Woods",
+      "description": "Should gold remain the ultimate anchor?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Fixed gold-dollar peg at $35/oz",
+          "favors": ["USA"],
+          "opposes": ["UK", "USSR"]
+        },
+        {
+          "id": "b",
+          "text": "Flexible gold standard",
+          "favors": ["UK", "France"],
+          "opposes": ["USA"]
+        },
+        {
+          "id": "c",
+          "text": "Abandon gold entirely",
+          "favors": ["USSR", "China"],
+          "opposes": ["USA", "UK", "France"]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Soviet Participation",
+      "description": "Should the USSR join IMF and World Bank?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Full participation with conditions",
+          "favors": ["USA", "UK"],
+          "opposes": ["USSR"]
+        },
+        {
+          "id": "b",
+          "text": "Participation without political strings",
+          "favors": ["USSR", "France", "India"],
+          "opposes": ["USA"]
+        },
+        {
+          "id": "c",
+          "text": "Separate Eastern European system",
+          "favors": ["USSR"],
+          "opposes": ["USA", "UK", "France"]
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Post-War Economic Order",
+      "description": "What principles should govern the new system?",
+      "options": [
+        {
+          "id": "a",
+          "text": "US-led liberal order",
+          "favors": ["USA"],
+          "opposes": ["USSR", "India", "Argentina"]
+        },
+        {
+          "id": "b",
+          "text": "Multilateral cooperation",
+          "favors": ["UK", "France", "China", "India", "Argentina"],
+          "opposes": []
+        },
+        {
+          "id": "c",
+          "text": "National economic sovereignty",
+          "favors": ["USSR", "Argentina"],
+          "opposes": ["USA", "UK"]
+        }
+      ]
+    }
+  ],
+  "historicalEvents": {
+    "1946": [
+      "Bretton Woods agreements officially ratified",
+      "IMF and World Bank begin operations in December",
+      "USSR demands $6 billion reconstruction loan (denied by USA)",
+      "Philippines gains independence from USA (July 4)"
+    ],
+    "1947": [
+      "India gains independence from Britain (August 15)",
+      "Marshall Plan announced by USA ($13 billion for European reconstruction)",
+      "GATT (General Agreement on Tariffs and Trade) negotiations begin",
+      "Truman Doctrine pledges support against Soviet expansion"
+    ],
+    "1948": [
+      "USSR refuses Marshall Plan aid and blocks Eastern Europe from participating",
+      "Berlin Blockade begins (June 24) - USSR blocks Western access",
+      "Organization of American States (OAS) founded",
+      "State of Israel founded, Arab-Israeli War begins"
+    ],
+    "1949": [
+      "NATO (North Atlantic Treaty Organization) founded (April 4)",
+      "Chinese Communist Party defeats Nationalists (October 1)",
+      "USSR successfully tests atomic bomb (August 29)",
+      "Germany divided into Federal Republic (West) and Democratic Republic (East)"
+    ],
+    "1950": [
+      "Korean War begins (June 25) - North Korea invades South",
+      "European Payments Union created to facilitate trade",
+      "Schuman Plan proposed (European Coal and Steel Community)",
+      "Chinese forces enter Korean War (October)"
+    ],
+    "1951": [
+      "Treaty of Paris creates European Coal and Steel Community",
+      "Iranian oil nationalization crisis - Mossadegh nationalizes Anglo-Iranian Oil",
+      "Japanese Peace Treaty signed in San Francisco",
+      "European Defense Community proposed (later fails)"
+    ],
+    "1952": [
+      "European Defense Community treaty signed (ratification fails 1954)",
+      "Britain successfully tests atomic bomb",
+      "End of post-war Allied occupation of West Germany",
+      "Eisenhower elected US President, pledges to end Korean War"
+    ]
+  }
+}
