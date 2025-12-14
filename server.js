@@ -320,7 +320,7 @@ process.on('SIGTERM', () => {
 });
 
 // Password functions
-const crypto = require('crypto');
+// (crypto already required at top of file)
 
 // Simple password hashing (for educational use - in production use bcrypt)
 // Using SHA256 with salt for better security
