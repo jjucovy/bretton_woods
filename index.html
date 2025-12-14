@@ -1296,6 +1296,328 @@
                 </p>
               </div>
 
+              {/* User Management Panel (Admin Only - Always Visible) */}
+              {userRole === 'superadmin' && (() => {
+                const [showUsers, setShowUsers] = React.useState(false);
+                const [users, setUsers] = React.useState([]);
+                
+                const loadUsers = async () => {
+                  try {
+                    const response = await fetch(`/api/users?adminPlayerId=${playerId}`);
+                    const data = await response.json();
+                    if (data.users) {
+                      setUsers(data.users);
+                      setShowUsers(true);
+                    }
+                  } catch (err) {
+                    console.error('Error loading users:', err);
+                  }
+                };
+                
+                const deleteUser = async (username) => {
+                  if (!confirm(`Delete user "${username}"?\n\nThis cannot be undone!`)) return;
+                  
+                  try {
+                    const response = await fetch(`/api/users/${username}`, {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ adminPlayerId: playerId })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                      alert('✅ User deleted');
+                      loadUsers(); // Refresh list
+                    } else {
+                      alert('❌ ' + result.error);
+                    }
+                  } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                  }
+                };
+                
+                const exportUsers = () => {
+                  window.location.href = `/api/export-users?adminPlayerId=${playerId}`;
+                };
+                
+                return (
+                  <div className="card" style={{ background: '#f0f9ff', border: '2px solid #0891b2', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#075985' }}>
+                        👥 User Management
+                      </h3>
+                      <button
+                        onClick={() => showUsers ? setShowUsers(false) : loadUsers()}
+                        style={{
+                          padding: '8px 16px',
+                          background: '#0891b2',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {showUsers ? '🔼 Hide Users' : '🔽 Show Users'}
+                      </button>
+                    </div>
+                    
+                    {showUsers && (
+                      <div>
+                        <div style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
+                          <button
+                            onClick={exportUsers}
+                            style={{
+                              padding: '8px 16px',
+                              background: '#7c3aed',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '0.85rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            💾 Export User Database
+                          </button>
+                          <button
+                            onClick={loadUsers}
+                            style={{
+                              padding: '8px 16px',
+                              background: '#059669',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '0.85rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🔄 Refresh
+                          </button>
+                        </div>
+                        
+                        <div style={{
+                          maxHeight: '400px',
+                          overflowY: 'auto',
+                          background: 'white',
+                          borderRadius: '6px',
+                          padding: '12px'
+                        }}>
+                          <table style={{ width: '100%', fontSize: '0.875rem', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '2px solid #e5e7eb', background: '#f9fafb' }}>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Username</th>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Role</th>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Created</th>
+                                <th style={{ padding: '10px', textAlign: 'left' }}>Last Login</th>
+                                <th style={{ padding: '10px', textAlign: 'center' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {users.length === 0 ? (
+                                <tr>
+                                  <td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                                    No users found
+                                  </td>
+                                </tr>
+                              ) : (
+                                users.map(user => (
+                                  <tr key={user.username} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                    <td style={{ padding: '10px', fontWeight: 'bold' }}>
+                                      {user.username}
+                                      {user.playerId === playerId && (
+                                        <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#3b82f6' }}>(You)</span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '10px' }}>
+                                      <span style={{
+                                        padding: '4px 8px',
+                                        background: user.role === 'superadmin' ? '#dc2626' : '#0891b2',
+                                        color: 'white',
+                                        borderRadius: '4px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 'bold'
+                                      }}>
+                                        {user.role === 'superadmin' ? 'ADMIN' : 'PLAYER'}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '10px', color: '#64748b', fontSize: '0.8rem' }}>
+                                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                                    </td>
+                                    <td style={{ padding: '10px', color: '#64748b', fontSize: '0.8rem' }}>
+                                      {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
+                                    </td>
+                                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                                      {user.playerId !== playerId && (
+                                        <button
+                                          onClick={() => deleteUser(user.username)}
+                                          style={{
+                                            padding: '6px 12px',
+                                            background: '#dc2626',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            fontSize: '0.75rem',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          🗑️ Delete
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                        
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '10px',
+                          background: '#fef3c7',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem',
+                          color: '#78350f'
+                        }}>
+                          <strong>💡 Tip:</strong> User accounts persist across server restarts. Export database for backup.
+                          Total users: {users.length}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Admin Control Panel */}
+              {userRole === 'superadmin' && gameState?.gameStarted && (
+                <div className="card" style={{ background: '#fef3c7', border: '2px solid #f59e0b', marginBottom: '20px' }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#92400e' }}>
+                    🎛️ Administrator Controls
+                  </h3>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => {
+                        const url = `/api/export-state/${SINGLE_ROOM_ID}`;
+                        window.location.href = url;
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        background: '#0891b2',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#0e7490'}
+                      onMouseOut={(e) => e.currentTarget.style.background = '#0891b2'}
+                    >
+                      💾 Export Game State
+                    </button>
+                    
+                    <label style={{
+                      padding: '10px 20px',
+                      background: '#7c3aed',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.background = '#6d28d9'}
+                    onMouseOut={(e) => e.currentTarget.style.background = '#7c3aed'}>
+                      📤 Import Game State
+                      <input
+                        type="file"
+                        accept=".json"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          
+                          const reader = new FileReader();
+                          reader.onload = async (event) => {
+                            try {
+                              const importData = JSON.parse(event.target.result);
+                              
+                              if (!importData.roomData) {
+                                alert('Invalid game state file!');
+                                return;
+                              }
+                              
+                              if (!confirm(`Import game state from ${importData.exportedAt}?\n\nThis will replace the current game!`)) {
+                                return;
+                              }
+                              
+                              const response = await fetch(`/api/import-state/${SINGLE_ROOM_ID}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  roomData: importData.roomData,
+                                  playerId: playerId
+                                })
+                              });
+                              
+                              const result = await response.json();
+                              
+                              if (result.success) {
+                                alert('✅ Game state imported successfully!');
+                                window.location.reload();
+                              } else {
+                                alert('❌ Failed to import: ' + result.error);
+                              }
+                            } catch (err) {
+                              alert('❌ Error reading file: ' + err.message);
+                            }
+                          };
+                          reader.readAsText(file);
+                        }}
+                      />
+                    </label>
+                    
+                    <button
+                      onClick={() => {
+                        if (confirm('Reset the game? All progress will be lost.')) {
+                          socket.emit('resetRoom', { roomId: SINGLE_ROOM_ID, playerId });
+                        }
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        background: '#dc2626',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#b91c1c'}
+                      onMouseOut={(e) => e.currentTarget.style.background = '#dc2626'}
+                    >
+                      🗑️ Reset Game
+                    </button>
+                  </div>
+                  
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '10px',
+                    background: 'white',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    color: '#78350f'
+                  }}>
+                    <strong>💡 Tip:</strong> Export game state to save progress. Import later to resume from exact same point.
+                    Game auto-saves to server every action.
+                  </div>
+                </div>
+              )}
+
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                   <h2>{gameState?.gameStarted ? 'Game In Progress' : 'Game Lobby'}</h2>
@@ -2371,7 +2693,27 @@
 
                         {/* Admin can reset */}
                         {userRole === 'superadmin' && (
-                          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                          <div style={{ marginTop: '20px', textAlign: 'center', display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button
+                              onClick={() => {
+                                // Export game state
+                                const url = `/api/export-state/${SINGLE_ROOM_ID}`;
+                                window.location.href = url;
+                              }}
+                              style={{
+                                padding: '15px 30px',
+                                background: '#0891b2',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '1rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              💾 Download Game State
+                            </button>
+                            
                             <button
                               onClick={() => {
                                 if (window.confirm('Reset this game? All progress will be lost.')) {

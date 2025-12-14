@@ -120,6 +120,156 @@ function saveState() {
 loadState();
 
 // ============================================
+// EXPORT/IMPORT GAME STATE
+// ============================================
+
+// Export game state (download JSON)
+app.get('/api/export-state/:roomId', (req, res) => {
+  const { roomId } = req.params;
+  const room = globalState.rooms[roomId];
+  
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+  
+  // Create export package with timestamp
+  const exportData = {
+    exportedAt: new Date().toISOString(),
+    version: '2.0',
+    roomId: roomId,
+    roomData: room
+  };
+  
+  // Set headers for file download
+  const filename = `bretton-woods-${roomId}-${Date.now()}.json`;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  
+  res.json(exportData);
+  console.log(`📥 Exported game state for room ${roomId}`);
+});
+
+// Import game state (restore from JSON)
+app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res) => {
+  const { roomId } = req.params;
+  const { roomData, playerId } = req.body;
+  
+  // Verify admin permissions
+  const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+  if (!user || user.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Only administrators can import game states' });
+  }
+  
+  if (!roomData) {
+    return res.status(400).json({ error: 'No room data provided' });
+  }
+  
+  try {
+    // Restore room state
+    globalState.rooms[roomId] = roomData;
+    
+    // Save to disk
+    saveState();
+    
+    // Broadcast update to all clients in room
+    io.to(roomId).emit('gameStateUpdate', roomData);
+    
+    console.log(`📤 Imported game state for room ${roomId}`);
+    res.json({ success: true, message: 'Game state imported successfully' });
+  } catch (err) {
+    console.error('Error importing state:', err);
+    res.status(500).json({ error: 'Failed to import game state' });
+  }
+});
+
+// ============================================
+// END EXPORT/IMPORT
+// ============================================
+
+// ============================================
+// USER MANAGEMENT API
+// ============================================
+
+// Get all users (admin only)
+app.get('/api/users', (req, res) => {
+  const { adminPlayerId } = req.query;
+  
+  // Verify admin
+  const admin = Object.values(globalState.users).find(u => u.playerId === adminPlayerId);
+  if (!admin || admin.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  // Return users without passwords
+  const users = Object.entries(globalState.users).map(([username, data]) => ({
+    username,
+    playerId: data.playerId,
+    role: data.role,
+    createdAt: data.createdAt,
+    lastLogin: data.lastLogin
+  }));
+  
+  res.json({ users });
+});
+
+// Delete user (admin only)
+app.delete('/api/users/:username', express.json(), (req, res) => {
+  const { username } = req.params;
+  const { adminPlayerId } = req.body;
+  
+  // Verify admin
+  const admin = Object.values(globalState.users).find(u => u.playerId === adminPlayerId);
+  if (!admin || admin.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  // Don't allow deleting self
+  const adminUsername = Object.keys(globalState.users).find(u => globalState.users[u].playerId === adminPlayerId);
+  if (username === adminUsername) {
+    return res.status(400).json({ error: 'Cannot delete your own account' });
+  }
+  
+  if (!globalState.users[username]) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  delete globalState.users[username];
+  saveState();
+  
+  console.log(`User deleted: ${username} by admin`);
+  res.json({ success: true, message: 'User deleted successfully' });
+});
+
+// Export user database (admin only)
+app.get('/api/export-users', (req, res) => {
+  const { adminPlayerId } = req.query;
+  
+  // Verify admin
+  const admin = Object.values(globalState.users).find(u => u.playerId === adminPlayerId);
+  if (!admin || admin.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  const exportData = {
+    exportedAt: new Date().toISOString(),
+    version: '2.0',
+    users: globalState.users
+  };
+  
+  const filename = `users-database-${Date.now()}.json`;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  
+  res.json(exportData);
+  console.log(`📥 Exported user database`);
+});
+
+// ============================================
+// END USER MANAGEMENT
+// ============================================
+
+
+// ============================================
 // SINGLE-ROOM MODE: Auto-create main game room
 // ============================================
 const SINGLE_ROOM_ID = 'main-game';
@@ -170,8 +320,13 @@ process.on('SIGTERM', () => {
 });
 
 // Password functions
+const crypto = require('crypto');
+
+// Simple password hashing (for educational use - in production use bcrypt)
+// Using SHA256 with salt for better security
 function hashPassword(password) {
-  return crypto.createHash('sha256').update(password).digest('hex');
+  const salt = 'bretton-woods-2024'; // Static salt for consistency
+  return crypto.createHash('sha256').update(salt + password).digest('hex');
 }
 
 function verifyPassword(password, hashedPassword) {
@@ -915,6 +1070,10 @@ io.on('connection', (socket) => {
     const role = user.role || 'player';
     console.log('Login successful, sending role:', role);
     
+    // Update last login time
+    user.lastLogin = Date.now();
+    saveState();
+    
     socket.emit('loginResult', { 
       success: true, 
       playerId: user.playerId, 
@@ -1455,7 +1614,19 @@ io.on('connection', (socket) => {
     
     if (!room.phase2.active) return;
     
-    // Calculate this year's economics
+    // Check if we're already at the end
+    if (room.phase2.currentYear >= 1952) {
+      // Don't calculate more economics, just finalize
+      calculatePhase2Scores(roomId);
+      room.gamePhase = 'complete';
+      room.phase2.active = false;
+      console.log('Phase 2 complete! Final scores calculated.');
+      broadcastToRoom(roomId);
+      saveState();
+      return;
+    }
+    
+    // Calculate this year's economics (this creates data for next year)
     calculateYearEconomics(roomId);
     
     // Advance year
@@ -1464,12 +1635,9 @@ io.on('connection', (socket) => {
     
     console.log(`Advanced to year ${room.phase2.currentYear}`);
     
-    // Check if Phase 2 is complete
-    if (room.phase2.currentYear > 1952) {
-      calculatePhase2Scores(roomId);
-      room.gamePhase = 'complete';
-      room.phase2.active = false;
-      console.log('Phase 2 complete! Final scores calculated.');
+    // Check if we've reached the final year
+    if (room.phase2.currentYear >= 1952) {
+      console.log('Reached final year 1952. Next advance will complete Phase 2.');
     }
     
     broadcastToRoom(roomId);
