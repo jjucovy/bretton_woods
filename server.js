@@ -746,12 +746,7 @@ function calculateYearEconomics(roomId) {
         
         gdpGrowth += (warIntensity[currentYear] || -1.0); // Negative growth from civil war
         tradeBalance -= (currentYear - 1945) * 200; // Worsening trade disruption
-        // Note: Unemployment increase handled later in unemployment calculation section
-        
-        // Agricultural disruption
-        if (currentYear >= 1948) {
-          inflation += 3.0; // Severe shortages
-        }
+        // Note: Unemployment and inflation increases handled later in their respective sections
       }
       
       // Communist China (post-1949) - command economy
@@ -804,6 +799,11 @@ function calculateYearEconomics(roomId) {
     
     // === INFLATION (affected by global conditions) ===
     let inflation = prevData.inflation;
+    
+    // China civil war effect on inflation (agricultural disruption)
+    if (country === 'China' && currentYear >= 1948 && currentYear <= 1949) {
+      inflation += 3.0; // Severe shortages from agricultural collapse
+    }
     
     // Your own interest rate
     if (centralBankRate < 2.0) {
