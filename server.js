@@ -48,6 +48,9 @@ let globalState = {
 // Load military deployments data
 const militaryDeploymentsData = require('./military-deployments.json');
 
+// Load crisis events data
+const crisisEventsData = require('./crisis-events.json');
+
 // Create default game state template
 function createGameState(roomId, roomName, hostId) {
   return {
@@ -70,7 +73,12 @@ function createGameState(roomId, roomName, hostId) {
       maxYears: 7, // 1946-1952
       policies: {}, // year -> country -> policy
       yearlyData: {}, // year -> country -> economic data
-      achievements: {}
+      achievements: {},
+      crises: {
+        active: null, // Current active crisis
+        history: [], // Resolved crises
+        responses: {} // playerId -> response choice
+      }
     },
     maxPlayers: 7,
     createdAt: Date.now()
@@ -396,7 +404,13 @@ function initializePhase2(roomId) {
       unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
       tradeBalance: initialData.tradeBalance,
       inflation: country === 'USA' ? 8.3 : country === 'UK' ? 3.1 : country === 'USSR' ? 0 : country === 'France' ? 50.0 : country === 'China' ? 300.0 : 20.0,
-      industrialOutput: initialData.industrialOutput
+      industrialOutput: initialData.industrialOutput,
+      military: {
+        army: initialData.military.army,
+        navy: initialData.military.navy,
+        airForce: initialData.military.airForce,
+        total: initialData.military.total
+      }
     };
   });
   
@@ -543,29 +557,56 @@ function calculateYearEconomics(roomId) {
     }
     
     const militarySpending = policy.militarySpending || 5;
-    const militarySize = policy.militarySize || 500000;
+    
+    // NEW: Military branch breakdown
+    const armySize = policy.armySize || prevData.military.army;
+    const navySize = policy.navySize || prevData.military.navy;
+    const airForceSize = policy.airForceSize || prevData.military.airForce;
+    const totalMilitary = armySize + navySize + airForceSize;
     
     // Base growth rate (post-war boom)
     let gdpGrowth = 4.0;
     
-    // === MILITARY ECONOMIC IMPACT ===
+    // === MILITARY ECONOMIC IMPACT (BRANCH-SPECIFIC) ===
     // Military spending as % of GDP
     const milSpending = militarySpending || 5;
-    const milSize = militarySize || 500000;
+    
+    // Calculate actual cost based on branch composition
+    // Army: $1 per soldier (cheap - food, basic equipment)
+    // Navy: $4 per sailor (ships, fuel, maintenance)
+    // Air Force: $6 per airman (planes, fuel, high-tech equipment)
+    const armyCost = armySize * 1;
+    const navyCost = navySize * 4;
+    const airForceCost = airForceSize * 6;
+    const totalMilitaryCost = armyCost + navyCost + airForceCost;
+    
+    // Calculate effective military spending based on force structure
+    const gdp = country === 'USA' ? 210000 : country === 'UK' ? 61000 : country === 'USSR' ? 126000 : country === 'France' ? 37000 : country === 'China' ? 45000 : country === 'India' ? 55000 : 32000;
+    const effectiveMilSpending = (totalMilitaryCost / (gdp * 10)) * 100; // Convert to % of GDP
     
     // High military spending drains civilian economy
-    if (milSpending > 10) {
-      gdpGrowth -= (milSpending - 10) * 0.15; // Each % above 10 hurts growth
+    if (effectiveMilSpending > 10) {
+      gdpGrowth -= (effectiveMilSpending - 10) * 0.15; // Each % above 10 hurts growth
     }
     
     // But some military spending stimulates industry (Keynesian effect)
-    if (milSpending >= 5 && milSpending <= 8) {
+    if (effectiveMilSpending >= 5 && effectiveMilSpending <= 8) {
       gdpGrowth += 0.3; // Optimal military-industrial stimulus
     }
     
     // Large standing army reduces civilian workforce
-    const laborForceImpact = (milSize / 1000000) * -0.2; // Per million troops
+    const laborForceImpact = (totalMilitary / 1000000) * -0.2; // Per million troops
     gdpGrowth += laborForceImpact;
+    
+    // Navy protects trade routes (if you have a navy)
+    if (navySize > 100000) {
+      tradeBalance += (navySize / 100000) * 150; // Large navy protects commerce
+    }
+    
+    // Air Force provides strategic capabilities but very expensive
+    if (airForceSize > 200000) {
+      gdpGrowth -= 0.3; // High-tech maintenance burden
+    }
     
     // Central bank rate impact
     const optimalCBRate = 3.0;
@@ -608,7 +649,10 @@ function calculateYearEconomics(roomId) {
       
       // === MILITARY TENSION & ARMS RACE ===
       const otherMilSpending = otherPolicy.militarySpending || 5;
-      const otherMilSize = otherPolicy.militarySize || 500000;
+      const otherArmySize = otherPolicy.armySize || 500000;
+      const otherNavySize = otherPolicy.navySize || 100000;
+      const otherAirForceSize = otherPolicy.airForceSize || 100000;
+      const otherTotalMilitary = otherArmySize + otherNavySize + otherAirForceSize;
       
       // Arms race: if they heavily militarize, you feel pressure
       // Specific rivalries
@@ -621,9 +665,14 @@ function calculateYearEconomics(roomId) {
       
       if (isRival) {
         // If rival has much larger military, you lose influence
-        if (otherMilSize > milSize * 1.5) {
+        if (otherTotalMilitary > totalMilitary * 1.5) {
           gdpGrowth -= 0.3; // Lost influence hurts economy
           tradeBalance -= 200; // Less favorable trade terms
+        }
+        
+        // Naval rivalry for maritime powers
+        if ((country === 'UK' || country === 'USA') && otherNavySize > navySize * 1.3) {
+          tradeBalance -= 300; // Lost sea control hurts trade
         }
         
         // If rival spends heavily on military (>12%), creates tension
@@ -868,7 +917,12 @@ function calculateYearEconomics(roomId) {
       inflation: Math.round(inflation * 10) / 10,
       industrialOutput: Math.round(industrialOutput),
       militarySpending: milSpending,
-      militarySize: milSize
+      military: {
+        army: armySize,
+        navy: navySize,
+        airForce: airForceSize,
+        total: totalMilitary
+      }
     };
   });
   
@@ -1632,6 +1686,9 @@ io.on('connection', (socket) => {
     // Advance year
     room.phase2.currentYear++;
     room.readyPlayers = [];
+    
+    // Check for crisis events this year
+    triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
     
     console.log(`Advanced to year ${room.phase2.currentYear}`);
     

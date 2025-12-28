@@ -84,49 +84,91 @@
       "tradeBalance": 6800,
       "gdp": 210000,
       "warDebt": 250000,
-      "industrialOutput": 100
+      "industrialOutput": 100,
+      "military": {
+        "army": 1070000,
+        "navy": 484000,
+        "airForce": 390000,
+        "total": 1944000
+      }
     },
     "UK": {
       "goldReserves": 1800,
       "tradeBalance": -2000,
       "gdp": 61000,
       "warDebt": 120000,
-      "industrialOutput": 35
+      "industrialOutput": 35,
+      "military": {
+        "army": 600000,
+        "navy": 350000,
+        "airForce": 150000,
+        "total": 1100000
+      }
     },
     "USSR": {
       "goldReserves": 2500,
       "tradeBalance": -1000,
       "gdp": 126000,
       "warDebt": 50000,
-      "industrialOutput": 60
+      "industrialOutput": 60,
+      "military": {
+        "army": 2400000,
+        "navy": 300000,
+        "airForce": 200000,
+        "total": 2900000
+      }
     },
     "France": {
       "goldReserves": 500,
       "tradeBalance": -1500,
       "gdp": 37000,
       "warDebt": 45000,
-      "industrialOutput": 15
+      "industrialOutput": 15,
+      "military": {
+        "army": 500000,
+        "navy": 180000,
+        "airForce": 120000,
+        "total": 800000
+      }
     },
     "China": {
       "goldReserves": 300,
       "tradeBalance": -800,
       "gdp": 45000,
       "warDebt": 35000,
-      "industrialOutput": 8
+      "industrialOutput": 8,
+      "military": {
+        "army": 2200000,
+        "navy": 50000,
+        "airForce": 450000,
+        "total": 2700000
+      }
     },
     "India": {
       "goldReserves": 800,
       "tradeBalance": 400,
       "gdp": 55000,
       "warDebt": 20000,
-      "industrialOutput": 12
+      "industrialOutput": 12,
+      "military": {
+        "army": 1800000,
+        "navy": 30000,
+        "airForce": 170000,
+        "total": 2000000
+      }
     },
     "Argentina": {
       "goldReserves": 1200,
       "tradeBalance": 1500,
       "gdp": 32000,
       "warDebt": 5000,
-      "industrialOutput": 18
+      "industrialOutput": 18,
+      "military": {
+        "army": 100000,
+        "navy": 35000,
+        "airForce": 15000,
+        "total": 150000
+      }
     }
   },
   "issues": [
