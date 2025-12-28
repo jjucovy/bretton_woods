@@ -482,6 +482,45 @@ function calculateAgreementBonus(roomId) {
   return bonus;
 }
 
+// Trigger crisis events if appropriate for current year
+function triggerCrisisIfNeeded(roomId, year) {
+  const room = globalState.rooms[roomId];
+  if (!room) return;
+  
+  // Check if there's already an active crisis
+  if (room.phase2.crises.active) {
+    console.log(`Crisis already active, skipping trigger for year ${year}`);
+    return;
+  }
+  
+  // Find crisis events for this year that haven't been triggered yet
+  const availableCrisis = crisisEventsData.crisisEvents.find(event => 
+    event.year === year && 
+    !room.phase2.crises.history.find(h => h.id === event.id)
+  );
+  
+  if (availableCrisis) {
+    console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
+    room.phase2.crises.active = {
+      ...availableCrisis,
+      triggeredAt: Date.now(),
+      resolved: false
+    };
+    room.phase2.crises.responses = {};
+    
+    // Note: Crisis resolution needs to be implemented in client/server handlers
+    // For now, auto-resolve to prevent blocking
+    console.log(`⚠️ Crisis system not fully implemented - auto-resolving ${availableCrisis.id}`);
+    room.phase2.crises.history.push({
+      ...availableCrisis,
+      triggeredAt: Date.now(),
+      resolvedAt: Date.now(),
+      autoResolved: true
+    });
+    room.phase2.crises.active = null;
+  }
+}
+
 function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
@@ -1361,13 +1400,15 @@ io.on('connection', (socket) => {
     }
     
     const isSuperAdmin = user && user.role === 'superadmin';
+    const isRoomHost = room.hostId === playerId;
     console.log('Is superadmin:', isSuperAdmin);
+    console.log('Is room host:', isRoomHost);
     
-    if (!isSuperAdmin) {
-      console.log('ERROR: Not superadmin');
+    if (!isSuperAdmin && !isRoomHost) {
+      console.log('ERROR: Not superadmin or room host');
       socket.emit('startGameResult', { 
         success: false, 
-        message: `Only the administrator can start games. Your role: ${user ? user.role : 'not found'}` 
+        message: `Only the game admin can start games. Your role: ${user ? user.role : 'not found'}` 
       });
       return;
     }
@@ -1524,9 +1565,21 @@ io.on('connection', (socket) => {
     
     const user = Object.values(globalState.users).find(u => u.playerId === playerId);
     const isSuperAdmin = user && user.role === 'superadmin';
+    const isRoomHost = room.hostId === playerId;
     
-    if (!isSuperAdmin) {
-      console.log('Advance round rejected: not superadmin');
+    // Allow either superadmin OR room host to advance round
+    if (!isSuperAdmin && !isRoomHost) {
+      console.log('Advance round rejected:', {
+        playerId,
+        username: user?.username || 'unknown',
+        role: user?.role || 'none',
+        isSuperAdmin,
+        isRoomHost,
+        roomHost: room.hostId
+      });
+      socket.emit('advanceRoundError', { 
+        message: 'Only the game admin can advance the round.' 
+      });
       return;
     }
     
@@ -1655,18 +1708,54 @@ io.on('connection', (socket) => {
   });
 
   socket.on('advanceYear', ({ roomId, playerId }) => {
+    console.log('=== ADVANCE YEAR REQUEST ===');
+    console.log('Room ID:', roomId);
+    console.log('Player ID:', playerId);
+    
     const room = globalState.rooms[roomId];
-    if (!room) return;
-    
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    const isSuperAdmin = user && user.role === 'superadmin';
-    
-    if (!isSuperAdmin) {
-      console.log('Advance year rejected: not superadmin');
+    if (!room) {
+      console.log('ERROR: Room not found');
       return;
     }
     
-    if (!room.phase2.active) return;
+    console.log('Room found:', room.roomName);
+    console.log('Room host:', room.hostId);
+    console.log('Phase 2 active:', room.phase2.active);
+    console.log('Current year:', room.phase2.currentYear);
+    
+    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+    console.log('User found:', user ? 'YES' : 'NO');
+    if (user) {
+      console.log('User details:', { playerId: user.playerId, role: user.role });
+    }
+    
+    const isSuperAdmin = user && user.role === 'superadmin';
+    const isRoomHost = room.hostId === playerId;
+    
+    console.log('Permission check:', { isSuperAdmin, isRoomHost });
+    
+    // Allow either superadmin OR room host to advance year
+    if (!isSuperAdmin && !isRoomHost) {
+      console.log('❌ Advance year rejected:', {
+        playerId,
+        username: user?.username || 'unknown',
+        role: user?.role || 'none',
+        isSuperAdmin,
+        isRoomHost,
+        roomHost: room.hostId
+      });
+      socket.emit('advanceYearError', { 
+        message: 'Only the game admin can advance the year.' 
+      });
+      return;
+    }
+    
+    console.log('✅ Permission granted');
+    
+    if (!room.phase2.active) {
+      console.log('ERROR: Phase 2 not active');
+      return;
+    }
     
     // Check if we're already at the end
     if (room.phase2.currentYear >= 1952) {
@@ -1690,27 +1779,30 @@ io.on('connection', (socket) => {
     // Check for crisis events this year
     triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
     
-    console.log(`Advanced to year ${room.phase2.currentYear}`);
+    console.log(`✅ Advanced to year ${room.phase2.currentYear}`);
     
     // Check if we've reached the final year
     if (room.phase2.currentYear >= 1952) {
       console.log('Reached final year 1952. Next advance will complete Phase 2.');
     }
     
+    console.log('Broadcasting updated game state...');
     broadcastToRoom(roomId);
     saveState();
+    console.log('✅ Year advancement complete');
   });
   
-  // SUPERADMIN ONLY: Reset room
+  // ADMIN: Reset room (room host or superadmin)
   socket.on('resetRoom', ({ roomId, playerId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
     const user = Object.values(globalState.users).find(u => u.playerId === playerId);
     const isSuperAdmin = user && user.role === 'superadmin';
+    const isRoomHost = room.hostId === playerId;
     
-    if (!isSuperAdmin) {
-      socket.emit('resetRoomResult', { success: false, message: 'Only the administrator can reset games' });
+    if (!isSuperAdmin && !isRoomHost) {
+      socket.emit('resetRoomResult', { success: false, message: 'Only the game admin can reset games' });
       return;
     }
     

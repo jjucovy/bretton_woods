@@ -1383,6 +1383,11 @@
               }
             });
 
+            socket.on('advanceYearError', ({ message }) => {
+              alert('❌ ' + message);
+              console.error('Advance year error:', message);
+            });
+
             return () => {
               socket.off('connect');
               socket.off('disconnect');
@@ -1392,6 +1397,7 @@
               socket.off('resetRoomResult');
               socket.off('joinResult');
               socket.off('rejoinResult');
+              socket.off('advanceYearError');
             };
           }, [playerId, isAuthenticated]);
 
