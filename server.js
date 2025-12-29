@@ -1066,6 +1066,12 @@ function calculatePhase2Scores(roomId) {
         breakdown.brettonWoods = Math.round((bwBonus.gdpBonus + bwBonus.tradeBonus / 100) * 5);
         score += breakdown.brettonWoods;
       }
+      
+      // Crisis diplomatic points
+      if (room.phase2.diplomaticPoints && room.phase2.diplomaticPoints[country]) {
+        breakdown.crisisDiplomacy = room.phase2.diplomaticPoints[country] * 2; // 2 pts per diplomatic point
+        score += breakdown.crisisDiplomacy;
+      }
     }
     
     phase2Scores[country] = Math.round(score);
@@ -1118,6 +1124,12 @@ function resolveCrisisEffects(roomId) {
     if (effects.tradeBalance) yearData.tradeBalance = (yearData.tradeBalance || 0) + effects.tradeBalance;
     if (effects.inflation) yearData.inflation = (yearData.inflation || 0) + effects.inflation;
     if (effects.unemployment) yearData.unemployment = (yearData.unemployment || 0) + effects.unemployment;
+    
+    // Apply diplomatic points (stored separately, counted in final scoring)
+    if (effects.diplomaticPoints) {
+      if (!room.phase2.diplomaticPoints) room.phase2.diplomaticPoints = {};
+      room.phase2.diplomaticPoints[country] = (room.phase2.diplomaticPoints[country] || 0) + effects.diplomaticPoints;
+    }
     
     console.log(`  ${country}: ${choice.text}`);
     if (Object.keys(effects).length > 0) {
