@@ -605,6 +605,7 @@ function calculateYearEconomics(roomId) {
     
     // Base growth rate (post-war boom)
     let gdpGrowth = 4.0;
+    let tradeBalance = prevData.tradeBalance; // Initialize early - used in military effects
     
     // === MILITARY ECONOMIC IMPACT (BRANCH-SPECIFIC) ===
     // Military spending as % of GDP
@@ -655,7 +656,6 @@ function calculateYearEconomics(roomId) {
     // === DYNAMIC TRADE EFFECTS ===
     // Calculate trade competitiveness vs other countries
     let tradeCompetitiveness = 0;
-    let tradeBalance = prevData.tradeBalance;
     
     allCountries.forEach(otherCountry => {
       if (otherCountry === country) return;
@@ -1729,10 +1729,37 @@ io.on('connection', (socket) => {
       console.log('User details:', { playerId: user.playerId, role: user.role });
     }
     
+    // AUTO-FIX: If room has no host, set to current user (if they're in the game)
+    if (!room.hostId && room.players[playerId]) {
+      console.log('⚠️ Room has no host ID, setting to current player:', playerId);
+      room.hostId = playerId;
+      saveState();
+    }
+    
+    // AUTO-FIX: If room host is not in the players list, reassign to first player
+    if (room.hostId && !room.players[room.hostId]) {
+      const playerIds = Object.keys(room.players);
+      if (playerIds.length > 0) {
+        const newHostId = playerIds[0];
+        console.log('⚠️ Room host not in game, reassigning from', room.hostId, 'to', newHostId);
+        room.hostId = newHostId;
+        saveState();
+      }
+    }
+    
     const isSuperAdmin = user && user.role === 'superadmin';
     const isRoomHost = room.hostId === playerId;
     
-    console.log('Permission check:', { isSuperAdmin, isRoomHost });
+    console.log('=== DETAILED PERMISSION CHECK ===');
+    console.log('Player ID from request:', playerId);
+    console.log('Room host ID:', room.hostId);
+    console.log('IDs match:', room.hostId === playerId);
+    console.log('Player ID type:', typeof playerId);
+    console.log('Room host ID type:', typeof room.hostId);
+    console.log('User object:', user);
+    console.log('Is superadmin:', isSuperAdmin);
+    console.log('Is room host:', isRoomHost);
+    console.log('Permission check result:', { isSuperAdmin, isRoomHost });
     
     // Allow either superadmin OR room host to advance year
     if (!isSuperAdmin && !isRoomHost) {
@@ -1742,7 +1769,8 @@ io.on('connection', (socket) => {
         role: user?.role || 'none',
         isSuperAdmin,
         isRoomHost,
-        roomHost: room.hostId
+        roomHost: room.hostId,
+        reason: 'Player is neither superadmin nor room host'
       });
       socket.emit('advanceYearError', { 
         message: 'Only the game admin can advance the year.' 
