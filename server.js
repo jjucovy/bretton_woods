@@ -1420,10 +1420,11 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', ({ roomId, playerId }) => {
+  socket.on('startGame', ({ roomId, playerId, skipPhase1 }) => {
     console.log('=== START GAME REQUEST ===');
     console.log('Room ID:', roomId);
     console.log('Player ID:', playerId);
+    console.log('Skip Phase 1:', skipPhase1 || false);
     console.log('Total users in system:', Object.keys(globalState.users).length);
     console.log('All users:', Object.keys(globalState.users));
     
@@ -1477,8 +1478,18 @@ io.on('connection', (socket) => {
     }
     
     room.gameStarted = true;
-    room.gamePhase = 'voting';
-    room.currentRound = 1;
+    
+    // Check if skipping Phase 1
+    if (skipPhase1) {
+      console.log('🚀 Skipping Phase 1 - Starting directly in Phase 2');
+      initializePhase2(roomId);
+      room.currentRound = 11; // Mark Phase 1 as "complete"
+      console.log('✅ Phase 2 initialized - Economic management (1946-1952)');
+    } else {
+      room.gamePhase = 'voting';
+      room.currentRound = 1;
+      console.log('Starting Phase 1 - Bretton Woods Conference voting');
+    }
     
     console.log('SUCCESS: Game started!');
     socket.emit('startGameResult', { success: true });
@@ -1486,7 +1497,7 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    console.log(`Game started in room ${roomId} by superadmin`);
+    console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
   });
   

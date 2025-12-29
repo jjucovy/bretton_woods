@@ -1272,6 +1272,7 @@
           const [gameState, setGameState] = useState(null);
           const [isReady, setIsReady] = useState(false);
           const [connected, setConnected] = useState(false);
+          const [skipPhase1, setSkipPhase1] = useState(false);
 
           // Check for existing session
           useEffect(() => {
@@ -1784,18 +1785,45 @@
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                   <h2>{gameState?.gameStarted ? 'Game In Progress' : 'Game Lobby'}</h2>
                   {userRole === 'superadmin' && (
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                       {!gameState?.gameStarted && (
-                        <button
-                          onClick={() => {
-                            console.log('Start game button clicked');
-                            socket.emit('startGame', { roomId: SINGLE_ROOM_ID, playerId });
-                          }}
-                          className="btn-primary"
-                          style={{ padding: '8px 16px' }}
-                        >
-                          🎮 Start Game
-                        </button>
+                        <>
+                          <label style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            background: '#fef3c7',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: '2px solid #f59e0b',
+                            cursor: 'pointer',
+                            fontSize: '0.95rem'
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={skipPhase1}
+                              onChange={(e) => setSkipPhase1(e.target.checked)}
+                              style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                            />
+                            <span style={{ color: '#92400e', fontWeight: '500' }}>
+                              🚀 Skip Phase 1 (Start at Phase 2)
+                            </span>
+                          </label>
+                          <button
+                            onClick={() => {
+                              console.log('Start game button clicked, skipPhase1:', skipPhase1);
+                              socket.emit('startGame', { 
+                                roomId: SINGLE_ROOM_ID, 
+                                playerId,
+                                skipPhase1: skipPhase1 
+                              });
+                            }}
+                            className="btn-primary"
+                            style={{ padding: '8px 16px' }}
+                          >
+                            🎮 Start Game
+                          </button>
+                        </>
                       )}
                       {gameState?.gameStarted && (
                         <button
@@ -2414,9 +2442,220 @@
                       const currentYear = gameState.phase2?.currentYear || 1946;
                       const myData = gameState.phase2?.yearlyData?.[currentYear]?.[playerCountry];
                       const hasSubmitted = gameState.readyPlayers?.includes(playerId);
+                      const activeCrisis = gameState.phase2?.crises?.active;
+                      const crisisResponses = gameState.phase2?.crises?.responses || {};
+                      const myCountryOptions = activeCrisis?.options?.[playerCountry] || [];
+                      const hasRespondedToCrisis = crisisResponses[playerCountry];
                       
                       return (
                         <div>
+                          {/* CRISIS EVENT OVERLAY */}
+                          {activeCrisis && (
+                            <div style={{
+                              position: 'fixed',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              background: 'rgba(0, 0, 0, 0.95)',
+                              zIndex: 10000,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '20px',
+                              overflowY: 'auto'
+                            }}>
+                              <div style={{
+                                maxWidth: '900px',
+                                width: '100%',
+                                background: 'white',
+                                borderRadius: '16px',
+                                padding: '40px',
+                                maxHeight: '90vh',
+                                overflowY: 'auto'
+                              }}>
+                                <h1 style={{ color: '#dc2626', marginTop: 0, marginBottom: '16px', fontSize: '2rem' }}>
+                                  {activeCrisis.title}
+                                </h1>
+                                
+                                <div style={{
+                                  background: '#fef3c7',
+                                  padding: '20px',
+                                  borderRadius: '8px',
+                                  marginBottom: '20px',
+                                  border: '2px solid #f59e0b'
+                                }}>
+                                  <p style={{ fontSize: '1.1rem', margin: 0, lineHeight: 1.6 }}>
+                                    {activeCrisis.description}
+                                  </p>
+                                </div>
+                                
+                                <div style={{
+                                  background: '#f3f4f6',
+                                  padding: '16px',
+                                  borderRadius: '8px',
+                                  marginBottom: '24px'
+                                }}>
+                                  <strong>📚 Historical Context:</strong>
+                                  <p style={{ margin: '8px 0 0 0', lineHeight: 1.5 }}>
+                                    {activeCrisis.historicalContext}
+                                  </p>
+                                </div>
+
+                                {/* Response Status */}
+                                <div style={{
+                                  background: '#eff6ff',
+                                  padding: '16px',
+                                  borderRadius: '8px',
+                                  marginBottom: '24px',
+                                  border: '2px solid #3b82f6'
+                                }}>
+                                  <strong>📊 Response Status:</strong>
+                                  <div style={{ marginTop: '8px' }}>
+                                    {activeCrisis.affectedCountries.map(country => {
+                                      const responded = crisisResponses[country];
+                                      return (
+                                        <div key={country} style={{ 
+                                          display: 'inline-block',
+                                          margin: '4px 8px 4px 0',
+                                          padding: '4px 12px',
+                                          background: responded ? '#86efac' : '#fecaca',
+                                          borderRadius: '4px',
+                                          fontSize: '0.9rem'
+                                        }}>
+                                          {countries[country]?.flag} {country} {responded ? '✓' : '⏳'}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                
+                                {/* Player's Options */}
+                                {myCountryOptions.length > 0 && !hasRespondedToCrisis ? (
+                                  <div>
+                                    <h3 style={{ color: '#1e40af', marginBottom: '16px' }}>
+                                      Your Options as {countries[playerCountry]?.name}:
+                                    </h3>
+                                    
+                                    {myCountryOptions.map(option => (
+                                      <button
+                                        key={option.id}
+                                        onClick={() => {
+                                          socket.emit('submitCrisisResponse', {
+                                            roomId: SINGLE_ROOM_ID,
+                                            playerId,
+                                            choiceId: option.id
+                                          });
+                                        }}
+                                        style={{
+                                          width: '100%',
+                                          padding: '20px',
+                                          marginBottom: '12px',
+                                          border: '2px solid #d1d5db',
+                                          borderRadius: '8px',
+                                          background: 'white',
+                                          cursor: 'pointer',
+                                          textAlign: 'left',
+                                          transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.borderColor = '#2563eb';
+                                          e.currentTarget.style.background = '#eff6ff';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.borderColor = '#d1d5db';
+                                          e.currentTarget.style.background = 'white';
+                                        }}
+                                      >
+                                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px', color: '#1e40af' }}>
+                                          {option.text}
+                                        </div>
+                                        
+                                        {option.cost > 0 && (
+                                          <div style={{ color: '#dc2626', marginBottom: '6px', fontSize: '0.95rem' }}>
+                                            💰 Cost: ${option.cost}M
+                                          </div>
+                                        )}
+                                        
+                                        {option.militaryRequired && (
+                                          <div style={{ color: '#7c2d12', marginBottom: '8px', fontSize: '0.9rem' }}>
+                                            ⚔️ Requires:{' '}
+                                            {option.militaryRequired.army && `${(option.militaryRequired.army / 1000).toFixed(0)}K army `}
+                                            {option.militaryRequired.navy && `${(option.militaryRequired.navy / 1000).toFixed(0)}K navy `}
+                                            {option.militaryRequired.airForce && `${(option.militaryRequired.airForce / 1000).toFixed(0)}K air force`}
+                                          </div>
+                                        )}
+                                        
+                                        <div style={{ fontSize: '0.95rem', color: '#64748b', lineHeight: 1.5 }}>
+                                          {option.outcome}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : hasRespondedToCrisis ? (
+                                  <div style={{
+                                    background: '#d1fae5',
+                                    padding: '24px',
+                                    borderRadius: '8px',
+                                    border: '2px solid #10b981',
+                                    textAlign: 'center'
+                                  }}>
+                                    <div style={{ fontSize: '3rem', marginBottom: '12px' }}>✅</div>
+                                    <h3 style={{ color: '#065f46', marginTop: 0, marginBottom: '8px' }}>
+                                      Response Submitted
+                                    </h3>
+                                    <p style={{ color: '#047857', margin: 0 }}>
+                                      You chose: <strong>{crisisResponses[playerCountry]?.choice?.text}</strong>
+                                    </p>
+                                    <p style={{ color: '#047857', marginTop: '12px', marginBottom: 0 }}>
+                                      Waiting for other nations to respond...
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div style={{
+                                    background: '#f3f4f6',
+                                    padding: '24px',
+                                    borderRadius: '8px',
+                                    textAlign: 'center'
+                                  }}>
+                                    <h3 style={{ color: '#6b7280', marginTop: 0 }}>
+                                      Your nation is not directly involved in this crisis
+                                    </h3>
+                                    <p style={{ color: '#9ca3af', margin: 0 }}>
+                                      Waiting for affected nations to respond...
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Admin Manual Resolve (if needed) */}
+                                {userRole === 'superadmin' && (
+                                  <button
+                                    onClick={() => {
+                                      socket.emit('resolveCrisis', {
+                                        roomId: SINGLE_ROOM_ID,
+                                        playerId
+                                      });
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      padding: '16px',
+                                      marginTop: '20px',
+                                      background: '#ef4444',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      fontSize: '1rem',
+                                      fontWeight: 'bold',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ⚡ Admin: Force Resolve Crisis ({Object.keys(crisisResponses).length} responses)
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
                           <div style={{
                             padding: '30px',
                             background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
