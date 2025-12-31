@@ -180,7 +180,7 @@
         {
           "id": "a",
           "text": "US Dollar backed by gold (White Plan)",
-          "favors": ["USA"],
+          "favors": ["USA", "China"],
           "opposes": ["UK", "USSR"]
         },
         {
@@ -192,8 +192,8 @@
         {
           "id": "c",
           "text": "Multiple reserve currencies",
-          "favors": ["USSR", "UK", "France", "India", "Argentina"],
-          "opposes": ["USA"]
+          "favors": ["USSR", "UK", "France", "India"],
+          "opposes": []
         }
       ]
     },
@@ -205,14 +205,14 @@
         {
           "id": "a",
           "text": "Fixed rates pegged to dollar",
-          "favors": ["USA"],
+          "favors": ["USA", "UK"],
           "opposes": ["China"]
         },
         {
           "id": "b",
           "text": "Adjustable pegs with flexibility",
-          "favors": ["UK", "France", "India", "Argentina"],
-          "opposes": ["USA"]
+          "favors": ["UK", "France", "Argentina"],
+          "opposes": []
         },
         {
           "id": "c",
@@ -230,20 +230,20 @@
         {
           "id": "a",
           "text": "Free capital movement",
-          "favors": ["USA"],
+          "favors": ["USA", "Argentina"],
           "opposes": ["UK", "USSR", "France", "China"]
         },
         {
           "id": "b",
           "text": "Transitional capital controls",
-          "favors": ["UK", "USSR", "France", "China", "India", "Argentina"],
+          "favors": ["UK", "USSR", "China", "India", "Argentina"],
           "opposes": []
         },
         {
           "id": "c",
           "text": "Permanent capital controls",
           "favors": ["USSR", "China"],
-          "opposes": ["USA"]
+          "opposes": []
         }
       ]
     },
@@ -261,7 +261,7 @@
         {
           "id": "b",
           "text": "Major powers get substantial quotas",
-          "favors": ["UK", "France", "China"],
+          "favors": ["UK", "France"],
           "opposes": ["USA"]
         },
         {
@@ -280,19 +280,19 @@
         {
           "id": "a",
           "text": "World Bank with US conditions",
-          "favors": ["USA"],
+          "favors": ["USA", "UK", "China"],
           "opposes": ["USSR"]
         },
         {
           "id": "b",
           "text": "Large unconditional grants",
-          "favors": ["UK", "USSR", "France", "China", "India"],
+          "favors": ["UK", "USSR", "India"],
           "opposes": ["USA"]
         },
         {
           "id": "c",
           "text": "Priority for most devastated",
-          "favors": ["France", "China"],
+          "favors": ["France", "USSR"],
           "opposes": []
         }
       ]
@@ -305,13 +305,13 @@
         {
           "id": "a",
           "text": "Market-based reforms",
-          "favors": ["USA"],
+          "favors": ["USA", "UK"],
           "opposes": ["USSR", "France"]
         },
         {
           "id": "b",
           "text": "IMF stabilization loans",
-          "favors": ["UK", "France", "China", "India", "Argentina"],
+          "favors": ["UK", "France", "India", "Argentina"],
           "opposes": []
         },
         {
@@ -330,8 +330,8 @@
         {
           "id": "a",
           "text": "Free trade with minimal barriers",
-          "favors": ["USA"],
-          "opposes": ["UK", "India", "Argentina"]
+          "favors": ["USA", "UK"],
+          "opposes": ["India", "Argentina"]
         },
         {
           "id": "b",
@@ -342,7 +342,7 @@
         {
           "id": "c",
           "text": "Gradual reduction of tariffs",
-          "favors": ["France", "China", "Argentina"],
+          "favors": ["France", "Argentina"],
           "opposes": []
         }
       ]
@@ -362,12 +362,12 @@
           "id": "b",
           "text": "Flexible gold standard",
           "favors": ["UK", "France"],
-          "opposes": ["USA"]
+          "opposes": []
         },
         {
           "id": "c",
           "text": "Abandon gold entirely",
-          "favors": ["USSR", "China"],
+          "favors": ["USSR"],
           "opposes": ["USA", "UK", "France"]
         }
       ]
@@ -387,7 +387,7 @@
           "id": "b",
           "text": "Participation without political strings",
           "favors": ["USSR", "France", "India"],
-          "opposes": ["USA"]
+          "opposes": []
         },
         {
           "id": "c",
@@ -411,7 +411,7 @@
         {
           "id": "b",
           "text": "Multilateral cooperation",
-          "favors": ["UK", "France", "China", "India", "Argentina"],
+          "favors": ["USA", "UK", "France", "India", "Argentina"],
           "opposes": []
         },
         {
