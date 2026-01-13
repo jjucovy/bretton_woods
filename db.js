@@ -16,7 +16,7 @@ connection.connect(err => {
   console.log('Connected to Hostinger MySQL database!');
 });
 // Create connection pool
-const pool = mysql.createPool(dbConfig);
+const pool = mysql.createPool(connection);
 
 // Test connection on startup
 async function testConnection() {
