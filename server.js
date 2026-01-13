@@ -81,7 +81,9 @@ function createGameState(roomId, roomName, hostId) {
       }
     },
     maxPlayers: 7,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    autoAdvance: true, // Auto-advance when all players submit
+    autoAdvanceDelay: 5000 // Delay in ms before auto-advancing (for Phase 1 results viewing)
   };
 }
 
@@ -1628,6 +1630,37 @@ io.on('connection', (socket) => {
         voteTally, 
         winningOption: room.roundOutcome 
       });
+      
+      // AUTO-ADVANCE: After all votes, auto-advance to next round
+      if (room.autoAdvance) {
+        const delay = room.autoAdvanceDelay || 5000;
+        console.log(`Auto-advancing to next round in ${delay}ms...`);
+        
+        setTimeout(() => {
+          // Re-fetch room state in case it changed
+          const currentRoom = globalState.rooms[roomId];
+          if (!currentRoom || currentRoom.gamePhase !== 'results') {
+            console.log('Auto-advance cancelled: room state changed');
+            return;
+          }
+          
+          // Advance round
+          currentRoom.currentRound++;
+          console.log(`[AUTO] Advancing to round ${currentRoom.currentRound}`);
+          
+          // Check if Phase 1 is complete - start Phase 2
+          if (currentRoom.currentRound > 10) {
+            initializePhase2(roomId);
+            console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
+          } else {
+            currentRoom.gamePhase = 'voting';
+            currentRoom.votes = {}; // Clear votes for new round
+          }
+          
+          broadcastToRoom(roomId);
+          saveState();
+        }, delay);
+      }
     }
     
     broadcastToRoom(roomId);
@@ -1717,11 +1750,55 @@ io.on('connection', (socket) => {
       room.readyPlayers.push(playerId);
     }
     
+    // AUTO-ADVANCE: Check if all players have submitted policies
+    const playerIds = Object.keys(room.players);
+    const allReady = playerIds.every(id => room.readyPlayers.includes(id));
+    
+    if (allReady && room.autoAdvance) {
+      console.log(`[AUTO] All ${playerIds.length} players submitted policies, auto-advancing year...`);
+      
+      // Check if there's an active crisis that needs resolution first
+      if (room.phase2.crises.active) {
+        console.log('[AUTO] Cannot auto-advance - active crisis must be resolved first');
+        broadcastToRoom(roomId);
+        saveState();
+        return;
+      }
+      
+      // Check if we're already at the end
+      if (room.phase2.currentYear >= 1952) {
+        // Don't calculate more economics, just finalize
+        calculatePhase2Scores(roomId);
+        room.gamePhase = 'complete';
+        room.phase2.active = false;
+        console.log('[AUTO] Phase 2 complete! Final scores calculated.');
+        broadcastToRoom(roomId);
+        saveState();
+        return;
+      }
+      
+      // Calculate this year's economics (this creates data for next year)
+      calculateYearEconomics(roomId);
+      
+      // Advance year
+      room.phase2.currentYear++;
+      room.readyPlayers = [];
+      
+      // Check for crisis events this year
+      triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+      
+      console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
+      
+      // Check if we've reached the final year
+      if (room.phase2.currentYear >= 1952) {
+        console.log('[AUTO] Reached final year 1952. Next advance will complete Phase 2.');
+      }
+    }
+    
     broadcastToRoom(roomId);
     saveState();
   });
   
-  // PHASE 2: Advance to next year
   // PLAYER: Deploy troops
   socket.on('deployTroops', ({ roomId, playerId, deployment }) => {
     const room = globalState.rooms[roomId];
@@ -2055,6 +2132,36 @@ io.on('connection', (socket) => {
     saveState();
     
     console.log(`Room ${roomId} reset by superadmin`);
+  });
+  
+  // ADMIN: Toggle auto-advance setting
+  socket.on('toggleAutoAdvance', ({ roomId, playerId, enabled, delay }) => {
+    const room = globalState.rooms[roomId];
+    if (!room) return;
+    
+    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+    const isSuperAdmin = user && user.role === 'superadmin';
+    const isRoomHost = room.hostId === playerId;
+    
+    if (!isSuperAdmin && !isRoomHost) {
+      socket.emit('toggleAutoAdvanceResult', { success: false, message: 'Only the game admin can toggle auto-advance' });
+      return;
+    }
+    
+    room.autoAdvance = enabled !== undefined ? enabled : !room.autoAdvance;
+    if (delay !== undefined && delay >= 1000 && delay <= 30000) {
+      room.autoAdvanceDelay = delay;
+    }
+    
+    console.log(`Auto-advance ${room.autoAdvance ? 'enabled' : 'disabled'} for room ${roomId} (delay: ${room.autoAdvanceDelay}ms)`);
+    
+    socket.emit('toggleAutoAdvanceResult', { 
+      success: true, 
+      autoAdvance: room.autoAdvance,
+      autoAdvanceDelay: room.autoAdvanceDelay
+    });
+    broadcastToRoom(roomId);
+    saveState();
   });
   
   // SUPERADMIN ONLY: Clear all data
