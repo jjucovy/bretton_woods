@@ -3,7 +3,7 @@ const mysql = require('mysql2/promise');
 
 // Database configuration
 const dbConfig = {
-  host: '86.38.202.154',
+  host: 'srv959.hstgr.io',
   user: 'u585377912_keynes',
   password: ';y$@5x>yJ1',
   database: 'u585377912_bretton',
