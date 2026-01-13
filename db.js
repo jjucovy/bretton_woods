@@ -20,7 +20,7 @@ const dbConfig = {
 const pool = mysql.createPool(dbConfig);
 
 // Test connection on startup
-async function testConnection() {
+/*async function testConnection() {
   try {
     const conn = await pool.getConnection();
     console.log('[DB] Connected to MySQL database');
@@ -30,8 +30,15 @@ async function testConnection() {
  console.error('Error connecting: ' + err.stack);
     return;
   }
-}
-
+}*/
+pool.getConnection((err, connection) => {
+    if (err) {
+        console.error('Error connecting to the database:', err);
+        return;
+    }
+    console.log('Connected to the database!');
+    connection.release(); // Release the connection back to the pool
+});
 // === USER FUNCTIONS ===
 
 async function getUserByUsername(username) {
