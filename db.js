@@ -27,20 +27,9 @@ async function testConnection() {
     conn.release();
     return true;
   } catch (err) {
-  if (err instanceof Errors.BadRequest)
-    return res.status(HttpStatus.BAD_REQUEST).send({ message: err.message }); // 400
-  if (err instanceof Errors.Forbidden)
-    return res.status(HttpStatus.FORBIDDEN).send({ message: err.message }); // 403
-  if (err instanceof Errors.NotFound)
-    return res.status(HttpStatus.NOT_FOUND).send({ message: err.message }); // 404
-  if (err instanceof Errors.UnprocessableEntity)
-    return res.status(HttpStatus.UNPROCESSABLE_ENTITY).send({ message: err.message }); // 422
-  console.log(err);
-  return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send({ error: err, message: err.message });
-}
-    // Silently fail - server.js handles retry logic
-   // return false;
-  //}
+ console.error('Error connecting: ' + err.stack);
+    return;
+  }
 }
 
 // === USER FUNCTIONS ===
