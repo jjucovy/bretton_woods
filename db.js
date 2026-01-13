@@ -27,7 +27,7 @@ async function testConnection() {
     conn.release();
     return true;
   } catch (err) {
-    console.error('[DB] Connection failed:', err.message);
+    // Silently fail - server.js handles retry logic
     return false;
   }
 }
