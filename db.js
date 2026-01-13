@@ -23,8 +23,10 @@ async function testConnection() {
  try {
     const conn = await pool.getConnection();
     console.log('[DB] Connected to MySQL database');
-    conn.release();
+   if (myObject) { 
+   conn.release();
     return true;
+   }
   } catch (err) {
  console.error('Error connecting: ' + err.stack);
     return;
