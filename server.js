@@ -9,6 +9,15 @@ const crypto = require('crypto');
 // Database module for MySQL persistence
 const db = require('./db');
 
+// Helper to safely call DB functions (fails silently, logs errors)
+async function dbSync(operation, ...args) {
+  try {
+    await operation(...args);
+  } catch (err) {
+    console.warn(`[DB Sync] ${operation.name || 'operation'} failed: ${err.message}`);
+  }
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
@@ -133,26 +142,38 @@ function saveState() {
 loadState();
 
 // Try to load users from MySQL if local state is empty
-async function loadUsersFromMySQL() {
+async function loadUsersFromMySQL(retries = 3) {
   if (Object.keys(globalState.users).length === 0) {
     console.log('📊 Attempting to load users from MySQL...');
-    try {
-      const users = await db.getAllUsers();
-      users.forEach(user => {
-        globalState.users[user.username] = {
-          password: user.password_hash,
-          playerId: `player_db_${user.user_id}`,
-          createdAt: new Date(user.created_at).getTime(),
-          role: user.is_teacher ? 'superadmin' : 'player'
-        };
-      });
-      if (users.length > 0) {
-        console.log(`✅ Loaded ${users.length} users from MySQL`);
-        saveState(); // Save to local file too
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const users = await db.getAllUsers();
+        users.forEach(user => {
+          globalState.users[user.username] = {
+            password: user.password_hash,
+            playerId: `player_db_${user.user_id}`,
+            createdAt: new Date(user.created_at).getTime(),
+            role: user.is_teacher ? 'superadmin' : 'player'
+          };
+        });
+        if (users.length > 0) {
+          console.log(`✅ Loaded ${users.length} users from MySQL`);
+          saveState(); // Save to local file too
+        } else {
+          console.log('ℹ️  No users in MySQL database yet');
+        }
+        return; // Success, exit
+      } catch (err) {
+        console.warn(`⚠️  MySQL connection attempt ${attempt}/${retries} failed: ${err.message}`);
+        if (attempt < retries) {
+          console.log(`   Retrying in 5 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
       }
-    } catch (err) {
-      console.error('MySQL load error:', err.message);
     }
+    console.log('ℹ️  MySQL unavailable - server will use local state and sync when DB is available');
+  } else {
+    console.log(`ℹ️  Using ${Object.keys(globalState.users).length} users from local state`);
   }
 }
 
@@ -1249,7 +1270,7 @@ io.on('connection', (socket) => {
     // Sync to MySQL (hybrid persistence)
     db.createUser(username, globalState.users[username].password, username, null, isSuperAdmin)
       .then(userId => console.log(`📊 User synced to MySQL: ${username} (ID: ${userId})`))
-      .catch(err => console.error('MySQL sync error (register):', err.message));
+      .catch(err => console.warn('u26a0ufe0f  MySQL sync (register):', err.message));
     
     console.log(`User registered: ${username} (${isSuperAdmin ? 'SUPER ADMIN' : 'player'})`);
   });
@@ -1316,7 +1337,7 @@ io.on('connection', (socket) => {
     // Sync to MySQL (hybrid persistence)
     db.createGameSession(roomId, roomName, playerId)
       .then(() => console.log(`📊 Game room synced to MySQL: ${roomId}`))
-      .catch(err => console.error('MySQL sync error (createRoom):', err.message));
+      .catch(err => console.warn('u26a0ufe0f  MySQL sync (createRoom):', err.message));
     
     console.log(`Room created: ${roomName} (${roomId}) by ${playerId}`);
   });
@@ -1416,7 +1437,7 @@ io.on('connection', (socket) => {
       // Sync to MySQL (hybrid persistence)
       db.addPlayerToGame(roomId, playerId, country)
         .then(() => console.log(`📊 Player ${country} synced to MySQL`))
-        .catch(err => console.error('MySQL sync error (joinGame):', err.message));
+        .catch(err => console.warn('u26a0ufe0f  MySQL sync (joinGame):', err.message));
       
       console.log(`Player ${playerId} joined as ${country} in room ${roomId}`);
     }
@@ -1733,7 +1754,7 @@ io.on('connection', (socket) => {
     if (voterCountry) {
       db.saveVote(roomId, room.currentRound, voterCountry, choice)
         .then(() => console.log(`📊 Vote synced to MySQL: ${voterCountry} -> ${choice}`))
-        .catch(err => console.error('MySQL sync error (vote):', err.message));
+        .catch(err => console.warn('u26a0ufe0f  MySQL sync (vote):', err.message));
     }
   });
   
@@ -1819,7 +1840,7 @@ io.on('connection', (socket) => {
     const submittedPolicy = room.phase2.policies[currentYear][player.country];
     db.submitEconomicPolicy(roomId, player.country, currentYear, submittedPolicy)
       .then(() => console.log(`📊 Policy synced to MySQL: ${player.country} (${currentYear})`))
-      .catch(err => console.error('MySQL sync error (policy):', err.message));
+      .catch(err => console.warn('u26a0ufe0f  MySQL sync (policy):', err.message));
     
     // Mark ready
     if (!room.readyPlayers.includes(playerId)) {

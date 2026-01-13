@@ -9,7 +9,11 @@ const dbConfig = {
   database: 'u585377912_bretton',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  connectTimeout: 10000,  // 10 second connection timeout
+  acquireTimeout: 10000,  // 10 seconds to acquire connection from pool
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000
 };
 
 // Create connection pool
