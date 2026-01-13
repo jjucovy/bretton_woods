@@ -8,13 +8,13 @@ const connection = mysql.createConnection({
   port: process.env.DB_PORT || 3306 // Use the environment variable or default to 3306
 });
 
-connection.connect(err => {
+/*connection.connect(err => {
   if (err) {
     console.error('Error connecting to the database:', err.stack);
     return;
   }
   console.log('Connected to Hostinger MySQL database!');
-});
+});*/
 // Create connection pool
 const pool = mysql.createPool(connection);
 
