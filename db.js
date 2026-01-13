@@ -5,7 +5,7 @@ const mysql = require('mysql2/promise');
 const dbConfig = {
   host: '86.38.202.154',
   user: 'u585377912_keynes',
-  password: '1OMwE*9ik~N',
+  password: ';y$@5x>yJ1',
   database: 'u585377912_bretton',
   waitForConnections: true,
   connectionLimit: 10,
