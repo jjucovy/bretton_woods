@@ -154,10 +154,10 @@ async function loadUsersFromDB(retries = 3) {
         }
         users.forEach(user => {
           globalState.users[user.username] = {
-            password: user.password,
+            password: user.password_hash,
             playerId: `player_db_${user.user_id || user.id || user.username}`,
             createdAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
-            role: user.role === 'teacher' ? 'superadmin' : 'player'
+            role: (user.is_teacher === '1' || user.is_teacher === 1) ? 'superadmin' : 'player'
           };
         });
         if (users.length > 0) {
@@ -1315,10 +1315,10 @@ io.on('connection', (socket) => {
           // Load user from database into memory
           const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           globalState.users[username] = {
-            password: dbUser.password,
+            password: dbUser.password_hash,
             playerId: playerId,
             createdAt: Date.now(),
-            role: dbUser.role || 'player'
+            role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
           };
           user = globalState.users[username];
           console.log('User loaded from database:', username);
