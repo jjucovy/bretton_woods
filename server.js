@@ -155,7 +155,7 @@ async function loadUsersFromDB(retries = 3) {
         users.forEach(user => {
           globalState.users[user.username] = {
             password: user.password,
-            playerId: `player_db_${user.id}`,
+            playerId: `player_db_${user.user_id || user.id || user.username}`,
             createdAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
             role: user.role === 'teacher' ? 'superadmin' : 'player'
           };
