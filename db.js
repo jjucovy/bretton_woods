@@ -31,6 +31,12 @@ async function testConnection() {
     return;
   }
 }
+
+module.exports = {
+  pool,
+  testConnection
+}
+
 /*
 // === USER FUNCTIONS ===
 
