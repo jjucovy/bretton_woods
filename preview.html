@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bretton Woods 1944 - UI Preview</title>
+    <link rel="stylesheet" href="styles-new.css">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header animate-fade-in">
+            <h1>
+                Bretton Woods
+                <span>International Monetary Conference • 1944</span>
+            </h1>
+            <p class="subtitle">"In the final analysis, the people of the world want peace. Let us give them the instruments of peace."</p>
+            <div class="header-divider">
+                <span>✦</span>
+            </div>
+        </header>
+
+        <!-- LOGIN CARD -->
+        <section class="card animate-slide-up" style="max-width: 500px; margin: 0 auto var(--space-2xl);">
+            <h2 style="font-family: var(--font-display); font-size: 1.75rem; text-align: center; margin-bottom: var(--space-lg); color: var(--navy-900);">
+                🌍 Join the Conference
+            </h2>
+            <div class="form-group">
+                <label for="username">Delegate Name</label>
+                <input type="text" id="username" placeholder="Enter your name">
+            </div>
+            <div class="form-group">
+                <label for="gamecode">Conference Code</label>
+                <input type="text" id="gamecode" placeholder="Enter 6-digit code">
+            </div>
+            <button class="btn-primary btn-cta w-full">
+                Enter Conference Hall →
+            </button>
+            <p style="text-align: center; margin-top: var(--space-lg); color: var(--sepia-500); font-size: 0.9rem;">
+                Or <a href="#" style="color: var(--gold-600); font-weight: 600;">create a new conference</a>
+            </p>
+        </section>
+
+        <!-- COUNTRY SELECTION -->
+        <section class="card animate-slide-up" style="margin-bottom: var(--space-2xl);">
+            <h2 style="font-family: var(--font-display); font-size: 1.75rem; text-align: center; margin-bottom: var(--space-sm); color: var(--navy-900);">
+                Select Your Delegation
+            </h2>
+            <p style="text-align: center; color: var(--sepia-500); margin-bottom: var(--space-lg);">
+                Choose a nation to represent at the historic Bretton Woods Conference
+            </p>
+            
+            <div class="country-grid">
+                <div class="country-card country-usa animate-slide-up stagger-1">
+                    <div class="flag">🇺🇸</div>
+                    <h3>United States</h3>
+                    <div class="role">Economic Superpower</div>
+                    <ul>
+                        <li>Largest gold reserves</li>
+                        <li>Push for dollar dominance</li>
+                        <li>Free trade advocate</li>
+                    </ul>
+                </div>
+                
+                <div class="country-card country-uk animate-slide-up stagger-2">
+                    <div class="flag">🇬🇧</div>
+                    <h3>United Kingdom</h3>
+                    <div class="role">Colonial Power</div>
+                    <ul>
+                        <li>Preserve Sterling Area</li>
+                        <li>Keynes Plan supporter</li>
+                        <li>Post-war debt concerns</li>
+                    </ul>
+                </div>
+                
+                <div class="country-card country-ussr animate-slide-up stagger-3">
+                    <div class="flag">☠️</div>
+                    <h3>Soviet Union</h3>
+                    <div class="role">Rising Superpower</div>
+                    <ul>
+                        <li>Command economy</li>
+                        <li>Skeptical of West</li>
+                        <li>Reconstruction needs</li>
+                    </ul>
+                </div>
+                
+                <div class="country-card country-france animate-slide-up stagger-4">
+                    <div class="flag">🇫🇷</div>
+                    <h3>France</h3>
+                    <div class="role">Rebuilding Nation</div>
+                    <ul>
+                        <li>Gold standard advocate</li>
+                        <li>European leadership</li>
+                        <li>War reparations</li>
+                    </ul>
+                </div>
+                
+                <div class="country-card country-china animate-slide-up stagger-5">
+                    <div class="flag">🇨🇳</div>
+                    <h3>China</h3>
+                    <div class="role">Developing Power</div>
+                    <ul>
+                        <li>Development funding</li>
+                        <li>Civil war context</li>
+                        <li>Agricultural economy</li>
+                    </ul>
+                </div>
+                
+                <div class="country-card country-india animate-slide-up stagger-6">
+                    <div class="flag">🇮🇳</div>
+                    <h3>India</h3>
+                    <div class="role">Colonial Territory</div>
+                    <ul>
+                        <li>Independence movement</li>
+                        <li>Sterling reserves</li>
+                        <li>Development needs</li>
+                    </ul>
+                </div>
+                
+                <div class="country-card country-argentina animate-slide-up stagger-7">
+                    <div class="flag">🇦🇷</div>
+                    <h3>Argentina</h3>
+                    <div class="role">Latin American Voice</div>
+                    <ul>
+                        <li>Agricultural exporter</li>
+                        <li>Neutral in war</li>
+                        <li>Regional influence</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- GAME HEADER BAR -->
+        <div class="game-header animate-slide-up">
+            <div class="game-info">
+                <div class="phase-badge">Phase 1 • Voting</div>
+                <div class="round-indicator">Round <strong>3</strong> of 10</div>
+            </div>
+            <div class="score-display">
+                <div class="score-item">
+                    <div class="label">Your Points</div>
+                    <div class="value">24</div>
+                </div>
+                <div class="score-item">
+                    <div class="label">Rank</div>
+                    <div class="value">#2</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VOTING CARD -->
+        <section class="card issue-card animate-slide-up">
+            <div class="issue-header">
+                <div class="issue-number">3</div>
+                <div class="issue-content">
+                    <h2>Exchange Rate System</h2>
+                    <p class="issue-description">
+                        Should currencies be pegged to gold, to the dollar, or allowed to float freely? 
+                        This decision will shape global trade and monetary policy for decades to come.
+                    </p>
+                </div>
+            </div>
+            
+            <h3 style="font-family: var(--font-display); color: var(--navy-800); margin-bottom: var(--space-md);">
+                Cast Your Vote
+            </h3>
+            
+            <div class="voting-options">
+                <div class="vote-option">
+                    <h4>Option A: Gold Standard</h4>
+                    <p>Return to the classical gold standard with fixed exchange rates backed by gold reserves.</p>
+                    <div class="points">
+                        Your alignment: <strong>+3 points</strong>
+                    </div>
+                </div>
+                
+                <div class="vote-option selected">
+                    <h4>Option B: Dollar-Gold System</h4>
+                    <p>Peg currencies to the US dollar, which remains convertible to gold at $35/oz.</p>
+                    <div class="points">
+                        Your alignment: <strong>+5 points</strong>
+                    </div>
+                </div>
+                
+                <div class="vote-option">
+                    <h4>Option C: Floating Rates</h4>
+                    <p>Allow currencies to find their market value through supply and demand.</p>
+                    <div class="points">
+                        Your alignment: <strong>+1 point</strong>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: var(--space-xl);">
+                <button class="btn-primary btn-cta">Submit Vote ✓</button>
+            </div>
+        </section>
+
+        <!-- CRISIS ALERT -->
+        <div class="crisis-alert animate-slide-up">
+            <h3>🚨 Berlin Blockade Crisis (1948)</h3>
+            <p>
+                The Soviet Union has blocked all ground access to West Berlin. 
+                The Western powers must decide how to respond to this escalating Cold War confrontation.
+                Your response will affect your nation's influence and economic stability.
+            </p>
+            <div style="margin-top: var(--space-lg);">
+                <button class="btn-primary" style="background: rgba(255,255,255,0.2); border: 1px solid white;">
+                    View Response Options
+                </button>
+            </div>
+        </div>
+
+        <!-- ECONOMIC INDICATORS -->
+        <section class="card animate-slide-up" style="margin-top: var(--space-xl);">
+            <h3 style="font-family: var(--font-display); font-size: 1.25rem; color: var(--navy-800); margin-bottom: var(--space-lg);">
+                📈 Economic Indicators (1948)
+            </h3>
+            <div class="economic-grid">
+                <div class="economic-card">
+                    <div class="label">GDP Growth</div>
+                    <div class="value">4.2%</div>
+                    <div class="change positive">▲ +1.3% from 1947</div>
+                </div>
+                <div class="economic-card">
+                    <div class="label">Inflation Rate</div>
+                    <div class="value">8.1%</div>
+                    <div class="change negative">▲ +2.4% (rising)</div>
+                </div>
+                <div class="economic-card">
+                    <div class="label">Trade Balance</div>
+                    <div class="value">+$2.4B</div>
+                    <div class="change positive">Surplus</div>
+                </div>
+                <div class="economic-card">
+                    <div class="label">Gold Reserves</div>
+                    <div class="value">$18.7B</div>
+                    <div class="change positive">▲ +$1.2B</div>
+                </div>
+                <div class="economic-card">
+                    <div class="label">Employment</div>
+                    <div class="value">94.2%</div>
+                    <div class="change positive">▲ +0.8%</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- LEADERBOARD -->
+        <div class="leaderboard animate-slide-up" style="margin-top: var(--space-xl);">
+            <h3>🏆 Conference Standings</h3>
+            
+            <div class="leaderboard-item rank-1">
+                <div class="rank">1</div>
+                <div style="font-size: 1.5rem;">🇺🇸</div>
+                <div class="country-info">
+                    <div class="country-name">United States</div>
+                    <div class="player-name">played by JohnD</div>
+                </div>
+                <div class="score">42</div>
+            </div>
+            
+            <div class="leaderboard-item rank-2">
+                <div class="rank">2</div>
+                <div style="font-size: 1.5rem;">🇬🇧</div>
+                <div class="country-info">
+                    <div class="country-name">United Kingdom</div>
+                    <div class="player-name">played by SarahK</div>
+                </div>
+                <div class="score">38</div>
+            </div>
+            
+            <div class="leaderboard-item rank-3">
+                <div class="rank">3</div>
+                <div style="font-size: 1.5rem;">🇫🇷</div>
+                <div class="country-info">
+                    <div class="country-name">France</div>
+                    <div class="player-name">played by MikeP</div>
+                </div>
+                <div class="score">31</div>
+            </div>
+            
+            <div class="leaderboard-item">
+                <div class="rank">4</div>
+                <div style="font-size: 1.5rem;">🇨🇳</div>
+                <div class="country-info">
+                    <div class="country-name">China</div>
+                    <div class="player-name">played by LisaW</div>
+                </div>
+                <div class="score">24</div>
+            </div>
+        </div>
+
+        <!-- LOBBY / WAITING ROOM -->
+        <section class="card lobby-container animate-slide-up" style="margin-top: var(--space-2xl);">
+            <h2 style="font-family: var(--font-display); font-size: 1.75rem; color: var(--navy-900); margin-bottom: var(--space-md);">
+                📡 Conference Lobby
+            </h2>
+            <p style="color: var(--sepia-500);">Share this code with other delegates to join</p>
+            
+            <div class="game-code-display">
+                <div class="label">Conference Code</div>
+                <div class="code">BWC944</div>
+            </div>
+            
+            <h3 style="font-family: var(--font-display); color: var(--navy-800); margin: var(--space-xl) 0 var(--space-lg);">
+                Delegates Present (4/7)
+            </h3>
+            
+            <div class="players-list">
+                <div class="player-badge ready" style="border-color: var(--usa-primary);">
+                    <div class="flag">🇺🇸</div>
+                    <div>
+                        <div class="name">JohnD</div>
+                        <div class="country">United States</div>
+                    </div>
+                </div>
+                <div class="player-badge ready" style="border-color: var(--uk-primary);">
+                    <div class="flag">🇬🇧</div>
+                    <div>
+                        <div class="name">SarahK</div>
+                        <div class="country">United Kingdom</div>
+                    </div>
+                </div>
+                <div class="player-badge" style="border-color: var(--france-primary);">
+                    <div class="flag">🇫🇷</div>
+                    <div>
+                        <div class="name">MikeP</div>
+                        <div class="country">France</div>
+                    </div>
+                </div>
+                <div class="player-badge" style="border-color: var(--china-primary);">
+                    <div class="flag">🇨🇳</div>
+                    <div>
+                        <div class="name">LisaW</div>
+                        <div class="country">China</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: var(--space-xl);">
+                <button class="btn-primary btn-cta">Start Conference 🏛️</button>
+            </div>
+        </section>
+
+        <!-- FINAL RESULTS -->
+        <section class="card results-container animate-slide-up" style="margin-top: var(--space-2xl);">
+            <h2 style="font-family: var(--font-display); font-size: 2rem; color: var(--navy-900); margin-bottom: var(--space-lg);">
+                🏛️ Conference Concluded
+            </h2>
+            
+            <div class="winner-showcase">
+                <h2>Conference Victor</h2>
+                <div class="winner-name">🇺🇸 United States</div>
+                <div class="winner-score">87 Points</div>
+            </div>
+            
+            <h3 style="font-family: var(--font-display); color: var(--navy-800); margin: var(--space-2xl) 0 var(--space-lg);">
+                Final Standings
+            </h3>
+            
+            <div class="final-scores-grid">
+                <div class="final-score-card country-usa">
+                    <div class="rank-badge">1</div>
+                    <div class="flag">🇺🇸</div>
+                    <div class="country-name">United States</div>
+                    <div class="score">87</div>
+                </div>
+                <div class="final-score-card country-uk">
+                    <div class="rank-badge">2</div>
+                    <div class="flag">🇬🇧</div>
+                    <div class="country-name">United Kingdom</div>
+                    <div class="score">72</div>
+                </div>
+                <div class="final-score-card country-france">
+                    <div class="rank-badge">3</div>
+                    <div class="flag">🇫🇷</div>
+                    <div class="country-name">France</div>
+                    <div class="score">65</div>
+                </div>
+                <div class="final-score-card country-china">
+                    <div class="rank-badge">4</div>
+                    <div class="flag">🇨🇳</div>
+                    <div class="country-name">China</div>
+                    <div class="score">58</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: var(--space-2xl);">
+                <button class="btn-secondary" style="margin-right: var(--space-md);">
+                    📄 View Detailed Report
+                </button>
+                <button class="btn-primary">
+                    🔄 Play Again
+                </button>
+            </div>
+        </section>
+
+        <!-- LOADING STATE -->
+        <section class="card animate-slide-up" style="margin-top: var(--space-2xl); text-align: center;">
+            <h3 style="font-family: var(--font-display); color: var(--navy-800); margin-bottom: var(--space-lg);">
+                Loading Conference Data...
+            </h3>
+            <div class="loading-spinner"></div>
+            <p style="color: var(--sepia-500); margin-top: var(--space-lg);">
+                Connecting to the Mount Washington Hotel...
+            </p>
+            <div class="loading-bar" style="max-width: 300px; margin: var(--space-lg) auto 0;"></div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer style="text-align: center; padding: var(--space-2xl); color: var(--sepia-400); font-size: 0.875rem;">
+            <p style="font-family: var(--font-accent); font-style: italic;">
+                "The Bretton Woods Agreement was the most ambitious undertaking in international monetary cooperation ever attempted."
+            </p>
+            <p style="margin-top: var(--space-md); opacity: 0.7;">
+                Historical Simulation • Educational Purpose
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
