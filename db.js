@@ -181,7 +181,7 @@ async function saveCrisisResponse(gameCode, crisisId, countryCode, response) {
     return await apiCall('saveCrisisResponse', { gameCode, crisisId, countryCode, response });
 }
 
-// ============ FULL DATA LOAD ============
+// ============ FULL DATA LOAD1 ============
 
 async function getFullGameData() {
     return await apiCall('getFullGameData');
