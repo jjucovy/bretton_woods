@@ -31,7 +31,7 @@ async function testConnection() {
     return;
   }
 }
-
+/*
 // === USER FUNCTIONS ===
 
 async function getUserByUsername(username) {
@@ -628,3 +628,4 @@ module.exports = {
   // Utils
   generateGameCode
 };
+*/
