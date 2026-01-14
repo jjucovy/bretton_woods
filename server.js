@@ -1239,48 +1239,63 @@ io.on('connection', (socket) => {
   socket.emit('roomListUpdate', globalState.roomList);
   
   // Register new user
-  socket.on('register', ({ username, password }) => {
+  socket.on('register', async ({ username, password }) => {
     if (!username || !password) {
       socket.emit('registerResult', { success: false, message: 'Username and password required' });
       return;
     }
     
+    // Check memory first
     if (globalState.users[username]) {
       socket.emit('registerResult', { success: false, message: 'Username already exists' });
       return;
+    }
+    
+    // Check database for existing user
+    try {
+      const existingUser = await db.getUser(username);
+      if (existingUser) {
+        socket.emit('registerResult', { success: false, message: 'Username already exists' });
+        return;
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not check DB for user:', err.message);
     }
     
     const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     // Only jjucovy@gmail.com is the super admin
     const isSuperAdmin = username.toLowerCase() === 'jjucovy@gmail.com' || username.toLowerCase() === 'jjucovy';
+    const role = isSuperAdmin ? 'superadmin' : 'player';
+    const hashedPassword = hashPassword(password);
     
+    // Save to memory
     globalState.users[username] = {
-      password: hashPassword(password),
+      password: hashedPassword,
       playerId: playerId,
       createdAt: Date.now(),
-      role: isSuperAdmin ? 'superadmin' : 'player'
+      role: role
     };
     
     socket.emit('registerResult', { 
       success: true, 
       playerId: playerId,
       username: username,
-      role: isSuperAdmin ? 'superadmin' : 'player'
+      role: role
     });
     
     saveState();
     
-    // Sync to MySQL (hybrid persistence)
-    db.createUser(username, globalState.users[username].password, username, null, isSuperAdmin)
-      .then(userId => console.log(`📊 User synced to MySQL: ${username} (ID: ${userId})`))
-      .catch(err => console.warn('u26a0ufe0f  MySQL sync (register):', err.message));
+    // Save to MySQL database (persistent storage)
+    db.createUser(username, hashedPassword, role)
+      .then(result => console.log(`📊 User saved to MySQL: ${username}`))
+      .catch(err => console.warn('⚠️ MySQL save failed:', err.message));
     
-    console.log(`User registered: ${username} (${isSuperAdmin ? 'SUPER ADMIN' : 'player'})`);
+    console.log(`User registered: ${username} (${role})`);
   });
   
   // Login existing user
-  socket.on('login', ({ username, password }) => {
+  socket.on('login', async ({ username, password }) => {
     console.log('=== LOGIN REQUEST ===');
     console.log('Username:', username);
     
@@ -1289,7 +1304,31 @@ io.on('connection', (socket) => {
       return;
     }
     
-    const user = globalState.users[username];
+    let user = globalState.users[username];
+    
+    // If not in memory, check database
+    if (!user) {
+      console.log('User not in memory, checking database...');
+      try {
+        const dbUser = await db.getUser(username);
+        if (dbUser) {
+          // Load user from database into memory
+          const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          globalState.users[username] = {
+            password: dbUser.password,
+            playerId: playerId,
+            createdAt: Date.now(),
+            role: dbUser.role || 'player'
+          };
+          user = globalState.users[username];
+          console.log('User loaded from database:', username);
+          saveState();
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not check DB for user:', err.message);
+      }
+    }
+    
     if (!user) {
       console.log('ERROR: User not found');
       socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
