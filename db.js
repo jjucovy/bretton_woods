@@ -1,180 +1,261 @@
-/**
- * Database module - calls PHP API on Hostinger
- * Complete game state persistence
- */
+// Database connection module for Bretton Woods Simulation
+// Connects to MySQL via PHP API on Hostinger
 
-const API_URL = 'https://jucovy.com/api.php';
-const API_KEY = 'bretton-woods-secret-key-2024';
+const API_URL = process.env.DB_API_URL || 'https://jucovy.com/api.php';
+const API_KEY = process.env.DB_API_KEY || 'bretton-woods-secret-key-2024';
 
-async function callAPI(action, data = {}) {
-  try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY
-      },
-      body: JSON.stringify({ action, ...data })
-    });
+// Flag to enable/disable database sync
+let DB_ENABLED = true;
+
+async function apiCall(action, data = {}) {
+    if (!DB_ENABLED) return null;
     
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.error || 'API call failed');
+    try {
+        const response = await fetch(`${API_URL}?action=${action}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': API_KEY
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            console.error(`API error (${action}):`, response.status);
+            return null;
+        }
+        
+        const json = await response.json();
+        
+        // API returns {success: true, data: [...]} - extract the data
+        if (json && json.success && json.data !== undefined) {
+            return json.data;
+        }
+        // For test/error responses, return the full object
+        return json;
+    } catch (error) {
+        console.error(`API call failed (${action}):`, error.message);
+        return null;
     }
-    return result.data;
-  } catch (err) {
-    console.error(`API call failed (${action}):`, err.message);
-    throw err;
-  }
 }
 
-// ============ SCHEMA ============
-async function setupSchema() {
-  return callAPI('setupSchema');
+// ============ CONNECTION ============
+
+async function testConnection() {
+    const result = await apiCall('test');
+    if (result && result.status === 'ok') {
+        console.log('✅ Database API connected');
+        return true;
+    }
+    console.log('⚠️ Database API not available - running in local-only mode');
+    DB_ENABLED = false;
+    return false;
+}
+
+function isEnabled() {
+    return DB_ENABLED;
+}
+
+function setEnabled(enabled) {
+    DB_ENABLED = enabled;
+    console.log(`Database sync ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 // ============ USERS ============
-async function getAllUsers() {
-  return callAPI('getAllUsers');
-}
 
 async function getUser(username) {
-  return callAPI('getUser', { username });
+    return await apiCall('getUser', { username });
 }
 
-async function createUser(username, password, role = 'student', email = '', displayName = '') {
-  return callAPI('createUser', { username, password, role, email, displayName: displayName || username });
+async function createUser(username, password, role = 'student') {
+    return await apiCall('createUser', { username, password, role });
 }
 
-// ============ GAMES ============
-async function createGame(gameCode, createdBy = null) {
-  return callAPI('createGame', { gameCode, createdBy });
+async function getAllUsers() {
+    return await apiCall('getAllUsers') || [];
 }
 
-async function getGame(gameCode) {
-  return callAPI('getGame', { gameCode });
+// ============ COUNTRIES ============
+
+async function getCountries() {
+    return await apiCall('getCountries') || [];
 }
 
-async function updateGame(gameCode, updates) {
-  return callAPI('updateGame', { gameCode, ...updates });
+async function getCountry(code) {
+    return await apiCall('getCountry', { code });
+}
+
+// ============ ISSUES & OPTIONS ============
+
+async function getIssues() {
+    return await apiCall('getIssues') || [];
+}
+
+async function getOptions(issueId = null) {
+    return await apiCall('getOptions', { issueId }) || [];
+}
+
+async function getPreferences(countryCode = null) {
+    return await apiCall('getPreferences', { countryCode }) || [];
+}
+
+// ============ GAME ROOMS ============
+
+async function createGameSession(code, teacherId, status = 'waiting') {
+    return await apiCall('createGame', { code, teacherId, status });
+}
+
+async function getGame(code) {
+    return await apiCall('getGame', { code });
+}
+
+async function updateGame(code, updates) {
+    return await apiCall('updateGame', { code, ...updates });
+}
+
+async function getAllGames() {
+    return await apiCall('getAllGames') || [];
 }
 
 // ============ PLAYERS ============
-async function addPlayer(gameCode, userId, countryCode, countryName) {
-  return callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
+
+async function addPlayerToGame(gameCode, userId, countryCode) {
+    return await apiCall('addPlayer', { gameCode, userId, countryCode });
 }
 
 async function getPlayers(gameCode) {
-  return callAPI('getPlayers', { gameCode });
+    return await apiCall('getPlayers', { gameCode }) || [];
 }
 
-async function updatePlayerPoints(gameCode, userId, points, addPoints = 0) {
-  return callAPI('updatePlayerPoints', { gameCode, userId, points, addPoints });
-}
+// ============ VOTES ============
 
-// ============ VOTES (Phase 1) ============
-async function saveVote(gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned = 0) {
-  return callAPI('saveVote', { gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned });
+async function saveVote(gameCode, round, countryCode, optionId) {
+    return await apiCall('saveVote', { gameCode, round, countryCode, optionId });
 }
 
 async function getVotes(gameCode, round = null) {
-  return callAPI('getVotes', { gameCode, round });
+    return await apiCall('getVotes', { gameCode, round }) || [];
 }
 
-// ============ POLICY DECISIONS (Phase 2) ============
-async function savePolicy(gameCode, userId, round, policyData) {
-  return callAPI('savePolicy', { gameCode, userId, round, ...policyData });
+// ============ RESULTS ============
+
+async function saveGameResult(gameCode, countryCode, score, breakdown) {
+    return await apiCall('saveResult', { 
+        gameCode, 
+        round: 0, 
+        countryCode, 
+        score,
+        breakdown: JSON.stringify(breakdown)
+    });
 }
 
-async function getPolicies(gameCode, round = null) {
-  return callAPI('getPolicies', { gameCode, round });
+async function getResults(gameCode) {
+    return await apiCall('getResults', { gameCode }) || [];
 }
 
-// ============ ROUND RESULTS ============
-async function saveRoundResult(gameCode, round, phase, resultData) {
-  return callAPI('saveRoundResult', { gameCode, round, phase, ...resultData });
+// ============ ECONOMIC STATE ============
+
+// saveEconomicState(roomId, country, year, state) - matches server.js signature
+async function saveEconomicState(gameCode, countryCode, year, state) {
+    return await apiCall('saveEconomicState', { 
+        gameCode, 
+        year, 
+        countryCode,
+        gdpGrowth: state.gdpGrowth,
+        inflation: state.inflation,
+        unemployment: state.unemployment,
+        tradeBalance: state.tradeBalance,
+        reserves: state.reserves,
+        stability: state.stability
+    });
 }
 
-async function getRoundResults(gameCode) {
-  return callAPI('getRoundResults', { gameCode });
+async function getEconomicState(gameCode, year = null, countryCode = null) {
+    return await apiCall('getEconomicState', { gameCode, year, countryCode }) || [];
 }
 
-// ============ FULL GAME STATE ============
-async function getFullGameState(gameCode) {
-  return callAPI('getFullGameState', { gameCode });
+// ============ POLICIES ============
+
+async function submitEconomicPolicy(gameCode, countryCode, year, policy) {
+    return await apiCall('savePolicy', { 
+        gameCode, 
+        year, 
+        countryCode,
+        policyType: 'economic',
+        policyValue: JSON.stringify(policy)
+    });
 }
 
-// ============ LEADERBOARD ============
-async function getLeaderboard(gameCode = null) {
-  return callAPI('getLeaderboard', { gameCode });
+async function getPolicies(gameCode, year = null) {
+    return await apiCall('getPolicies', { gameCode, year }) || [];
 }
 
 // ============ CRISES ============
-async function getCrises(year = null) {
-  return callAPI('getCrises', { year });
+
+async function saveCrisis(gameCode, year, crisisType, severity = 'medium') {
+    return await apiCall('saveCrisis', { gameCode, year, crisisType, severity });
 }
 
-async function getCrisisOptions(crisisId, countryCode = null) {
-  return callAPI('getCrisisOptions', { crisisId, countryCode });
+async function saveCrisisResponse(gameCode, crisisId, countryCode, response) {
+    return await apiCall('saveCrisisResponse', { gameCode, crisisId, countryCode, response });
 }
 
-async function saveCrisisResponse(gameCode, playerId, crisisId, optionId, responseDetails = null) {
-  return callAPI('saveCrisisResponse', { 
-    gameCode, 
-    playerId, 
-    crisisId, 
-    optionId,
-    responseDetails 
-  });
+// ============ FULL DATA LOAD ============
+
+async function getFullGameData() {
+    return await apiCall('getFullGameData');
 }
 
-// ============ TEST ============
-async function testConnection() {
-  return callAPI('test');
-}
+// ============ EXPORTS ============
 
 module.exports = {
-  // Schema
-  setupSchema,
-  
-  // Users
-  getAllUsers,
-  getUser,
-  createUser,
-  
-  // Games
-  createGame,
-  getGame,
-  updateGame,
-  
-  // Players
-  addPlayer,
-  getPlayers,
-  updatePlayerPoints,
-  
-  // Votes
-  saveVote,
-  getVotes,
-  
-  // Policies
-  savePolicy,
-  getPolicies,
-  
-  // Results
-  saveRoundResult,
-  getRoundResults,
-  
-  // Full state
-  getFullGameState,
-  
-  // Leaderboard
-  getLeaderboard,
-  
-  // Crises
-  getCrises,
-  getCrisisOptions,
-  saveCrisisResponse,
-  
-  // Test
-  testConnection
+    // Connection
+    testConnection,
+    isEnabled,
+    setEnabled,
+    
+    // Users
+    getUser,
+    createUser,
+    getAllUsers,
+    
+    // Countries
+    getCountries,
+    getCountry,
+    
+    // Issues
+    getIssues,
+    getOptions,
+    getPreferences,
+    
+    // Games
+    createGameSession,
+    getGame,
+    updateGame,
+    getAllGames,
+    
+    // Players
+    addPlayerToGame,
+    getPlayers,
+    
+    // Votes
+    saveVote,
+    getVotes,
+    
+    // Results
+    saveGameResult,
+    getResults,
+    
+    // Economic
+    saveEconomicState,
+    getEconomicState,
+    submitEconomicPolicy,
+    getPolicies,
+    
+    // Crises
+    saveCrisis,
+    saveCrisisResponse,
+    
+    // Full data
+    getFullGameData
 };
