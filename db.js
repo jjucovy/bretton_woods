@@ -25,7 +25,14 @@ async function apiCall(action, data = {}) {
             return null;
         }
         
-        return await response.json();
+        const json = await response.json();
+        
+        // API returns {success: true, data: [...]} - extract the data
+        if (json && json.success && json.data !== undefined) {
+            return json.data;
+        }
+        // For test/error responses, return the full object
+        return json;
     } catch (error) {
         console.error(`API call failed (${action}):`, error.message);
         return null;
@@ -181,7 +188,7 @@ async function saveCrisisResponse(gameCode, crisisId, countryCode, response) {
     return await apiCall('saveCrisisResponse', { gameCode, crisisId, countryCode, response });
 }
 
-// ============ FULL DATA LOAD1 ============
+// ============ FULL DATA LOAD ============
 
 async function getFullGameData() {
     return await apiCall('getFullGameData');

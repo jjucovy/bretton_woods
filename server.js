@@ -142,18 +142,22 @@ function saveState() {
 loadState();
 
 // Try to load users from MySQL if local state is empty
-async function loadUsersFromMySQL(retries = 3) {
+async function loadUsersFromDB(retries = 3) {
   if (Object.keys(globalState.users).length === 0) {
     console.log('📊 Attempting to load users from MySQL...');
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const users = await db.getAllUsers();
+        if (!users || !Array.isArray(users)) {
+          console.log('⚠️ Could not load users from API');
+          return;
+        }
         users.forEach(user => {
           globalState.users[user.username] = {
-            password: user.password_hash,
-            playerId: `player_db_${user.user_id}`,
-            createdAt: new Date(user.created_at).getTime(),
-            role: user.is_teacher ? 'superadmin' : 'player'
+            password: user.password,
+            playerId: `player_db_${user.id}`,
+            createdAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
+            role: user.role === 'teacher' ? 'superadmin' : 'player'
           };
         });
         if (users.length > 0) {
@@ -178,7 +182,7 @@ async function loadUsersFromMySQL(retries = 3) {
 }
 
 // Call async loader (non-blocking)
-loadUsersFromMySQL();
+loadUsersFromDB();
 
 // ============================================
 // EXPORT/IMPORT GAME STATE
