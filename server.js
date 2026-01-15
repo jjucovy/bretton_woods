@@ -1379,14 +1379,36 @@ io.on('connection', (socket) => {
     user.lastLogin = Date.now();
     saveState();
     
+    // Check if user is already in an active game
+    let activeGame = null;
+    try {
+      const userId = await getUserId(username);
+      if (userId) {
+        activeGame = await db.getPlayerActiveGame(userId);
+        if (activeGame) {
+          console.log(`📊 User ${username} has active game: ${activeGame.game_code} as ${activeGame.country_name}`);
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not check for active game:', err.message);
+    }
+    
     socket.emit('loginResult', { 
       success: true, 
       playerId: user.playerId, 
       username: username,
-      role: role
+      role: role,
+      activeGame: activeGame ? {
+        gameCode: activeGame.game_code,
+        country: activeGame.country_code,
+        countryName: activeGame.country_name,
+        status: activeGame.game_status,
+        currentRound: activeGame.current_round,
+        score: parseInt(activeGame.phase1_score || 0) + parseInt(activeGame.phase2_score || 0)
+      } : null
     });
     
-    console.log(`User logged in: ${username} (${role})`);
+    console.log(`User logged in: ${username} (${role})${activeGame ? ` - rejoining ${activeGame.game_code}` : ''}`);
     console.log('====================');
   });
   
