@@ -12,10 +12,29 @@ const db = require('./db');
 // Helper to safely call DB functions (fails silently, logs errors)
 async function dbSync(operation, ...args) {
   try {
-    await operation(...args);
+    return await operation(...args);
   } catch (err) {
     console.warn(`[DB Sync] ${operation.name || 'operation'} failed: ${err.message}`);
+    return null;
   }
+}
+
+// Cache for user IDs (username -> user_id from MySQL)
+const userIdCache = {};
+
+// Get MySQL user_id for a username
+async function getUserId(username) {
+  if (userIdCache[username]) return userIdCache[username];
+  try {
+    const user = await db.getUser(username);
+    if (user && user.user_id) {
+      userIdCache[username] = user.user_id;
+      return user.user_id;
+    }
+  } catch (err) {
+    console.warn(`Could not get user_id for ${username}:`, err.message);
+  }
+  return null;
 }
 
 const app = express();
@@ -1377,10 +1396,13 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    // Sync to MySQL (hybrid persistence)
-    db.createGameSession(roomId, roomName, playerId)
-      .then(() => console.log(`📊 Game room synced to MySQL: ${roomId}`))
-      .catch(err => console.warn('u26a0ufe0f  MySQL sync (createRoom):', err.message));
+    // Sync to MySQL
+    (async () => {
+      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+      const userId = username ? await getUserId(username) : null;
+      await dbSync(db.createGame, roomId, userId);
+      console.log(`📊 Game created in MySQL: ${roomId}`);
+    })();
     
     console.log(`Room created: ${roomName} (${roomId}) by ${playerId}`);
   });
@@ -1477,10 +1499,17 @@ io.on('connection', (socket) => {
       broadcastRoomList();
       saveState();
       
-      // Sync to MySQL (hybrid persistence)
-      db.addPlayerToGame(roomId, playerId, country)
-        .then(() => console.log(`📊 Player ${country} synced to MySQL`))
-        .catch(err => console.warn('u26a0ufe0f  MySQL sync (joinGame):', err.message));
+      // Sync to MySQL - add player with country assignment
+      (async () => {
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        const userId = username ? await getUserId(username) : null;
+        if (userId) {
+          // Get country name from countries list
+          const countryNames = { USA: 'United States', UK: 'United Kingdom', USSR: 'Soviet Union', France: 'France', China: 'China', India: 'India', Argentina: 'Argentina' };
+          await dbSync(db.addPlayer, roomId, userId, country, countryNames[country] || country);
+          console.log(`📊 Player ${username} (${country}) synced to MySQL`);
+        }
+      })();
       
       console.log(`Player ${playerId} joined as ${country} in room ${roomId}`);
     }
@@ -1637,6 +1666,10 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
+    // Sync game start to MySQL
+    dbSync(db.updateGame, roomId, { status: 'active', startedAt: true, phase: skipPhase1 ? 2 : 1, currentRound: skipPhase1 ? 11 : 1 });
+    console.log(`📊 Game started synced to MySQL`);
+    
     console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
   });
@@ -1757,6 +1790,32 @@ io.on('connection', (socket) => {
         winningOption: room.roundOutcome 
       });
       
+      // Save round results to MySQL
+      (async () => {
+        let issueTitle = '', winningOptionText = '';
+        try {
+          const gameDataPath = path.join(__dirname, 'game-data.json');
+          const gameData = JSON.parse(fs.readFileSync(gameDataPath, 'utf8'));
+          const issue = gameData.issues[room.currentRound - 1];
+          if (issue) {
+            issueTitle = issue.title;
+            const optIdx = winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2;
+            if (issue.options[optIdx]) winningOptionText = issue.options[optIdx].text;
+          }
+        } catch (err) { /* ignore */ }
+        
+        await dbSync(db.saveRoundResult, roomId, room.currentRound, 1, {
+          winningOptionId: winningOption,
+          winningOptionText: winningOptionText,
+          totalVotes: playerIds.length,
+          results: { voteTally, roundScores, issueTitle }
+        });
+        
+        // Update game state in DB
+        await dbSync(db.updateGame, roomId, { currentRound: room.currentRound, phase: 1 });
+        console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
+      })();
+      
       // AUTO-ADVANCE: After all votes, auto-advance to next round
       if (room.autoAdvance) {
         const delay = room.autoAdvanceDelay || 5000;
@@ -1792,13 +1851,37 @@ io.on('connection', (socket) => {
     broadcastToRoom(roomId);
     saveState();
     
-    // Sync vote to MySQL (hybrid persistence)
-    const voterCountry = room.players[playerId]?.country;
-    if (voterCountry) {
-      db.saveVote(roomId, room.currentRound, voterCountry, choice)
-        .then(() => console.log(`📊 Vote synced to MySQL: ${voterCountry} -> ${choice}`))
-        .catch(err => console.warn('u26a0ufe0f  MySQL sync (vote):', err.message));
-    }
+    // Sync vote to MySQL with full details
+    (async () => {
+      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+      const userId = username ? await getUserId(username) : null;
+      const voterCountry = room.players[playerId]?.country;
+      
+      if (userId && voterCountry) {
+        // Get issue and option details
+        let issueTitle = '', optionText = '';
+        try {
+          const gameDataPath = path.join(__dirname, 'game-data.json');
+          const gameData = JSON.parse(fs.readFileSync(gameDataPath, 'utf8'));
+          const issue = gameData.issues[room.currentRound - 1];
+          if (issue) {
+            issueTitle = issue.title;
+            const optIdx = choice.toLowerCase() === 'a' ? 0 : choice.toLowerCase() === 'b' ? 1 : 2;
+            if (issue.options[optIdx]) optionText = issue.options[optIdx].text;
+          }
+        } catch (err) { /* ignore */ }
+        
+        const pointsEarned = room.roundScores?.[voterCountry] || 0;
+        await dbSync(db.saveVote, roomId, userId, room.currentRound, 
+          `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned);
+        console.log(`📊 Vote synced: ${username} (${voterCountry}) -> ${choice}`);
+        
+        // Also update player total points
+        if (room.scores?.[voterCountry]) {
+          await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry]);
+        }
+      }
+    })();
   });
   
   // Advance to next round (admin only)
@@ -1879,11 +1962,25 @@ io.on('connection', (socket) => {
     
     console.log(`Player ${playerId} (${player.country}) submitted policy for ${currentYear}`);
     
-    // Sync policy to MySQL (hybrid persistence)
+    // Sync policy to MySQL with full details
     const submittedPolicy = room.phase2.policies[currentYear][player.country];
-    db.submitEconomicPolicy(roomId, player.country, currentYear, submittedPolicy)
-      .then(() => console.log(`📊 Policy synced to MySQL: ${player.country} (${currentYear})`))
-      .catch(err => console.warn('u26a0ufe0f  MySQL sync (policy):', err.message));
+    (async () => {
+      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+      const userId = username ? await getUserId(username) : null;
+      if (userId) {
+        const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+        await dbSync(db.savePolicy, roomId, userId, phase2Round, {
+          year: currentYear,
+          interestRate: submittedPolicy.centralBankRate || 0,
+          govtSpending: submittedPolicy.militarySpending || 0,
+          tradePolicy: submittedPolicy.isCommandEconomy ? 'command' : 'market',
+          currencyPolicy: `rate_${submittedPolicy.exchangeRate || 1}`,
+          policyFocus: submittedPolicy.isCommandEconomy ? 'heavy_industry' : 'balanced',
+          rationale: JSON.stringify(submittedPolicy)
+        });
+        console.log(`📊 Policy synced to MySQL: ${username} (${currentYear})`);
+      }
+    })();
     
     // Mark ready
     if (!room.readyPlayers.includes(playerId)) {
@@ -2405,6 +2502,16 @@ io.on('connection', (socket) => {
 async function startServer() {
   // Test database connection
   const dbConnected = await db.testConnection();
+  
+  // Ensure database schema exists
+  if (dbConnected) {
+    try {
+      await db.setupSchema();
+      console.log('✅ Database schema verified');
+    } catch (err) {
+      console.warn('⚠️ Schema setup warning:', err.message);
+    }
+  }
   
   server.listen(PORT, () => {
     console.log('🌍 Bretton Woods Multi-Room Server');
