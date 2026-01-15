@@ -1511,13 +1511,33 @@ io.on('connection', (socket) => {
       
       // Sync to MySQL - add player with country assignment
       (async () => {
-        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-        const userId = username ? await getUserId(username) : null;
-        if (userId) {
+        try {
+          // Debug: log the lookup
+          console.log(`🔍 Looking for username with playerId: ${playerId}`);
+          console.log(`🔍 globalState.users keys:`, Object.keys(globalState.users));
+          
+          const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+          console.log(`🔍 Found username: ${username || 'NOT FOUND'}`);
+          
+          if (!username) {
+            console.warn(`⚠️ Could not find username for playerId ${playerId} - player not synced to MySQL`);
+            return;
+          }
+          
+          const userId = await getUserId(username);
+          console.log(`🔍 Got userId: ${userId || 'NOT FOUND'}`);
+          
+          if (!userId) {
+            console.warn(`⚠️ Could not get MySQL user_id for ${username} - player not synced to MySQL`);
+            return;
+          }
+          
           // Get country name from countries list
           const countryNames = { USA: 'United States', UK: 'United Kingdom', USSR: 'Soviet Union', France: 'France', China: 'China', India: 'India', Argentina: 'Argentina' };
           await dbSync(db.addPlayer, roomId, userId, country, countryNames[country] || country);
           console.log(`📊 Player ${username} (${country}) synced to MySQL`);
+        } catch (err) {
+          console.error(`❌ Error syncing player to MySQL:`, err.message);
         }
       })();
       
