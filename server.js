@@ -371,6 +371,16 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
   updateRoomList();
   saveState();
   console.log('✅ Main game room auto-created:', SINGLE_ROOM_ID);
+  
+  // Sync to MySQL database
+  (async () => {
+    try {
+      await db.createGame(SINGLE_ROOM_ID, null);
+      console.log('📊 Main game room synced to MySQL');
+    } catch (err) {
+      console.log('[DB Sync] Main room creation failed:', err.message);
+    }
+  })();
 } else {
   console.log('✅ Main game room already exists:', SINGLE_ROOM_ID);
   console.log('   Room details:', {
