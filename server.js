@@ -378,12 +378,25 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         globalState.rooms[SINGLE_ROOM_ID].currentRound = parseInt(gameData.current_round) || 1;
         globalState.rooms[SINGLE_ROOM_ID].gameStarted = gameData.game_status !== 'lobby';
         
+        // Set correct gamePhase based on game status
+        if (gameData.game_status === 'phase2_active') {
+          globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'phase2';
+          globalState.rooms[SINGLE_ROOM_ID].phase2 = { active: true, currentYear: 1946, policies: {}, yearlyData: {} };
+        } else if (gameData.game_status === 'phase1_active') {
+          globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'voting'; // Phase 1 is voting
+        } else if (gameData.game_status === 'completed') {
+          globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'complete';
+        }
+        
         // Restore players from database
         try {
           const players = await db.getPlayers(SINGLE_ROOM_ID);
           console.log('   Restored', players.length, 'players from database');
           for (const p of players) {
-            globalState.rooms[SINGLE_ROOM_ID].players[p.user_id] = {
+            // Use player_id as key (or user_id if player_id not available)
+            const playerKey = p.player_id || p.user_id;
+            globalState.rooms[SINGLE_ROOM_ID].players[playerKey] = {
+              playerId: playerKey,
               userId: p.user_id,
               username: p.username,
               country: p.country_code,
