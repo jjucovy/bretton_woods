@@ -1461,7 +1461,6 @@
                 if (activeGame && activeGame.country && activeGame.gameCode) {
                   console.log(`✅ Active game found: ${activeGame.gameCode} as ${activeGame.countryName}`);
                   console.log(`Game status: ${activeGame.game_status || activeGame.status}`);
-                  setSelectedCountry(activeGame.country);
                   setPlayerCountry(activeGame.country);
                   setGameRoom(activeGame.gameCode);
                   // Check if game is in active phase (phase1_active, phase1_complete, or phase2_active)
