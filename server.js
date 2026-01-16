@@ -362,27 +362,58 @@ console.log('🔍 Checking for main game room...');
 console.log('   Current rooms:', Object.keys(globalState.rooms));
 
 if (!globalState.rooms[SINGLE_ROOM_ID]) {
-  console.log('📝 Creating main game room...');
-  globalState.rooms[SINGLE_ROOM_ID] = createGameState(
-    SINGLE_ROOM_ID,
-    'Bretton Woods 1944',
-    null // No specific host in single-room mode
-  );
-  updateRoomList();
-  saveState();
-  console.log('✅ Main game room auto-created:', SINGLE_ROOM_ID);
-  
-  // Sync to MySQL database
+  // Try loading from database first
   (async () => {
     try {
-      await db.createGame(SINGLE_ROOM_ID, null);
-      console.log('📊 Main game room synced to MySQL');
+      console.log('📂 Loading game from database...');
+      const gameData = await db.getGame(SINGLE_ROOM_ID);
+      
+      if (gameData) {
+        console.log('✅ Found existing game in database, restoring state...');
+        // Create room structure from DB data
+        globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        
+        // Restore game status and round
+        globalState.rooms[SINGLE_ROOM_ID].gameStatus = gameData.game_status;
+        globalState.rooms[SINGLE_ROOM_ID].currentRound = parseInt(gameData.current_round) || 1;
+        globalState.rooms[SINGLE_ROOM_ID].gameStarted = gameData.game_status !== 'lobby';
+        
+        // Restore players from database
+        try {
+          const players = await db.getPlayers(SINGLE_ROOM_ID);
+          console.log('   Restored', players.length, 'players from database');
+          for (const p of players) {
+            globalState.rooms[SINGLE_ROOM_ID].players[p.user_id] = {
+              userId: p.user_id,
+              username: p.username,
+              country: p.country_code,
+              countryId: p.country_id
+            };
+          }
+        } catch (err) {
+          console.log('   Warning: Could not restore players:', err.message);
+        }
+        
+        updateRoomList();
+        console.log('🎮 Game restored. Status:', gameData.game_status, 'Round:', gameData.current_round);
+      } else {
+        console.log('📝 No game found in database, creating new room...');
+        globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        updateRoomList();
+        saveState();
+        await db.createGame(SINGLE_ROOM_ID, null);
+        console.log('✅ New main game room created and synced to MySQL');
+      }
     } catch (err) {
-      console.log('[DB Sync] Main room creation failed:', err.message);
+      console.error('❌ Error loading game on startup:', err.message);
+      console.log('📝 Creating fresh game room...');
+      globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+      updateRoomList();
+      saveState();
     }
   })();
 } else {
-  console.log('✅ Main game room already exists:', SINGLE_ROOM_ID);
+  console.log('✅ Main game room already exists in memory:', SINGLE_ROOM_ID);
   console.log('   Room details:', {
     roomId: globalState.rooms[SINGLE_ROOM_ID].roomId,
     gameStarted: globalState.rooms[SINGLE_ROOM_ID].gameStarted,
