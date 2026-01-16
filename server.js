@@ -2075,6 +2075,11 @@ io.on('connection', (socket) => {
       room.phase2.currentYear++;
       room.readyPlayers = [];
       
+      // Sync to database
+      const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round, phase: 2 });
+      console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
+      
       // Check for crisis events this year
       triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
       
