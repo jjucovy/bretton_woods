@@ -1457,22 +1457,31 @@
                 sessionStorage.setItem('brettonWoodsPlayerId', returnedPlayerId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
-                // Auto-join single room after login
-                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
-                
-                // If user has an active game, restore their country selection
-                if (activeGame && activeGame.country) {
-                  console.log(`Restoring player to ${activeGame.countryName} in ${activeGame.gameCode}`);
+                // If user has an active game, restore them immediately
+                if (activeGame && activeGame.country && activeGame.gameCode) {
+                  console.log(`✅ Active game found: ${activeGame.gameCode} as ${activeGame.countryName}`);
                   setSelectedCountry(activeGame.country);
+                  setPlayerCountry(activeGame.country);
+                  setGameRoom(activeGame.gameCode);
+                  setCurrentPhase(activeGame.status === 'active' ? 'game' : 'lobby');
                   sessionStorage.setItem('brettonWoodsCountry', activeGame.country);
-                  // Emit select-country to sync with server
+                  sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
+                  
+                  // Join their active game room
+                  socket.emit('joinRoom', { roomId: activeGame.gameCode });
+                  
+                  // Restore their country selection in the game
                   setTimeout(() => {
                     socket.emit('select-country', { 
                       playerId: returnedPlayerId, 
                       roomId: activeGame.gameCode, 
                       country: activeGame.country 
                     });
-                  }, 500);
+                  }, 300);
+                } else {
+                  // No active game - join default room to see available games
+                  console.log('No active game - joining lobby');
+                  socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
                 }
                 
                 console.log('Stored in session:', {

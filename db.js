@@ -122,6 +122,17 @@ async function getCrisisOptions(crisisId, countryCode = null) {
   return callAPI('getCrisisOptions', { crisisId, countryCode });
 }
 
+async function saveDeployment(gameCode, userId, deploymentData) {
+  return callAPI('saveDeployment', { 
+    gameCode, 
+    userId, 
+    country: deploymentData.country,
+    region: deploymentData.region,
+    troops: deploymentData.troops,
+    year: deploymentData.year
+  });
+}
+
 async function saveCrisisResponse(gameCode, playerId, crisisId, optionId, responseDetails = null) {
   return callAPI('saveCrisisResponse', { 
     gameCode, 
@@ -217,6 +228,8 @@ module.exports = {
   getLeaderboard,
   
   // Crises
+  saveDeployment,
+  
   getCrises,
   getCrisisOptions,
   saveCrisisResponse,

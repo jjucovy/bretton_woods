@@ -1888,6 +1888,7 @@ io.on('connection', (socket) => {
           // Check if Phase 1 is complete - start Phase 2
           if (currentRoom.currentRound > 10) {
             initializePhase2(roomId);
+            dbSync(db.updateGame, roomId, { phase: 2, currentRound: 11 });
             console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
           } else {
             currentRoom.gamePhase = 'voting';
@@ -2060,6 +2061,7 @@ io.on('connection', (socket) => {
         calculatePhase2Scores(roomId);
         room.gamePhase = 'complete';
         room.phase2.active = false;
+        dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
         console.log('[AUTO] Phase 2 complete! Final scores calculated.');
         broadcastToRoom(roomId);
         saveState();
@@ -2145,6 +2147,21 @@ io.on('connection', (socket) => {
     
     console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
     
+    // Sync deployment to MySQL
+    (async () => {
+      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+      const userId = username ? await getUserId(username) : null;
+      if (userId) {
+        await dbSync(db.saveDeployment, roomId, userId, {
+          country: deployment.country,
+          region: deployment.region,
+          troops: deployment.troops,
+          year: room.phase2.currentYear
+        });
+        console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`)
+      }
+    })();
+    
     broadcastToRoom(roomId);
     saveState();
   });
@@ -2211,6 +2228,20 @@ io.on('connection', (socket) => {
     };
     
     console.log(`${country} submitted crisis response: ${choice.text}`);
+    
+    // Sync crisis response to MySQL
+    (async () => {
+      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+      const userId = username ? await getUserId(username) : null;
+      if (userId) {
+        await dbSync(db.saveCrisisResponse, roomId, userId, {
+          crisisId: crisis.id,
+          optionId: choiceId,
+          year: room.phase2.currentYear
+        });
+        console.log(`📊 Crisis response synced to MySQL: ${username}`);
+      }
+    })();
     
     // Check if all affected countries with active players have responded
     const affectedCountriesWithPlayers = crisis.affectedCountries.filter(c => {
@@ -2355,6 +2386,7 @@ io.on('connection', (socket) => {
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
+      dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
       console.log('Phase 2 complete! Final scores calculated.');
       broadcastToRoom(roomId);
       saveState();
@@ -2416,6 +2448,7 @@ io.on('connection', (socket) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
+    dbSync(db.updateGame, roomId, { status: 'active', phase: 1, currentRound: 0 });
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
