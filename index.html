@@ -809,21 +809,22 @@
           
           const totalMilitary = armySize + navySize + airForceSize;
 
-          const handleSubmit = () => {
-            socket.emit('submitPolicy', {
-              roomId,
-              playerId,
-              policy: { 
-                centralBankRate, 
-                exchangeRate, 
-                tariffRate,
-                militarySpending,
-                armySize,
-                navySize,
-                airForceSize
-              }
-            });
-          };
+            const handleSubmit = () => {
+              socket.emit('submitPolicy', {
+                roomId,
+                playerId,
+                policy: { 
+                  centralBankRate, 
+                  exchangeRate, 
+                  tariffRate,
+                  militarySpending,
+                  armySize,
+                  navySize,
+                  airForceSize,
+                  isCommandEconomy: false
+                }
+              });
+            }
 
           return (
             <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
