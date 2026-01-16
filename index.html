@@ -1460,24 +1460,31 @@
                 // If user has an active game, restore them immediately
                 if (activeGame && activeGame.country && activeGame.gameCode) {
                   console.log(`✅ Active game found: ${activeGame.gameCode} as ${activeGame.countryName}`);
+                  console.log(`Game status: ${activeGame.game_status || activeGame.status}`);
                   setSelectedCountry(activeGame.country);
                   setPlayerCountry(activeGame.country);
                   setGameRoom(activeGame.gameCode);
-                  setCurrentPhase(activeGame.status === 'active' ? 'game' : 'lobby');
+                  // Check if game is in active phase (phase1_active, phase1_complete, or phase2_active)
+                  const gameStatus = activeGame.game_status || activeGame.status;
+                  const isGameActive = gameStatus && (gameStatus.includes('active') || gameStatus === 'active');
+                  setCurrentPhase(isGameActive ? 'game' : 'lobby');
                   sessionStorage.setItem('brettonWoodsCountry', activeGame.country);
                   sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
                   
-                  // Join their active game room
-                  socket.emit('joinRoom', { roomId: activeGame.gameCode });
-                  
-                  // Restore their country selection in the game
+                  // Wait for server to fully load game state before joining
                   setTimeout(() => {
-                    socket.emit('select-country', { 
-                      playerId: returnedPlayerId, 
-                      roomId: activeGame.gameCode, 
-                      country: activeGame.country 
-                    });
-                  }, 300);
+                    // Join their active game room
+                    socket.emit('joinRoom', { roomId: activeGame.gameCode });
+                    
+                    // Restore their country selection in the game
+                    setTimeout(() => {
+                      socket.emit('select-country', { 
+                        playerId: returnedPlayerId, 
+                        roomId: activeGame.gameCode, 
+                        country: activeGame.country 
+                      });
+                    }, 300);
+                  }, 1000); // Give server time to load game state from DB
                 } else {
                   // No active game - join default room to see available games
                   console.log('No active game - joining lobby');
