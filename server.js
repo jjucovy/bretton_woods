@@ -1396,30 +1396,36 @@ io.on('connection', (socket) => {
     let user = globalState.users[username];
     
     // If not in memory, check database
-    if (!user) {
-      console.log('User not in memory, checking database...');
-      try {
-        const dbUser = await db.getUser(username);
-        if (dbUser) {
-          // Use consistent format: player_db_{user_id}
-          const playerId = `player_db_${dbUser.user_id}`;
-          
-          // Load user from database into memory
-          globalState.users[username] = {
-            password: dbUser.password_hash,
-            playerId: playerId,
-            userId: dbUser.user_id,
-            createdAt: Date.now(),
-            role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
-          };
-          user = globalState.users[username];
-          console.log('User loaded from database:', username, 'playerId:', playerId);
-          saveState();
+
+      if (!user) {
+        console.log('User not in memory, checking database...');
+        try {
+          const dbUser = await db.getUser(username);
+          if (dbUser) {
+            // Get the player's active game and actual player_id from database
+            const activeGame = await db.getPlayerActiveGame(dbUser.user_id);
+            
+            // Use the actual player_id from database, formatted as player_db_{player_id}
+            const playerId = activeGame && activeGame.player_id 
+              ? `player_db_${activeGame.player_id}`
+              : `player_db_${dbUser.user_id}`; // fallback
+            
+            // Load user from database into memory
+            globalState.users[username] = {
+              password: dbUser.password_hash,
+              playerId: playerId,
+              userId: dbUser.user_id,
+              createdAt: Date.now(),
+              role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
+            };
+            user = globalState.users[username];
+            console.log('User loaded from database:', username, 'playerId:', playerId, 'userId:', dbUser.user_id, 'activeGame:', activeGame?.game_code);
+            saveState();
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not check DB for user:', err.message);
         }
-      } catch (err) {
-        console.warn('⚠️ Could not check DB for user:', err.message);
       }
-    }
     
     if (!user) {
       console.log('ERROR: User not found');
