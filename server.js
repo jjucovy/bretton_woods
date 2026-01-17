@@ -491,12 +491,25 @@ function updateRoomList() {
 }
 
 // Broadcast to specific room
-function broadcastToRoom(roomId) {
-  const room = globalState.rooms[roomId];
-  if (!room) return;
-  
-  io.to(roomId).emit('stateUpdate', room);
-}
+  function broadcastToRoom(roomId) {
+    const room = globalState.rooms[roomId];
+    if (!room) return;
+    
+    // DEBUG: Log what we're broadcasting
+    console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
+      gameStarted: room.gameStarted,
+      gamePhase: room.gamePhase,
+      currentRound: room.currentRound,
+      phase2Active: room.phase2?.active,
+      phase2Year: room.phase2?.currentYear,
+      readyPlayersCount: room.readyPlayers?.length,
+      playersCount: Object.keys(room.players).length
+    });
+    
+    io.to(roomId).emit('stateUpdate', room);
+
+
+
 
 // Broadcast room list to lobby
 function broadcastRoomList() {
