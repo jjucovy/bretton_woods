@@ -2149,13 +2149,16 @@ io.on('connection', (socket) => {
       console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
       
       // Check if we've reached the final year
-      if (room.phase2.currentYear >= 1952) {
-        console.log('[AUTO] Reached final year 1952. Next advance will complete Phase 2.');
+    // Check if we've reached the final year
+        if (room.phase2.currentYear >= 1952) {
+          console.log('[AUTO] Reached final year 1952. Next advance will complete Phase 2.');
+        }
       }
-    }
-    
-    broadcastToRoom(roomId);
-    saveState();
+      
+      console.log(`   about to broadcast. room exists=${!!globalState.rooms[roomId]}, allReady=${playerIds ? playerIds.every(id => room.readyPlayers.includes(id)) : 'N/A'}`);
+      broadcastToRoom(roomId);
+      console.log(`   after broadcastToRoom`);
+        saveState();
   });
   
   // PLAYER: Deploy troops
