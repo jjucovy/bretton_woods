@@ -2055,7 +2055,7 @@
                                   {currentIssue.options.map((option, idx) => {
                                     const favorsYou = option.favors && option.favors.includes(playerCountry);
                                     const opposesYou = option.opposes && option.opposes.includes(playerCountry);
-                                    alert(optionfavors+"  "+playerCountry)
+                                    alert(option.favors+"  "+playerCountry)
                                     if (favorsYou) {
                                       return (
                                         <p key={idx} style={{ 
