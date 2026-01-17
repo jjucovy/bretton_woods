@@ -638,37 +638,65 @@ function calculateAgreementBonus(roomId) {
   return bonus;
 }
 
-// Trigger crisis events if appropriate for current year
-function triggerCrisisIfNeeded(roomId, year) {
-  const room = globalState.rooms[roomId];
-  if (!room) return;
+ // Map crisis country names to database country codes
+  const CRISIS_COUNTRY_MAPPING = {
+    'USA': 'USA',
+    'UK': 'UK',
+    'France': 'FRA',
+    'USSR': 'USSR',
+    'China': 'CHI',
+    'India': 'IND',
+    'Argentina': 'ARG'
+  };
   
-  // Check if there's already an active crisis
-  if (room.phase2.crises.active) {
-    console.log(`Crisis already active, skipping trigger for year ${year}`);
-    return;
-  }
-  
-  // Find crisis events for this year that haven't been triggered yet
-  const availableCrisis = crisisEventsData.crisisEvents.find(event => 
-    event.year === year && 
-    !room.phase2.crises.history.find(h => h.id === event.id)
-  );
-  
-  if (availableCrisis) {
-    console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
-    room.phase2.crises.active = {
-      ...availableCrisis,
-      triggeredAt: Date.now(),
-      resolved: false
-    };
-    room.phase2.crises.responses = {};
+  // Transform crisis options from display names to country codes
+  function transformCrisisOptions(crisisEvent) {
+    if (!crisisEvent.options) return crisisEvent;
     
-    console.log(`✋ Crisis active - waiting for player responses`);
-    console.log(`Affected countries:`, availableCrisis.affectedCountries);
+    const transformedOptions = {};
+    for (const countryName in crisisEvent.options) {
+      const countryCode = CRISIS_COUNTRY_MAPPING[countryName] || countryName;
+      transformedOptions[countryCode] = crisisEvent.options[countryName];
+    }
+    
+    return {
+      ...crisisEvent,
+      options: transformedOptions
+    };
   }
-}
-
+  
+  // Trigger crisis events if appropriate for current year
+  function triggerCrisisIfNeeded(roomId, year) {
+    const room = globalState.rooms[roomId];
+    if (!room) return;
+    
+    // Check if there's already an active crisis
+    if (room.phase2.crises.active) {
+      console.log(`Crisis already active, skipping trigger for year ${year}`);
+      return;
+    }
+    
+    // Find crisis events for this year that haven't been triggered yet
+    const availableCrisis = crisisEventsData.crisisEvents.find(event => 
+      event.year === year && 
+      !room.phase2.crises.history.find(h => h.id === event.id)
+    );
+    
+    if (availableCrisis) {
+      console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
+      const transformedCrisis = transformCrisisOptions(availableCrisis);
+      room.phase2.crises.active = {
+        ...transformedCrisis,
+        triggeredAt: Date.now(),
+        resolved: false
+      };
+      room.phase2.crises.responses = {};
+      
+      console.log(`✋ Crisis active - waiting for player responses`);
+      console.log(`Affected countries:`, availableCrisis.affectedCountries);
+      console.log(`Transformed options keys:`, Object.keys(room.phase2.crises.active.options));
+    }
+  }
 function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
