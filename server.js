@@ -378,14 +378,19 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         globalState.rooms[SINGLE_ROOM_ID].currentRound = parseInt(gameData.current_round) || 1;
         globalState.rooms[SINGLE_ROOM_ID].gameStarted = gameData.game_status !== 'lobby';
         
+        console.log(`✅ Setting gameStarted = ${globalState.rooms[SINGLE_ROOM_ID].gameStarted}, gameStatus = ${gameData.game_status}`);
+        
         // Set correct gamePhase based on game status
         if (gameData.game_status === 'phase2_active') {
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'phase2';
           globalState.rooms[SINGLE_ROOM_ID].phase2 = { active: true, currentYear: 1946, policies: {}, yearlyData: {} };
+          console.log(`✅ Set gamePhase = 'phase2'`);
         } else if (gameData.game_status === 'phase1_active') {
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'voting'; // Phase 1 is voting
+          console.log(`✅ Set gamePhase = 'voting'`);
         } else if (gameData.game_status === 'completed') {
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'complete';
+          console.log(`✅ Set gamePhase = 'complete'`);
         }
         
         // Restore players from database
@@ -393,10 +398,10 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           const players = await db.getPlayers(SINGLE_ROOM_ID);
           console.log('   Restored', players.length, 'players from database');
           for (const p of players) {
-            // Use player_id as key (or user_id if player_id not available)
-            const playerKey = p.player_id || p.user_id;
-            globalState.rooms[SINGLE_ROOM_ID].players[playerKey] = {
-              playerId: playerKey,
+            // Use player_id with player_db_ prefix to match login format
+            const playerId = `player_db_${p.player_id || p.user_id}`;
+            globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
+              playerId: playerId,
               userId: p.user_id,
               username: p.username,
               country: p.country_code,
@@ -491,25 +496,23 @@ function updateRoomList() {
 }
 
 // Broadcast to specific room
-  function broadcastToRoom(roomId) {
-    const room = globalState.rooms[roomId];
-    if (!room) return;
-    
-    // DEBUG: Log what we're broadcasting
-    console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
-      gameStarted: room.gameStarted,
-      gamePhase: room.gamePhase,
-      currentRound: room.currentRound,
-      phase2Active: room.phase2?.active,
-      phase2Year: room.phase2?.currentYear,
-      readyPlayersCount: room.readyPlayers?.length,
-      playersCount: Object.keys(room.players).length
-    });
-    
-    io.to(roomId).emit('stateUpdate', room);
-  }
-
-
+function broadcastToRoom(roomId) {
+  const room = globalState.rooms[roomId];
+  if (!room) return;
+  
+  // DEBUG: Log what we're broadcasting
+  console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
+    gameStarted: room.gameStarted,
+    gamePhase: room.gamePhase,
+    currentRound: room.currentRound,
+    phase2Active: room.phase2?.active,
+    phase2Year: room.phase2?.currentYear,
+    readyPlayersCount: room.readyPlayers?.length,
+    playersCount: Object.keys(room.players).length
+  });
+  
+  io.to(roomId).emit('stateUpdate', room);
+}
 
 // Broadcast room list to lobby
 function broadcastRoomList() {
@@ -1392,41 +1395,32 @@ io.on('connection', (socket) => {
     
     let user = globalState.users[username];
     
-       // If not in memory, check database
-      if (!user) {
-        console.log('User not in memory, checking database...');
-        try {
-          const dbUser = await db.getUser(username);
-          if (dbUser) {
-            // Get the actual database player_id from their active game
-            let playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            try {
-              const activeGame = await db.getPlayerActiveGame(dbUser.user_id);
-              if (activeGame && activeGame.player_id) {
-                playerId = activeGame.player_id;
-                console.log('Found active game player_id:', playerId);
-              }
-            } catch (e) {
-              console.log('No active game found, using generated playerId');
-            }
-            
-            // Load user from database into memory
-            globalState.users[username] = {
-              password: dbUser.password_hash,
-              playerId: playerId,
-              userId: dbUser.user_id,
-              createdAt: Date.now(),
-              role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
-            };
-            user = globalState.users[username];
-            console.log('User loaded from database:', username, 'playerId:', playerId);
-            saveState();
-          }
-        } catch (err) {
-          console.warn('⚠️ Could not check DB for user:', err.message);
+    // If not in memory, check database
+    if (!user) {
+      console.log('User not in memory, checking database...');
+      try {
+        const dbUser = await db.getUser(username);
+        if (dbUser) {
+          // Use consistent format: player_db_{user_id}
+          const playerId = `player_db_${dbUser.user_id}`;
+          
+          // Load user from database into memory
+          globalState.users[username] = {
+            password: dbUser.password_hash,
+            playerId: playerId,
+            userId: dbUser.user_id,
+            createdAt: Date.now(),
+            role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
+          };
+          user = globalState.users[username];
+          console.log('User loaded from database:', username, 'playerId:', playerId);
+          saveState();
         }
+      } catch (err) {
+        console.warn('⚠️ Could not check DB for user:', err.message);
       }
-
+    }
+    
     if (!user) {
       console.log('ERROR: User not found');
       socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
@@ -1509,42 +1503,43 @@ io.on('connection', (socket) => {
   });
   
   // Join existing room
-   socket.on('joinRoom', ({ roomId, playerId }) => {
-      if (!globalState.rooms[roomId]) {
-        socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
-        return;
-      }
-      
-      socket.join(roomId);
-      
-      // Update socketId for the player so submitPolicy can find them
-      const room = globalState.rooms[roomId];
-      const playerKey = Object.keys(room.players).find(key => {
-        const p = room.players[key];
-        return p.playerId === playerId || key === playerId;
-      });
-      if (playerKey && room.players[playerKey]) {
-        room.players[playerKey].socketId = socket.id;
-        console.log(`✅ Updated socketId for player ${playerKey} (playerId=${playerId}): ${socket.id}`);
-      }
-      
-      socket.emit('joinRoomResult', { 
-        success: true, 
-        roomId: roomId 
-      });
-      
-      // DEBUG: Log room state when player joins
-      console.log(`🔍 Room state for ${roomId}:`, {
-        gameStarted: room?.gameStarted,
-        gamePhase: room?.gamePhase,
-        currentRound: room?.currentRound,
-        playersCount: room?.players ? Object.keys(room.players).length : 0,
-        players: Object.keys(room.players).map(k => `${k}:${room.players[k].country}`)
-      });
-      
-      broadcastToRoom(roomId);
-      console.log(`Player joined room: ${roomId}`);
+  socket.on('joinRoom', ({ roomId, playerId }) => {
+    if (!globalState.rooms[roomId]) {
+      socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
+      return;
+    }
+    
+    socket.join(roomId);
+    
+    // Update socketId for the player so submitPolicy can find them
+    const room = globalState.rooms[roomId];
+    const playerKey = Object.keys(room.players).find(key => {
+      const p = room.players[key];
+      return p.playerId === playerId || key === playerId;
     });
+    if (playerKey && room.players[playerKey]) {
+      room.players[playerKey].socketId = socket.id;
+      console.log(`✅ Updated socketId for player ${playerKey} (playerId=${playerId}): ${socket.id}`);
+    }
+    
+    socket.emit('joinRoomResult', { 
+      success: true, 
+      roomId: roomId 
+    });
+    
+    // DEBUG: Log room state when player joins
+    console.log(`🔍 Room state for ${roomId}:`, {
+      gameStarted: room?.gameStarted,
+      gamePhase: room?.gamePhase,
+      currentRound: room?.currentRound,
+      playersCount: room?.players ? Object.keys(room.players).length : 0,
+      players: Object.keys(room.players).map(k => `${k}:${room.players[k].country}`)
+    });
+    
+    broadcastToRoom(roomId);
+    console.log(`Player joined room: ${roomId}`);
+  });
+  
   // Leave room
   socket.on('leaveRoom', ({ roomId }) => {
     socket.leave(roomId);
@@ -2067,34 +2062,35 @@ io.on('connection', (socket) => {
     broadcastToRoom(roomId);
     saveState();
   });
-    // PHASE 2: Submit economic policy
-    socket.on('submitPolicy', ({ roomId, playerId, policy }) => {
-      console.log(`🔵 submitPolicy event: roomId=${roomId}, playerId=${playerId}, policy exists=${!!policy}`);
-      
-      const room = globalState.rooms[roomId];
-      console.log(`   room exists=${!!room}, phase2=${room?.phase2?.active}`);
-      
-      if (!room || !room.phase2.active) {
-        console.log(`   ❌ EARLY RETURN: room=${!!room}, phase2.active=${room?.phase2?.active}`);
-        return;
-      }
-         // Find player by playerId (should match database player_id)
-      const playerKey = Object.keys(room.players).find(key => {
-        return room.players[key].playerId === playerId || key === playerId;
-      });
-      const player = playerKey ? room.players[playerKey] : null;
-      console.log(`   player found=${!!player}, playerKey=${playerKey}, playerId=${playerId}, country=${player?.country}`);
-      if (!player) return;
-      
-      const currentYear = room.phase2.currentYear;
-      console.log(`   currentYear=${currentYear}, policies for year=${!!room.phase2.policies[currentYear]}`);
-      if (!room.phase2.policies[currentYear]) {
-        room.phase2.policies[currentYear] = {};
-      }
-      
-      console.log(`   storing policy for ${player.country}, isCommand=${policy.isCommandEconomy}`);
-      room.phase2.policies[currentYear][player.country] = policy.isCommandEconomy ? {
-
+  
+  // PHASE 2: Submit economic policy
+  socket.on('submitPolicy', ({ roomId, playerId, policy }) => {
+    console.log(`🔵 submitPolicy event: roomId=${roomId}, playerId=${playerId}, policy exists=${!!policy}`);
+    
+    const room = globalState.rooms[roomId];
+    console.log(`   room exists=${!!room}, phase2=${room?.phase2?.active}`);
+    
+    if (!room || !room.phase2.active) {
+      console.log(`   ❌ EARLY RETURN: room=${!!room}, phase2.active=${room?.phase2?.active}`);
+      return;
+    }
+    
+    // Find player by playerId (should match database player_id)
+    const playerKey = Object.keys(room.players).find(key => {
+      return room.players[key].playerId === playerId || key === playerId;
+    });
+    const player = playerKey ? room.players[playerKey] : null;
+    console.log(`   player found=${!!player}, playerKey=${playerKey}, playerId=${playerId}, country=${player?.country}`);
+    if (!player) return;
+    
+    const currentYear = room.phase2.currentYear;
+    console.log(`   currentYear=${currentYear}, policies for year=${!!room.phase2.policies[currentYear]}`);
+    if (!room.phase2.policies[currentYear]) {
+      room.phase2.policies[currentYear] = {};
+    }
+    
+    console.log(`   storing policy for ${player.country}, isCommand=${policy.isCommandEconomy}`);
+    room.phase2.policies[currentYear][player.country] = policy.isCommandEconomy ? {
       // Command economy policy
       fiveYearPlanTarget: policy.fiveYearPlanTarget || 8,
       heavyIndustryAllocation: policy.heavyIndustryAllocation || 60,
@@ -2114,100 +2110,102 @@ io.on('connection', (socket) => {
       isCommandEconomy: false,
       submittedAt: Date.now()
     };
-  console.log(`   ✅ Policy stored for ${player.country}`);
-      console.log(`Player ${playerKey} (${player.country}) submitted policy for ${currentYear}`);
-      
-      // Sync policy to MySQL with full details
-      const submittedPolicy = room.phase2.policies[currentYear][player.country];
-      console.log(`   syncing to MySQL...`);
-      (async () => {
-        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-        const userId = username ? await getUserId(username) : null;
-        if (userId) {
-          const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-          await dbSync(db.savePolicy, roomId, userId, phase2Round, {
-            year: currentYear,
-            interestRate: submittedPolicy.centralBankRate || 0,
-            govtSpending: submittedPolicy.militarySpending || 0,
-            tradePolicy: submittedPolicy.isCommandEconomy ? 'command' : 'market',
-            currencyPolicy: `rate_${submittedPolicy.exchangeRate || 1}`,
-            policyFocus: submittedPolicy.isCommandEconomy ? 'heavy_industry' : 'balanced',
-            rationale: JSON.stringify(submittedPolicy)
-          });
-          console.log(`📊 Policy synced to MySQL: ${username} (${currentYear})`);
-        }
-      })();
-      
-      // Mark ready
-      if (!room.readyPlayers.includes(playerKey)) {
-        room.readyPlayers.push(playerKey);
+    
+    console.log(`   ✅ Policy stored for ${player.country}`);
+    console.log(`Player ${playerKey} (${player.country}) submitted policy for ${currentYear}`);
+    
+    // Sync policy to MySQL with full details
+    const submittedPolicy = room.phase2.policies[currentYear][player.country];
+    console.log(`   syncing to MySQL...`);
+    (async () => {
+      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+      const userId = username ? await getUserId(username) : null;
+      if (userId) {
+        const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+        await dbSync(db.savePolicy, roomId, userId, phase2Round, {
+          year: currentYear,
+          interestRate: submittedPolicy.centralBankRate || 0,
+          govtSpending: submittedPolicy.militarySpending || 0,
+          tradePolicy: submittedPolicy.isCommandEconomy ? 'command' : 'market',
+          currencyPolicy: `rate_${submittedPolicy.exchangeRate || 1}`,
+          policyFocus: submittedPolicy.isCommandEconomy ? 'heavy_industry' : 'balanced',
+          rationale: JSON.stringify(submittedPolicy)
+        });
+        console.log(`📊 Policy synced to MySQL: ${username} (${currentYear})`);
       }
-      console.log(`   marked ready. readyPlayers=${room.readyPlayers.length}`); 
-      // AUTO-ADVANCE: Check if all players have submitted policies
-      const playerIds = Object.keys(room.players);
-      const allReady = playerIds.every(id => room.readyPlayers.includes(id));
-      console.log(`   checkAutoAdvance: playerIds=${playerIds.length}, ready=${room.readyPlayers.length}, allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
-           
-        if (allReady && room.autoAdvance) {
-        console.log(`[AUTO] All ${playerIds.length} players submitted policies, auto-advancing year...`);
-        
-        // Check if there's an active crisis that needs resolution first
-        const crisisActive = room.phase2.crises?.active;
-        console.log(`   crisis check: active=${crisisActive}`);
-        if (crisisActive) {
-          console.log('[AUTO] Cannot auto-advance - active crisis must be resolved first');
-          broadcastToRoom(roomId);
-          saveState();
-          return;
-        }
+    })();
+    
+    // Mark ready
+    if (!room.readyPlayers.includes(playerKey)) {
+      room.readyPlayers.push(playerKey);
+    }
+    console.log(`   marked ready. readyPlayers=${room.readyPlayers.length}`);
+    
+    // AUTO-ADVANCE: Check if all players have submitted policies
+    const playerIds = Object.keys(room.players);
+    const allReady = playerIds.every(id => room.readyPlayers.includes(id));
+    console.log(`   checkAutoAdvance: playerIds=${playerIds.length}, ready=${room.readyPlayers.length}, allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
+    
+    if (allReady && room.autoAdvance) {
+      console.log(`[AUTO] All ${playerIds.length} players submitted policies, auto-advancing year...`);
       
-       // Check if we're already at the end
-        console.log(`   year check: currentYear=${room.phase2.currentYear}, >= 1952=${room.phase2.currentYear >= 1952}`);
-        if (room.phase2.currentYear >= 1952) {
-          // Don't calculate more economics, just finalize
-          console.log(`   [FINAL] calculating scores and completing...`);
-          calculatePhase2Scores(roomId);
-          room.gamePhase = 'complete';
-          room.phase2.active = false;
-          dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
-          console.log('[AUTO] Phase 2 complete! Final scores calculated.');
-          broadcastToRoom(roomId);
-          saveState();
-          return;
-        }
-        
-        // Calculate this year's economics (this creates data for next year)
-        console.log(`   calculating economics for ${room.phase2.currentYear}...`);
-        calculateYearEconomics(roomId);
-        
-        // Advance year
-        room.phase2.currentYear++;
-        room.readyPlayers = [];
-        console.log(`   advanced to year ${room.phase2.currentYear}`);
-        
-        // Sync to database
-        const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-        dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round, phase: 2 });
-        console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
-      
-        // Check for crisis events this year
-        console.log(`   checking crises...`);
-        triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
-        
-        console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
-        
-        // Check if we've reached the final year
-        if (room.phase2.currentYear >= 1952) {
-          console.log('[AUTO] Reached final year 1952. Next advance will complete Phase 2.');
-        }
-      } else {
-        console.log(`   no auto-advance: allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
-      }
-      
-      console.log(`   🎯 END OF submitPolicy - about to broadcast`);
-      broadcastToRoom(roomId);
-      console.log(`   ✅ broadcastToRoom completed`);
+      // Check if there's an active crisis that needs resolution first
+      const crisisActive = room.phase2.crises?.active;
+      console.log(`   crisis check: active=${crisisActive}`);
+      if (crisisActive) {
+        console.log('[AUTO] Cannot auto-advance - active crisis must be resolved first');
+        broadcastToRoom(roomId);
         saveState();
+        return;
+      }
+      
+      // Check if we're already at the end
+      console.log(`   year check: currentYear=${room.phase2.currentYear}, >= 1952=${room.phase2.currentYear >= 1952}`);
+      if (room.phase2.currentYear >= 1952) {
+        // Don't calculate more economics, just finalize
+        console.log(`   [FINAL] calculating scores and completing...`);
+        calculatePhase2Scores(roomId);
+        room.gamePhase = 'complete';
+        room.phase2.active = false;
+        dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
+        console.log('[AUTO] Phase 2 complete! Final scores calculated.');
+        broadcastToRoom(roomId);
+        saveState();
+        return;
+      }
+      
+      // Calculate this year's economics (this creates data for next year)
+      console.log(`   calculating economics for ${room.phase2.currentYear}...`);
+      calculateYearEconomics(roomId);
+      
+      // Advance year
+      room.phase2.currentYear++;
+      room.readyPlayers = [];
+      console.log(`   advanced to year ${room.phase2.currentYear}`);
+      
+      // Sync to database
+      const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round, phase: 2 });
+      console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
+      
+      // Check for crisis events this year
+      console.log(`   checking crises...`);
+      triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+      
+      console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
+      
+      // Check if we've reached the final year
+      if (room.phase2.currentYear >= 1952) {
+        console.log('[AUTO] Reached final year 1952. Next advance will complete Phase 2.');
+      }
+    } else {
+      console.log(`   no auto-advance: allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
+    }
+    
+    console.log(`   🎯 END OF submitPolicy - about to broadcast`);
+    broadcastToRoom(roomId);
+    console.log(`   ✅ broadcastToRoom completed`);
+    saveState();
   });
   
   // PLAYER: Deploy troops
