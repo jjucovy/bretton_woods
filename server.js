@@ -1402,13 +1402,13 @@ io.on('connection', (socket) => {
         try {
           const dbUser = await db.getUser(username);
           if (dbUser) {
-            // Get the player's active game and actual player_id from database
-            const activeGame = await db.getPlayerActiveGame(dbUser.user_id);
+            // Look up player record by user_id to get the actual player_id
+            const playerRecord = await db.getPlayerByUserId(dbUser.user_id);
             
-            // Use the actual player_id from database, formatted as player_db_{player_id}
-            const playerId = activeGame && activeGame.player_id 
-              ? `player_db_${activeGame.player_id}`
-              : `player_db_${dbUser.user_id}`; // fallback
+            // Use the actual player_id from the players table, formatted as player_db_{player_id}
+            const playerId = playerRecord && playerRecord.player_id 
+              ? `player_db_${playerRecord.player_id}`
+              : `player_db_${dbUser.user_id}`; // fallback if not found
             
             // Load user from database into memory
             globalState.users[username] = {
@@ -1419,7 +1419,7 @@ io.on('connection', (socket) => {
               role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
             };
             user = globalState.users[username];
-            console.log('User loaded from database:', username, 'playerId:', playerId, 'userId:', dbUser.user_id, 'activeGame:', activeGame?.game_code);
+            console.log('User loaded from database:', username, 'playerId:', playerId, 'userId:', dbUser.user_id, 'from player_id:', playerRecord?.player_id);
             saveState();
           }
         } catch (err) {
