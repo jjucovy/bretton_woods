@@ -810,7 +810,8 @@
           const totalMilitary = armySize + navySize + airForceSize;
 
             const handleSubmit = () => {
-              socket.emit('submitPolicy', {
+  alert('Button clicked! Socket=' + (socket ? 'exists' : 'MISSING'));
+   socket.emit('submitPolicy', {
                 roomId,
                 playerId,
                 policy: { 
