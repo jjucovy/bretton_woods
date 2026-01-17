@@ -2047,15 +2047,19 @@ io.on('connection', (socket) => {
         console.log(`   ❌ EARLY RETURN: room=${!!room}, phase2.active=${room?.phase2?.active}`);
         return;
       }  
-    const player = room.players[playerId];
-    if (!player) return;
-    
-    const currentYear = room.phase2.currentYear;
-    if (!room.phase2.policies[currentYear]) {
-      room.phase2.policies[currentYear] = {};
-    }
-    
-    room.phase2.policies[currentYear][player.country] = policy.isCommandEconomy ? {
+      const player = room.players[playerId];
+      console.log(`   player found=${!!player}, country=${player?.country}`);
+      if (!player) return;
+      
+      const currentYear = room.phase2.currentYear;
+      console.log(`   currentYear=${currentYear}, policies for year=${!!room.phase2.policies[currentYear]}`);
+      if (!room.phase2.policies[currentYear]) {
+        room.phase2.policies[currentYear] = {};
+      }
+      
+      console.log(`   storing policy for ${player.country}, isCommand=${policy.isCommandEconomy}`);
+      room.phase2.policies[currentYear][player.country] = policy.isCommandEconomy ? {
+
       // Command economy policy
       fiveYearPlanTarget: policy.fiveYearPlanTarget || 8,
       heavyIndustryAllocation: policy.heavyIndustryAllocation || 60,
@@ -2075,12 +2079,13 @@ io.on('connection', (socket) => {
       isCommandEconomy: false,
       submittedAt: Date.now()
     };
-    
-    console.log(`Player ${playerId} (${player.country}) submitted policy for ${currentYear}`);
-    
-    // Sync policy to MySQL with full details
-    const submittedPolicy = room.phase2.policies[currentYear][player.country];
-    (async () => {
+         console.log(`   ✅ Policy stored for ${player.country}`);
+      console.log(`Player ${playerId} (${player.country}) submitted policy for ${currentYear}`);
+      
+      // Sync policy to MySQL with full details
+      const submittedPolicy = room.phase2.policies[currentYear][player.country];
+      console.log(`   syncing to MySQL...`);
+      (async () => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       if (userId) {
@@ -2098,50 +2103,58 @@ io.on('connection', (socket) => {
       }
     })();
     
-    // Mark ready
-    if (!room.readyPlayers.includes(playerId)) {
-      room.readyPlayers.push(playerId);
-    }
-    
-    // AUTO-ADVANCE: Check if all players have submitted policies
-    const playerIds = Object.keys(room.players);
-    const allReady = playerIds.every(id => room.readyPlayers.includes(id));
-    
-    if (allReady && room.autoAdvance) {
-      console.log(`[AUTO] All ${playerIds.length} players submitted policies, auto-advancing year...`);
-      
-      // Check if there's an active crisis that needs resolution first
-      if (room.phase2.crises.active) {
-        console.log('[AUTO] Cannot auto-advance - active crisis must be resolved first');
-        broadcastToRoom(roomId);
-        saveState();
-        return;
+         // Mark ready
+      if (!room.readyPlayers.includes(playerId)) {
+        room.readyPlayers.push(playerId);
       }
+      console.log(`   marked ready. readyPlayers=${room.readyPlayers.length}`);
       
-      // Check if we're already at the end
-      if (room.phase2.currentYear >= 1952) {
-        // Don't calculate more economics, just finalize
-        calculatePhase2Scores(roomId);
-        room.gamePhase = 'complete';
-        room.phase2.active = false;
-        dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
-        console.log('[AUTO] Phase 2 complete! Final scores calculated.');
-        broadcastToRoom(roomId);
-        saveState();
-        return;
-      }
+      // AUTO-ADVANCE: Check if all players have submitted policies
+      const playerIds = Object.keys(room.players);
+      const allReady = playerIds.every(id => room.readyPlayers.includes(id));
+      console.log(`   checkAutoAdvance: playerIds=${playerIds.length}, ready=${room.readyPlayers.length}, allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
+           
+        if (allReady && room.autoAdvance) {
+        console.log(`[AUTO] All ${playerIds.length} players submitted policies, auto-advancing year...`);
+        
+        // Check if there's an active crisis that needs resolution first
+        const crisisActive = room.phase2.crises?.active;
+        console.log(`   crisis check: active=${crisisActive}`);
+        if (crisisActive) {
+          console.log('[AUTO] Cannot auto-advance - active crisis must be resolved first');
+          broadcastToRoom(roomId);
+          saveState();
+          return;
+        }
       
-      // Calculate this year's economics (this creates data for next year)
-      calculateYearEconomics(roomId);
-      
-      // Advance year
-      room.phase2.currentYear++;
-      room.readyPlayers = [];
-      
-      // Sync to database
-      const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round, phase: 2 });
-      console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
+       // Check if we're already at the end
+        console.log(`   year check: currentYear=${room.phase2.currentYear}, >= 1952=${room.phase2.currentYear >= 1952}`);
+        if (room.phase2.currentYear >= 1952) {
+          // Don't calculate more economics, just finalize
+          console.log(`   [FINAL] calculating scores and completing...`);
+          calculatePhase2Scores(roomId);
+          room.gamePhase = 'complete';
+          room.phase2.active = false;
+          dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
+          console.log('[AUTO] Phase 2 complete! Final scores calculated.');
+          broadcastToRoom(roomId);
+          saveState();
+          return;
+        }
+        
+        // Calculate this year's economics (this creates data for next year)
+        console.log(`   calculating economics for ${room.phase2.currentYear}...`);
+        calculateYearEconomics(roomId);
+        
+        // Advance year
+        room.phase2.currentYear++;
+        room.readyPlayers = [];
+        console.log(`   advanced to year ${room.phase2.currentYear}`);
+        
+        // Sync to database
+        const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+        dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round, phase: 2 });
+        console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
         // Check for crisis events this year
         console.log(`   checking crises...`);
