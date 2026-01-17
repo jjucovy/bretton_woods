@@ -68,14 +68,17 @@ async function getPlayers(gameCode) {
   return callAPI('getPlayers', { gameCode });
 }
 
-async function getPlayerActiveGame(userId) {
-  return callAPI('getPlayerActiveGame', { userId });
-}
-
-async function updatePlayerPoints(gameCode, userId, points, addPoints = 0) {
-  return callAPI('updatePlayerPoints', { gameCode, userId, points, addPoints });
-}
-
+  async function getPlayerActiveGame(userId) {
+    return callAPI('getPlayerActiveGame', { userId });
+  }
+  
+  async function getPlayerByUserId(userId) {
+    return callAPI('getPlayerByUserId', { userId });
+  }
+  
+  async function updatePlayerPoints(gameCode, userId, points, addPoints = 0) {
+    return callAPI('updatePlayerPoints', { gameCode, userId, points, addPoints });
+  }
 // ============ VOTES (Phase 1) ============
 async function saveVote(gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned = 0) {
   return callAPI('saveVote', { gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned });
