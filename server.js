@@ -507,7 +507,7 @@ function updateRoomList() {
     });
     
     io.to(roomId).emit('stateUpdate', room);
-
+  }
 
 
 
