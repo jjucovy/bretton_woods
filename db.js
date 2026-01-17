@@ -72,10 +72,6 @@ async function getPlayers(gameCode) {
     return callAPI('getPlayerActiveGame', { userId });
   }
   
-  async function getPlayerByUserId(userId) {
-    return callAPI('getPlayerByUserId', { userId });
-  }
-  
   async function updatePlayerPoints(gameCode, userId, points, addPoints = 0) {
     return callAPI('updatePlayerPoints', { gameCode, userId, points, addPoints });
   }
@@ -198,11 +194,11 @@ module.exports = {
   getGame,
   updateGame,
   
-  // Players
-  addPlayer,
-  getPlayers,
-  getPlayerActiveGame,
-  updatePlayerPoints,
+    // Players
+    addPlayer,
+    getPlayers,
+    getPlayerActiveGame,
+    updatePlayerPoints,
   
   // Votes
   saveVote,
