@@ -1309,11 +1309,11 @@
               setConnected(true);
               console.log('Connected to server');
               
-              // Auto-join the single room when connected and authenticated
-              if (isAuthenticated && playerId) {
-                console.log('Auto-joining single room:', SINGLE_ROOM_ID);
-                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
-              }
+                         // Auto-join the single room when connected and authenticated
+                if (isAuthenticated && playerId) {
+                  console.log('Auto-joining single room:', SINGLE_ROOM_ID, 'with playerId:', playerId);
+                  socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: playerId });
+                }
             });
 
             socket.on('disconnect', () => {
@@ -1437,8 +1437,8 @@
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
                 // Auto-join single room after registration
-                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
-                
+                  socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: newPlayerId });
+                  
                 if (role === 'superadmin') {
                   alert('🎉 Welcome, Administrator! You have full control over the game.');
                 }
@@ -1485,11 +1485,11 @@
                   sessionStorage.setItem('brettonWoodsCountry', activeGame.country);
                   sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
                   
-                  // Wait for server to fully load game state before joining
-                  setTimeout(() => {
-                    // Join their active game room
-                    socket.emit('joinRoom', { roomId: activeGame.gameCode });
-                    
+                     // Wait for server to fully load game state before joining
+                    setTimeout(() => {
+                      // Join their active game room
+                      socket.emit('joinRoom', { roomId: activeGame.gameCode, playerId: returnedPlayerId });
+                        
                     // Restore their country selection in the game
                     setTimeout(() => {
                       socket.emit('select-country', { 
@@ -1499,11 +1499,11 @@
                       });
                     }, 300);
                   }, 1000); // Give server time to load game state from DB
-                } else {
-                  // No active game - join default room to see available games
-                  console.log('No active game - joining lobby');
-                  socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID });
-                }
+                                } else {
+                    // No active game - join default room to see available games
+                    console.log('No active game - joining lobby');
+                    socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: returnedPlayerId });
+                  }
                 
                 console.log('Stored in session:', {
                   username: sessionStorage.getItem('brettonWoodsUsername'),
