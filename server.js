@@ -2035,9 +2035,8 @@ io.on('connection', (socket) => {
     broadcastToRoom(roomId);
     saveState();
   });
-  
-  // PHASE 2: Submit economic policy
-      socket.on('submitPolicy', ({ roomId, playerId, policy }) => {
+    // PHASE 2: Submit economic policy
+    socket.on('submitPolicy', ({ roomId, playerId, policy }) => {
       console.log(`🔵 submitPolicy event: roomId=${roomId}, playerId=${playerId}, policy exists=${!!policy}`);
       
       const room = globalState.rooms[roomId];
@@ -2046,9 +2045,12 @@ io.on('connection', (socket) => {
       if (!room || !room.phase2.active) {
         console.log(`   ❌ EARLY RETURN: room=${!!room}, phase2.active=${room?.phase2?.active}`);
         return;
-      }  
-      const player = room.players[playerId];
-      console.log(`   player found=${!!player}, country=${player?.country}`);
+      }
+      
+      // Find player by socket ID (more reliable than playerId which can mismatch)
+      const playerKey = Object.keys(room.players).find(key => room.players[key].socketId === socket.id);
+      const player = playerKey ? room.players[playerKey] : null;
+      console.log(`   player found=${!!player}, playerKey=${playerKey}, country=${player?.country}`);
       if (!player) return;
       
       const currentYear = room.phase2.currentYear;
@@ -2079,36 +2081,35 @@ io.on('connection', (socket) => {
       isCommandEconomy: false,
       submittedAt: Date.now()
     };
-         console.log(`   ✅ Policy stored for ${player.country}`);
-      console.log(`Player ${playerId} (${player.country}) submitted policy for ${currentYear}`);
+  console.log(`   ✅ Policy stored for ${player.country}`);
+      console.log(`Player ${playerKey} (${player.country}) submitted policy for ${currentYear}`);
       
       // Sync policy to MySQL with full details
       const submittedPolicy = room.phase2.policies[currentYear][player.country];
       console.log(`   syncing to MySQL...`);
       (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
-      if (userId) {
-        const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-        await dbSync(db.savePolicy, roomId, userId, phase2Round, {
-          year: currentYear,
-          interestRate: submittedPolicy.centralBankRate || 0,
-          govtSpending: submittedPolicy.militarySpending || 0,
-          tradePolicy: submittedPolicy.isCommandEconomy ? 'command' : 'market',
-          currencyPolicy: `rate_${submittedPolicy.exchangeRate || 1}`,
-          policyFocus: submittedPolicy.isCommandEconomy ? 'heavy_industry' : 'balanced',
-          rationale: JSON.stringify(submittedPolicy)
-        });
-        console.log(`📊 Policy synced to MySQL: ${username} (${currentYear})`);
-      }
-    })();
-    
-         // Mark ready
-      if (!room.readyPlayers.includes(playerId)) {
-        room.readyPlayers.push(playerId);
-      }
-      console.log(`   marked ready. readyPlayers=${room.readyPlayers.length}`);
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        const userId = username ? await getUserId(username) : null;
+        if (userId) {
+          const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+          await dbSync(db.savePolicy, roomId, userId, phase2Round, {
+            year: currentYear,
+            interestRate: submittedPolicy.centralBankRate || 0,
+            govtSpending: submittedPolicy.militarySpending || 0,
+            tradePolicy: submittedPolicy.isCommandEconomy ? 'command' : 'market',
+            currencyPolicy: `rate_${submittedPolicy.exchangeRate || 1}`,
+            policyFocus: submittedPolicy.isCommandEconomy ? 'heavy_industry' : 'balanced',
+            rationale: JSON.stringify(submittedPolicy)
+          });
+          console.log(`📊 Policy synced to MySQL: ${username} (${currentYear})`);
+        }
+      })();
       
+      // Mark ready
+      if (!room.readyPlayers.includes(playerKey)) {
+        room.readyPlayers.push(playerKey);
+      }
+      console.log(`   marked ready. readyPlayers=${room.readyPlayers.length}`); 
       // AUTO-ADVANCE: Check if all players have submitted policies
       const playerIds = Object.keys(room.players);
       const allReady = playerIds.every(id => room.readyPlayers.includes(id));
