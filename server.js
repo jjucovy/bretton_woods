@@ -380,11 +380,21 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         
         console.log(`✅ Setting gameStarted = ${globalState.rooms[SINGLE_ROOM_ID].gameStarted}, gameStatus = ${gameData.game_status}`);
         
-        // Set correct gamePhase based on game status
-        if (gameData.game_status === 'phase2_active') {
-          globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'phase2';
-          globalState.rooms[SINGLE_ROOM_ID].phase2 = { active: true, currentYear: 1946, policies: {}, yearlyData: {} };
-          console.log(`✅ Set gamePhase = 'phase2'`);
+       // Set correct gamePhase based on game status
+          if (gameData.game_status === 'phase2_active') {
+            globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'phase2';
+            globalState.rooms[SINGLE_ROOM_ID].phase2 = { 
+              active: true, 
+              currentYear: 1946, 
+              policies: {}, 
+              yearlyData: {},
+              crises: {
+                active: null,
+                history: [],
+                responses: {}
+              }
+            };
+            console.log(`✅ Set gamePhase = 'phase2'`);
         } else if (gameData.game_status === 'phase1_active') {
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'voting'; // Phase 1 is voting
           console.log(`✅ Set gamePhase = 'voting'`);
