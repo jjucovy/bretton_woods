@@ -2046,11 +2046,12 @@ io.on('connection', (socket) => {
         console.log(`   ❌ EARLY RETURN: room=${!!room}, phase2.active=${room?.phase2?.active}`);
         return;
       }
-      
-      // Find player by socket ID (more reliable than playerId which can mismatch)
-      const playerKey = Object.keys(room.players).find(key => room.players[key].socketId === socket.id);
+         // Find player by playerId (should match database player_id)
+      const playerKey = Object.keys(room.players).find(key => {
+        return room.players[key].playerId === playerId || key === playerId;
+      });
       const player = playerKey ? room.players[playerKey] : null;
-      console.log(`   player found=${!!player}, playerKey=${playerKey}, country=${player?.country}`);
+      console.log(`   player found=${!!player}, playerKey=${playerKey}, playerId=${playerId}, country=${player?.country}`);
       if (!player) return;
       
       const currentYear = room.phase2.currentYear;
