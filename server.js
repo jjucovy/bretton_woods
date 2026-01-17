@@ -2143,21 +2143,23 @@ io.on('connection', (socket) => {
       dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round, phase: 2 });
       console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
-      // Check for crisis events this year
-      triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
-      
-      console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
-      
-      // Check if we've reached the final year
-    // Check if we've reached the final year
+        // Check for crisis events this year
+        console.log(`   checking crises...`);
+        triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+        
+        console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
+        
+        // Check if we've reached the final year
         if (room.phase2.currentYear >= 1952) {
           console.log('[AUTO] Reached final year 1952. Next advance will complete Phase 2.');
         }
+      } else {
+        console.log(`   no auto-advance: allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
       }
       
-      console.log(`   about to broadcast. room exists=${!!globalState.rooms[roomId]}, allReady=${playerIds ? playerIds.every(id => room.readyPlayers.includes(id)) : 'N/A'}`);
+      console.log(`   🎯 END OF submitPolicy - about to broadcast`);
       broadcastToRoom(roomId);
-      console.log(`   after broadcastToRoom`);
+      console.log(`   ✅ broadcastToRoom completed`);
         saveState();
   });
   
