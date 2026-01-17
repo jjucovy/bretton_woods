@@ -810,22 +810,35 @@
           const totalMilitary = armySize + navySize + airForceSize;
 
             const handleSubmit = () => {
-  alert('Button clicked! Socket=' + (socket ? 'exists' : 'MISSING'));
-   socket.emit('submitPolicy', {
-                roomId,
-                playerId,
-                policy: { 
-                  centralBankRate, 
-                  exchangeRate, 
-                  tariffRate,
-                  militarySpending,
-                  armySize,
-                  navySize,
-                  airForceSize,
-                  isCommandEconomy: false
+              try {
+                alert('Button clicked! Socket=' + (socket ? 'exists' : 'MISSING'));
+                
+                if (!socket) {
+                  alert('ERROR: Socket is undefined');
+                  return;
                 }
-              });
-            }
+                
+                alert('About to emit...');
+                socket.emit('submitPolicy', {
+                  roomId,
+                  playerId,
+                  policy: { 
+                    centralBankRate, 
+                    exchangeRate, 
+                    tariffRate,
+                    militarySpending,
+                    armySize,
+                    navySize,
+                    airForceSize,
+                    isCommandEconomy: false
+                  }
+                });
+                alert('Policy submitted!');
+              } catch (error) {
+                alert('ERROR: ' + error.message);
+                console.error('submitPolicy error:', error);
+              }
+            };
 
           return (
             <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
