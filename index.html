@@ -327,8 +327,7 @@
 
         // Troop Deployment Interface Component
         function TroopDeploymentInterface({ playerCountry, gameState, socket, playerId, roomId }) {
-            console.log(playerCountry, gameState, socket, playerId, roomId )
-          const [selectedRegion, setSelectedRegion] = useState('');
+        const [selectedRegion, setSelectedRegion] = useState('');
           const [troopCount, setTroopCount] = useState(50000);
           const [deploymentLog, setDeploymentLog] = useState([]);
 
