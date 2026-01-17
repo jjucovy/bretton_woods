@@ -393,24 +393,24 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           console.log(`✅ Set gamePhase = 'complete'`);
         }
         
-        // Restore players from database
-        try {
-          const players = await db.getPlayers(SINGLE_ROOM_ID);
-          console.log('   Restored', players.length, 'players from database');
-          for (const p of players) {
-            // Use player_id with player_db_ prefix to match login format
-            const playerId = `player_db_${p.player_id || p.user_id}`;
-            globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
-              playerId: playerId,
-              userId: p.user_id,
-              username: p.username,
-              country: p.country_code,
-              countryId: p.country_id
-            };
+                // Restore players from database
+          try {
+            const players = await db.getPlayers(SINGLE_ROOM_ID);
+            console.log('   Restored', players.length, 'players from database');
+            for (const p of players) {
+              // Use user_id with player_db_ prefix (consistent format)
+              const playerId = `player_db_${p.user_id}`;
+              globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
+                playerId: playerId,
+                userId: p.user_id,
+                username: p.username,
+                country: p.country_code,
+                countryId: p.country_id
+              };
+            }
+          } catch (err) {
+            console.log('   Warning: Could not restore players:', err.message);
           }
-        } catch (err) {
-          console.log('   Warning: Could not restore players:', err.message);
-        }
         
         updateRoomList();
         console.log('🎮 Game restored. Status:', gameData.game_status, 'Round:', gameData.current_round);
@@ -1397,18 +1397,13 @@ io.on('connection', (socket) => {
     
     // If not in memory, check database
 
-      if (!user) {
+         if (!user) {
         console.log('User not in memory, checking database...');
         try {
           const dbUser = await db.getUser(username);
           if (dbUser) {
-            // Look up player record by user_id to get the actual player_id
-            const playerRecord = await db.getPlayerByUserId(dbUser.user_id);
-            
-            // Use the actual player_id from the players table, formatted as player_db_{player_id}
-            const playerId = playerRecord && playerRecord.player_id 
-              ? `player_db_${playerRecord.player_id}`
-              : `player_db_${dbUser.user_id}`; // fallback if not found
+            // Use user_id with player_db_ prefix (consistent format)
+            const playerId = `player_db_${dbUser.user_id}`;
             
             // Load user from database into memory
             globalState.users[username] = {
@@ -1419,7 +1414,7 @@ io.on('connection', (socket) => {
               role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
             };
             user = globalState.users[username];
-            console.log('User loaded from database:', username, 'playerId:', playerId, 'userId:', dbUser.user_id, 'from player_id:', playerRecord?.player_id);
+            console.log('User loaded from database:', username, 'playerId:', playerId);
             saveState();
           }
         } catch (err) {
