@@ -648,23 +648,34 @@ function calculateAgreementBonus(roomId) {
     'India': 'IND',
     'Argentina': 'ARG'
   };
-  
-  // Transform crisis options from display names to country codes
-  function transformCrisisOptions(crisisEvent) {
+   // Transform crisis options from display names to country codes
+  // Only include countries that are actually playing in the game
+  function transformCrisisOptions(crisisEvent, playingCountryCodes = []) {
     if (!crisisEvent.options) return crisisEvent;
     
     const transformedOptions = {};
     for (const countryName in crisisEvent.options) {
       const countryCode = CRISIS_COUNTRY_MAPPING[countryName] || countryName;
-      transformedOptions[countryCode] = crisisEvent.options[countryName];
+      // Only include if country is playing, or if no filter provided (include all)
+      if (playingCountryCodes.length === 0 || playingCountryCodes.includes(countryCode)) {
+        transformedOptions[countryCode] = crisisEvent.options[countryName];
+      }
     }
+    
+    // Filter affected countries to only those playing
+    const filteredAffectedCountries = playingCountryCodes.length > 0 
+      ? crisisEvent.affectedCountries.filter(name => {
+          const code = CRISIS_COUNTRY_MAPPING[name] || name;
+          return playingCountryCodes.includes(code);
+        })
+      : crisisEvent.affectedCountries;
     
     return {
       ...crisisEvent,
+      affectedCountries: filteredAffectedCountries,
       options: transformedOptions
     };
   }
-  
   // Trigger crisis events if appropriate for current year
   function triggerCrisisIfNeeded(roomId, year) {
     const room = globalState.rooms[roomId];
@@ -683,8 +694,13 @@ function calculateAgreementBonus(roomId) {
     );
     
     if (availableCrisis) {
+      // Get the list of countries that are actually playing
+      const playingCountryCodes = Object.values(room.players).map(p => p.country);
+      
       console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
-      const transformedCrisis = transformCrisisOptions(availableCrisis);
+      console.log(`Playing countries:`, playingCountryCodes);
+      
+      const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryCodes);
       room.phase2.crises.active = {
         ...transformedCrisis,
         triggeredAt: Date.now(),
@@ -693,10 +709,11 @@ function calculateAgreementBonus(roomId) {
       room.phase2.crises.responses = {};
       
       console.log(`✋ Crisis active - waiting for player responses`);
-      console.log(`Affected countries:`, availableCrisis.affectedCountries);
+      console.log(`Affected countries (filtered):`, transformedCrisis.affectedCountries);
       console.log(`Transformed options keys:`, Object.keys(room.phase2.crises.active.options));
     }
   }
+
 function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
