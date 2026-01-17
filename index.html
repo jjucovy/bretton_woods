@@ -2050,7 +2050,6 @@
                                     fontSize: '0.9rem',
                                     color: '#1e40af'
                                   }}>
-                                      console.log(countries.keys)
                                     Your Country's Interest:
                                   </h4>
                                   {currentIssue.options.map((option, idx) => {
@@ -2064,6 +2063,8 @@
                                           fontSize: '0.875rem',
                                           color: '#1e3a8a'
                                         }}>
+                                            
+                                      alert(countries.keys)
                                           ✓ Option {String.fromCharCode(65 + idx)} favors {countries[playerCountry]?.name || playerCountry}
                                         </p>
                                       );
