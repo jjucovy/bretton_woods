@@ -2023,31 +2023,24 @@ io.on('connection', (socket) => {
     room.currentRound++;
     console.log(`Advancing to round ${room.currentRound}`);
     
-f    // Check if Phase 1 is complete - start Phase 2
+    // Check if Phase 1 is complete - start Phase 2
     if (room.currentRound > 10) {
       initializePhase2(roomId);
       console.log('Phase 1 complete! Starting Phase 2: Post-war economic management');
     } else {
- f     room.gamePhase = 'voting';
+      room.gamePhase = 'voting';
       room.votes = {}; // Clear votes for new round
     }
-    d
+    
     broadcastToRoom(roomId);
     saveState();
   });
   
   // PHASE 2: Submit economic policy
-      socket.on('submitPolicy', ({ roomId, playerId, policy }) => {
-      console.log(`🔵 submitPolicy event: roomId=${roomId}, playerId=${playerId}, policy exists=${!!policy}`);
-      
-      const room = globalState.rooms[roomId];
-      console.log(`   room exists=${!!room}, phase2=${room?.phase2?.active}`);
-      
-      if (!room || !room.phase2.active) {
-        console.log(`   ❌ EARLY RETURN: room=${!!room}, phase2.active=${room?.phase2?.active}`);
-        return;
-      }
-  
+  socket.on('submitPolicy', ({ roomId, playerId, policy }) => {
+    const room = globalState.rooms[roomId];
+    if (!room || !room.phase2.active) return;
+    
     const player = room.players[playerId];
     if (!player) return;
     
