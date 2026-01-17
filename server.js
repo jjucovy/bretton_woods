@@ -1392,29 +1392,41 @@ io.on('connection', (socket) => {
     
     let user = globalState.users[username];
     
-    // If not in memory, check database
-    if (!user) {
-      console.log('User not in memory, checking database...');
-      try {
-        const dbUser = await db.getUser(username);
-        if (dbUser) {
-          // Load user from database into memory
-          const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          globalState.users[username] = {
-            password: dbUser.password_hash,
-            playerId: playerId,
-            createdAt: Date.now(),
-            role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
-          };
-          user = globalState.users[username];
-          console.log('User loaded from database:', username);
-          saveState();
+       // If not in memory, check database
+      if (!user) {
+        console.log('User not in memory, checking database...');
+        try {
+          const dbUser = await db.getUser(username);
+          if (dbUser) {
+            // Get the actual database player_id from their active game
+            let playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            try {
+              const activeGame = await db.getPlayerActiveGame(dbUser.user_id);
+              if (activeGame && activeGame.player_id) {
+                playerId = activeGame.player_id;
+                console.log('Found active game player_id:', playerId);
+              }
+            } catch (e) {
+              console.log('No active game found, using generated playerId');
+            }
+            
+            // Load user from database into memory
+            globalState.users[username] = {
+              password: dbUser.password_hash,
+              playerId: playerId,
+              userId: dbUser.user_id,
+              createdAt: Date.now(),
+              role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
+            };
+            user = globalState.users[username];
+            console.log('User loaded from database:', username, 'playerId:', playerId);
+            saveState();
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not check DB for user:', err.message);
         }
-      } catch (err) {
-        console.warn('⚠️ Could not check DB for user:', err.message);
       }
-    }
-    
+
     if (!user) {
       console.log('ERROR: User not found');
       socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
@@ -1497,22 +1509,42 @@ io.on('connection', (socket) => {
   });
   
   // Join existing room
-  socket.on('joinRoom', ({ roomId }) => {
-    if (!globalState.rooms[roomId]) {
-      socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
-      return;
-    }
-    
-    socket.join(roomId);
-    socket.emit('joinRoomResult', { 
-      success: true, 
-      roomId: roomId 
+   socket.on('joinRoom', ({ roomId, playerId }) => {
+      if (!globalState.rooms[roomId]) {
+        socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
+        return;
+      }
+      
+      socket.join(roomId);
+      
+      // Update socketId for the player so submitPolicy can find them
+      const room = globalState.rooms[roomId];
+      const playerKey = Object.keys(room.players).find(key => {
+        const p = room.players[key];
+        return p.playerId === playerId || key === playerId;
+      });
+      if (playerKey && room.players[playerKey]) {
+        room.players[playerKey].socketId = socket.id;
+        console.log(`✅ Updated socketId for player ${playerKey} (playerId=${playerId}): ${socket.id}`);
+      }
+      
+      socket.emit('joinRoomResult', { 
+        success: true, 
+        roomId: roomId 
+      });
+      
+      // DEBUG: Log room state when player joins
+      console.log(`🔍 Room state for ${roomId}:`, {
+        gameStarted: room?.gameStarted,
+        gamePhase: room?.gamePhase,
+        currentRound: room?.currentRound,
+        playersCount: room?.players ? Object.keys(room.players).length : 0,
+        players: Object.keys(room.players).map(k => `${k}:${room.players[k].country}`)
+      });
+      
+      broadcastToRoom(roomId);
+      console.log(`Player joined room: ${roomId}`);
     });
-    
-    broadcastToRoom(roomId);
-    console.log(`Player joined room: ${roomId}`);
-  });
-  
   // Leave room
   socket.on('leaveRoom', ({ roomId }) => {
     socket.leave(roomId);
