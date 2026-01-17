@@ -1513,6 +1513,9 @@ io.on('connection', (socket) => {
     
     // Update socketId for the player so submitPolicy can find them
     const room = globalState.rooms[roomId];
+    console.log(`🔗 joinRoom: roomId=${roomId}, playerId=${playerId}`);
+    console.log(`   Players in room: ${Object.keys(room.players).map(k => `${k}(${room.players[k].playerId})`).join(', ')}`);
+    
     const playerKey = Object.keys(room.players).find(key => {
       const p = room.players[key];
       return p.playerId === playerId || key === playerId;
@@ -1520,6 +1523,8 @@ io.on('connection', (socket) => {
     if (playerKey && room.players[playerKey]) {
       room.players[playerKey].socketId = socket.id;
       console.log(`✅ Updated socketId for player ${playerKey} (playerId=${playerId}): ${socket.id}`);
+    } else {
+      console.log(`⚠️  Player not found in room. Looking for ${playerId} but room has: ${Object.keys(room.players).map(k => room.players[k].playerId).join(', ')}`);
     }
     
     socket.emit('joinRoomResult', { 
@@ -2076,12 +2081,22 @@ io.on('connection', (socket) => {
     }
     
     // Find player by playerId (should match database player_id)
+    const playersInRoom = Object.keys(room.players).map(key => ({
+      key,
+      playerId: room.players[key].playerId,
+      country: room.players[key].country
+    }));
+    console.log(`   Players in room:`, playersInRoom.map(p => `${p.key}(${p.playerId}:${p.country})`).join(', '));
+    
     const playerKey = Object.keys(room.players).find(key => {
       return room.players[key].playerId === playerId || key === playerId;
     });
     const player = playerKey ? room.players[playerKey] : null;
-    console.log(`   player found=${!!player}, playerKey=${playerKey}, playerId=${playerId}, country=${player?.country}`);
-    if (!player) return;
+    console.log(`   Looking for playerId=${playerId}: found=${!!player}, playerKey=${playerKey}, country=${player?.country}`);
+    if (!player) {
+      console.log(`   ❌ Player not found in room. Available players: ${playersInRoom.map(p => p.playerId).join(', ')}`);
+      return;
+    }
     
     const currentYear = room.phase2.currentYear;
     console.log(`   currentYear=${currentYear}, policies for year=${!!room.phase2.policies[currentYear]}`);
