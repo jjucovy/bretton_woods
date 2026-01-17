@@ -380,12 +380,14 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         
         console.log(`✅ Setting gameStarted = ${globalState.rooms[SINGLE_ROOM_ID].gameStarted}, gameStatus = ${gameData.game_status}`);
         
-       // Set correct gamePhase based on game status
+              // Set correct gamePhase based on game status
           if (gameData.game_status === 'phase2_active') {
             globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'phase2';
+            // Calculate correct year from current round (round 11 = 1946, round 13 = 1948, etc.)
+            const currentYear = parseInt(gameData.current_round) + 1935;
             globalState.rooms[SINGLE_ROOM_ID].phase2 = { 
               active: true, 
-              currentYear: 1946, 
+              currentYear: currentYear, 
               policies: {}, 
               yearlyData: {},
               crises: {
@@ -394,7 +396,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
                 responses: {}
               }
             };
-            console.log(`✅ Set gamePhase = 'phase2'`);
+            console.log(`✅ Set gamePhase = 'phase2', currentYear = ${currentYear} (from round ${gameData.current_round})`);
         } else if (gameData.game_status === 'phase1_active') {
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'voting'; // Phase 1 is voting
           console.log(`✅ Set gamePhase = 'voting'`);
