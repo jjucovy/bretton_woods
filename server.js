@@ -2088,7 +2088,7 @@ io.on('connection', (socket) => {
     
              broadcastToRoom(roomId);
             saveState();
-     
+      }
     
     // Sync vote to MySQL with full details
     (async () => {
