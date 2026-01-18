@@ -2084,11 +2084,13 @@ io.on('connection', (socket) => {
               currentRoom.votes = {}; // Clear votes for new round
             }
           }, delay);
-}
-    }
+        
     
     broadcastToRoom(roomId);
     saveState();
+
+    }
+  }
     
     // Sync vote to MySQL with full details
     (async () => {
