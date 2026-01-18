@@ -2051,8 +2051,11 @@
                                     color: '#1e40af'
                                   }}>
                                     Your Country's Interest:</h4>
+                                    
+                                    
+                                    {currentIssue.options.map((option, idx) => {
                                     alert("Hh")
-                                  {currentIssue.options.map((option, idx) => {
+
                                     const favorsYou = option.favors && option.favors.includes(countries[playerCountry]?.name);
                                     const opposesYou = option.opposes && option.opposes.includes(countries[playerCountry]?.name);
                                     
