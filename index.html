@@ -1550,8 +1550,7 @@
             const economicData = gameData?.economicData || {};
             const historicalEvents = gameData?.historicalEvents || {};
             const currentIssue = gameState?.currentRound ? issues[gameState.currentRound - 1] : null;
-             console.log(Object.value(countryCode))
-  
+             
             // Helper: Convert country code to name used in voting options
             const getCountryNameForVoting = (countryCode) => {
               // Map country codes to the names used in game-data.json options
@@ -1564,6 +1563,8 @@
                 'IND': 'India (British Raj)',
                 'ARG': 'Argentina'
               };
+                console.log(Object.value(countryCode))
+  
               return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
                
             };
