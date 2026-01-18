@@ -1949,14 +1949,17 @@
                                 Phase 1: Conference Voting
                               </p>
                             </div>
-                            {userRole !== 'superadmin' && (
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
-                                  {gameState.scores?.[playerCountry] || 0} pts
+                              {userRole !== 'superadmin' && (() => {
+                                const countryNameForScoring = getCountryNameForVoting(playerCountry);
+                                return (
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
+                                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
+                                    {gameState.scores?.[countryNameForScoring] || 0} pts
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                                );
+                              })()}
                           </div>
                         </div>
 
@@ -2410,26 +2413,28 @@
                             </div>
                           </div>
 
-                          {/* Your score this round */}
-                          {userRole !== 'superadmin' && (
-                            <div style={{
-                              padding: '20px',
-                              background: 'white',
-                              borderRadius: '8px',
-                              marginBottom: '20px'
-                            }}>
-                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
-                                Your Score This Round
+  {/* Your score this round */}
+                            {userRole !== 'superadmin' && (() => {
+                              const countryNameForScoring = getCountryNameForVoting(playerCountry);
+                              return (
+                              <div style={{
+                                padding: '20px',
+                                background: 'white',
+                                borderRadius: '8px',
+                                marginBottom: '20px'
+                              }}>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
+                                  Your Score This Round
+                                </div>
+                                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                                  +{gameState.roundScores?.[countryNameForScoring] || 0} pts
+                                </div>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
+                                  Total: {gameState.scores?.[countryNameForScoring] || 0} pts
+                                </div>
                               </div>
-                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
-                                +{gameState.roundScores?.[playerCountry] || 0} pts
-                              </div>
-                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
-                                Total: {gameState.scores?.[playerCountry] || 0} pts
-                              </div>
-                            </div>
-                          )}
-
+                              );
+                            })()}
                           {/* Continue button - only admin can advance */}
                           {userRole === 'superadmin' && (
                             <button
