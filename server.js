@@ -427,7 +427,11 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
                  // Restore players from database
           try {
             const players = await db.getPlayers(SINGLE_ROOM_ID);
-            console.log('   Restored', players.length, 'players from database');
+            console.log('   📋 Restored', players.length, 'players from database');
+            if (players.length > 0) {
+              console.log('   🔍 First player object keys:', Object.keys(players[0]));
+              console.log('   🔍 First player object:', JSON.stringify(players[0], null, 2).substring(0, 500));
+            }
             for (const p of players) {
               // Use user_id with player_db_ prefix (consistent format)
               const playerId = `player_db_${p.user_id}`;
@@ -439,12 +443,15 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
                 country: p.country_code,
                 countryId: p.country_id
               };
-              // Restore player's accumulated points
-              if (p.total_points && !isNaN(parseInt(p.total_points))) {
-                globalState.rooms[SINGLE_ROOM_ID].scores[countryName] = parseInt(p.total_points);
-                console.log(`   Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - Points restored: ${p.total_points}`);
+              // Restore player's accumulated points - check ALL possible field names
+              let pointsValue = p.total_points || p.totalPoints || p.points || p.phase1_score || 0;
+              console.log(`   Player ${p.username}: total_points=${p.total_points}, totalPoints=${p.totalPoints}, points=${p.points}, phase1_score=${p.phase1_score}, phase2_score=${p.phase2_score}`);
+              
+              if (pointsValue && !isNaN(parseInt(pointsValue))) {
+                globalState.rooms[SINGLE_ROOM_ID].scores[countryName] = parseInt(pointsValue);
+                console.log(`   ✅ Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - Points restored: ${pointsValue}`);
               } else {
-                console.log(`   Player ${playerId}: ${p.username} → ${p.country_code} (${countryName})`);
+                console.log(`   ⚠️  Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - No points found`);
               }
             }
           } catch (err) {
@@ -534,24 +541,26 @@ function updateRoomList() {
   });
 }
 
-// Broadcast to specific room
-function broadcastToRoom(roomId) {
-  const room = globalState.rooms[roomId];
-  if (!room) return;
-  
-  // DEBUG: Log what we're broadcasting
-  console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
-    gameStarted: room.gameStarted,
-    gamePhase: room.gamePhase,
-    currentRound: room.currentRound,
-    phase2Active: room.phase2?.active,
-    phase2Year: room.phase2?.currentYear,
-    readyPlayersCount: room.readyPlayers?.length,
-    playersCount: Object.keys(room.players).length
-  });
-  
-  io.to(roomId).emit('stateUpdate', room);
-}
+  // Broadcast to specific room
+  function broadcastToRoom(roomId) {
+    const room = globalState.rooms[roomId];
+    if (!room) return;
+    
+    // DEBUG: Log what we're broadcasting
+    console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
+      gameStarted: room.gameStarted,
+      gamePhase: room.gamePhase,
+      currentRound: room.currentRound,
+      phase2Active: room.phase2?.active,
+      phase2Year: room.phase2?.currentYear,
+      readyPlayersCount: room.readyPlayers?.length,
+      playersCount: Object.keys(room.players).length,
+      scores: room.scores,
+      roundScores: room.roundScores
+    });
+    
+    io.to(roomId).emit('stateUpdate', room);
+  }
 
 // Broadcast room list to lobby
 function broadcastRoomList() {
@@ -2112,10 +2121,18 @@ io.on('connection', (socket) => {
           `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned);
         console.log(`📊 Vote synced: ${username} (${voterCountry}) -> ${choice}`);
         
-        // Also update player total points
-        if (room.scores?.[voterCountry]) {
-          await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry]);
-        }
+                // Also update player total points
+          if (room.scores?.[voterCountry]) {
+            console.log(`💾 Saving points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
+            const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry]);
+            if (pointsResult?.error) {
+              console.error(`❌ Failed to save points to DB:`, pointsResult.error);
+            } else {
+              console.log(`✅ Points saved successfully`);
+            }
+          } else {
+            console.log(`⚠️  No points to save for ${voterCountry}`);
+          }
       }
     })();
   });
