@@ -1321,14 +1321,19 @@
               console.log('Disconnected from server');
             });
 
-            socket.on('stateUpdate', (state) => {
-              console.log('=== STATE UPDATE ===');
-              console.log('Game started:', state.gameStarted);
-              console.log('Game phase:', state.gamePhase);
-              console.log('Current round:', state.currentRound);
-              console.log('Players:', Object.keys(state.players).length);
-              
-              setGameState(state);
+                         socket.on('stateUpdate', (state) => {
+                console.log('=== STATE UPDATE ===');
+                console.log('Game started:', state.gameStarted);
+                console.log('Game phase:', state.gamePhase);
+                console.log('Current round:', state.currentRound);
+                console.log('Players:', Object.keys(state.players).length);
+                console.log('Phase 2 active:', state.phase2?.active);
+                console.log('Phase 2 year:', state.phase2?.currentYear);
+                console.log('Ready players:', state.readyPlayers?.length);
+                console.log('📊 Scores received:', state.scores);
+                console.log('📊 Round scores received:', state.roundScores);
+                
+                setGameState(state);
               
               // Check if we're in this room
               if (state.players[playerId]) {
