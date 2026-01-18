@@ -2085,7 +2085,7 @@ io.on('connection', (socket) => {
             }
           }, delay);
       }
-    }
+    
              broadcastToRoom(roomId);
             saveState();
      
