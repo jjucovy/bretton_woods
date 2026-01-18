@@ -2053,12 +2053,10 @@
                                     Your Country's Interest:</h4>
                                     
                                     {currentIssue.options.map((option, idx) => {
-                                 //   alert(Object.values(Object.values(countries)[3]))
-//console.log(Object.values(gameData)[0])
-                                    console.log(Object.entries(option))
+                                
                                     const favorsYou = option.favors && option.favors.includes(countries[playerCountry]?.name);
                                     const opposesYou = option.opposes && option.opposes.includes(countries[playerCountry]?.name);
-                                    
+                                    console.log(favorsYou)
                                     if (favorsYou) {
                                       return (
                                         <p key={idx} style={{ 
