@@ -1902,11 +1902,10 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    // Sync game start to MySQL
-    dbSync(db.updateGame, roomId, { status: 'active', startedAt: true, phase: skipPhase1 ? 2 : 1, currentRound: skipPhase1 ? 11 : 1 });
-    console.log(`📊 Game started synced to MySQL`);
-    
-    console.log(`Game started in room ${roomId} by admin`);
+       // Sync game start to MySQL
+      const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
+      dbSync(db.updateGame, roomId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
+      console.log(`📊 Game started synced to MySQL (status: ${gameStatus})`);
     console.log('=========================');
   });
   
@@ -2055,11 +2054,10 @@ io.on('connection', (socket) => {
           results: { voteTally, roundScores, issueTitle }
         });
         
-        // Update game state in DB
-        await dbSync(db.updateGame, roomId, { currentRound: room.currentRound, phase: 1 });
-        console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
-      })();
-      
+          // Update game state in DB
+          await dbSync(db.updateGame, roomId, { currentRound: room.currentRound });
+          console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
+        
       // AUTO-ADVANCE: After all votes, auto-advance to next round
       if (room.autoAdvance) {
         const delay = room.autoAdvanceDelay || 5000;
@@ -2076,13 +2074,14 @@ io.on('connection', (socket) => {
           // Advance round
           currentRoom.currentRound++;
           console.log(`[AUTO] Advancing to round ${currentRoom.currentRound}`);
-          
+            
           // Check if Phase 1 is complete - start Phase 2
-          if (currentRoom.currentRound > 10) {
-            initializePhase2(roomId);
-            dbSync(db.updateGame, roomId, { phase: 2, currentRound: 11 });
-            console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
-          } else {
+            if (currentRoom.currentRound > 10) {
+              initializePhase2(roomId);
+              dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+              console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management'); } 
+            
+            else {
             currentRoom.gamePhase = 'voting';
             currentRoom.votes = {}; // Clear votes for new round
           }
@@ -2287,14 +2286,15 @@ io.on('connection', (socket) => {
       
       // Check if we're already at the end
       console.log(`   year check: currentYear=${room.phase2.currentYear}, >= 1952=${room.phase2.currentYear >= 1952}`);
-      if (room.phase2.currentYear >= 1952) {
-        // Don't calculate more economics, just finalize
-        console.log(`   [FINAL] calculating scores and completing...`);
-        calculatePhase2Scores(roomId);
-        room.gamePhase = 'complete';
-        room.phase2.active = false;
-        dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
-        console.log('[AUTO] Phase 2 complete! Final scores calculated.');
+              if (room.phase2.currentYear >= 1952) {
+          // Don't calculate more economics, just finalize
+          console.log(`   [FINAL] calculating scores and completing...`);
+          calculatePhase2Scores(roomId);
+          room.gamePhase = 'complete';
+          room.phase2.active = false;
+          dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+          console.log('[AUTO] Phase 2 complete! Final scores calculated.');
+                
         broadcastToRoom(roomId);
         saveState();
         return;
@@ -2309,10 +2309,10 @@ io.on('connection', (socket) => {
       room.readyPlayers = [];
       console.log(`   advanced to year ${room.phase2.currentYear}`);
       
-      // Sync to database
-      const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round, phase: 2 });
-      console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
+          // Sync to database
+        const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+        dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round });
+        console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
       // Check for crisis events this year
       console.log(`   checking crises...`);
@@ -2623,15 +2623,15 @@ io.on('connection', (socket) => {
       });
       return;
     }
-    
-    // Check if we're already at the end
-    if (room.phase2.currentYear >= 1952) {
-      // Don't calculate more economics, just finalize
-      calculatePhase2Scores(roomId);
-      room.gamePhase = 'complete';
-      room.phase2.active = false;
-      dbSync(db.updateGame, roomId, { status: 'completed', phase: 2, currentRound: 12 });
-      console.log('Phase 2 complete! Final scores calculated.');
+         // Check if we're already at the end
+      if (room.phase2.currentYear >= 1952) {
+        // Don't calculate more economics, just finalize
+        calculatePhase2Scores(roomId);
+        room.gamePhase = 'complete';
+        room.phase2.active = false;
+        dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+        console.log('Phase 2 complete! Final scores calculated.');
+        
       broadcastToRoom(roomId);
       saveState();
       return;
@@ -2690,11 +2690,9 @@ io.on('connection', (socket) => {
       yearlyData: {},
       achievements: {}
     };
-    
-    socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, roomId, { status: 'active', phase: 1, currentRound: 0 });
-    broadcastToRoom(roomId);
-    broadcastRoomList();
+      socket.emit('resetRoomResult', { success: true });
+      dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
+      broadcastToRoom(roomId);
     saveState();
     
     console.log(`Room ${roomId} reset by superadmin`);
