@@ -2086,16 +2086,18 @@ io.on('connection', (socket) => {
             currentRoom.votes = {}; // Clear votes for new round
           }
           
-          broadcastToRoom(roomId);
+             broadcastToRoom(roomId);
           saveState();
         }, delay);
       }
-    })
+    }
     
+    broadcastToRoom(roomId);
+    saveState();
     
     // Sync vote to MySQL with full details
     (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       const voterCountry = room.players[playerId]?.country;
       
