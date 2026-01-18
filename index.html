@@ -1544,13 +1544,27 @@
             socket.emit('setReady', { roomId: SINGLE_ROOM_ID, playerId, ready: !isReady });
           };
 
-          // Get countries and issues from game data
-          const countries = gameData?.countries || {};
-          const issues = gameData?.issues || [];
-          const economicData = gameData?.economicData || {};
-          const historicalEvents = gameData?.historicalEvents || {};
-          const currentIssue = gameState?.currentRound ? issues[gameState.currentRound - 1] : null;
-
+         // Get countries and issues from game data
+            const countries = gameData?.countries || {};
+            const issues = gameData?.issues || [];
+            const economicData = gameData?.economicData || {};
+            const historicalEvents = gameData?.historicalEvents || {};
+            const currentIssue = gameState?.currentRound ? issues[gameState.currentRound - 1] : null;
+  
+            // Helper: Convert country code to name used in voting options
+            const getCountryNameForVoting = (countryCode) => {
+              // Map country codes to the names used in game-data.json options
+              const codeToName = {
+                'USA': 'United States',
+                'UK': 'United Kingdom',
+                'USSR': 'Soviet Union',
+                'FRA': 'France',
+                'CHN': 'China',
+                'IND': 'India (British Raj)',
+                'ARG': 'Argentina'
+              };
+              return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
+            };
           // Login screen
           if (!isAuthenticated) {
             return (
@@ -2052,35 +2066,34 @@
                                   }}>
                                     Your Country's Interest:</h4>
                                     
-                                    {currentIssue.options.map((option, idx) => {
-                                
-                                    const favorsYou = option.favors && option.favors.includes(countries[playerCountry]?.name);
-                                    const opposesYou = option.opposes && option.opposes.includes(countries[playerCountry]?.name);
-                                    console.log(gameData.countries)
-                                    if (favorsYou) {
-                                      return (
-                                        <p key={idx} style={{ 
-                                          margin: 0,
-                                          fontSize: '0.875rem',
-                                          color: '#1e3a8a'
-                                        }}>
-                                            
-                                          ✓ Option {String.fromCharCode(65 + idx)} favors {countries[playerCountry]?.name || playerCountry}
-                                        </p>
-                                      );
-                                    } else if (opposesYou) {
-                                      return (
-                                        <p key={idx} style={{ 
-                                          margin: 0,
-                                          fontSize: '0.875rem',
-                                          color: '#991b1b'
-                                        }}>
-                                          ✗ Option {String.fromCharCode(65 + idx)} opposes {countries[playerCountry]?.name || playerCountry}
-                                        </p>
-                                      );
-                                    }
-                                    return null;
-                                  }).filter(Boolean)}
+                                         {currentIssue.options.map((option, idx) => {
+                                      const countryNameForVoting = getCountryNameForVoting(playerCountry);
+                                      const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
+                                      const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
+                                      
+                                      if (favorsYou) {
+                                        return (
+                                          <p key={idx} style={{ 
+                                            margin: 0,
+                                            fontSize: '0.875rem',
+                                            color: '#1e3a8a'
+                                          }}>
+                                            ✓ Option {String.fromCharCode(65 + idx)} favors {countryNameForVoting}
+                                          </p>
+                                        );
+                                      } else if (opposesYou) {
+                                        return (
+                                          <p key={idx} style={{ 
+                                            margin: 0,
+                                            fontSize: '0.875rem',
+                                            color: '#991b1b'
+                                          }}>
+                                            ✗ Option {String.fromCharCode(65 + idx)} opposes {countryNameForVoting}
+                                          </p>
+                                        );
+                                      }
+                                      return null;
+                                    }).filter(Boolean)}
                                 </div>
                               )}
 
