@@ -7,9 +7,26 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 // Database module for MySQL persistence
-const db = require('./db');
+  const db = require('./db');
+  
+  // Country code to full name mapping for voting checks
+  const COUNTRY_CODE_TO_NAME = {
+    'USA': 'United States',
+    'UK': 'United Kingdom',
+    'USSR': 'Soviet Union',
+    'FRA': 'France',
+    'CHN': 'China',
+    'IND': 'India (British Raj)',
+    'ARG': 'Argentina'
+  };
+  
+  // Helper function to convert country code to name for voting checks
 
-// Helper to safely call DB functions (fails silently, logs errors)
+  function getCountryName(countryCode) {
+    return COUNTRY_CODE_TO_NAME[countryCode] || countryCode;
+  }
+  
+  // Helper to safely call DB functions (fails silently, logs errors)
 async function dbSync(operation, ...args) {
   try {
     return await operation(...args);
@@ -1936,44 +1953,51 @@ io.on('connection', (socket) => {
       } catch (err) {
         console.error('Error loading game data for scoring:', err);
       }
-      
-      // Calculate scores for this round
-      const roundScores = {};
-      Object.entries(room.players).forEach(([id, player]) => {
-        const country = player.country;
-        const vote = room.votes[id].toLowerCase();
-        
-        let points = 0;
-        
-        // Base points for participation
-        points += 10;
-        
-        // Find the option they voted for
-        const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : 2;
-        const votedOption = currentIssueOptions[optionIndex];
-        
-        if (votedOption) {
-          // Bonus for voting for winning option
-          if (vote === winningOption) {
-            points += 20; // Voted with winning side
-          }
+              // Calculate scores for this round
+        const roundScores = {};
+        console.log(`📝 Scoring Round ${room.currentRound}:`);
+        Object.entries(room.players).forEach(([id, player]) => {
+          const countryCode = player.country;
+          const countryName = getCountryName(countryCode);
+          const vote = room.votes[id].toLowerCase();
           
-          // Major bonus if the winning option favors your country
-          const winningOptionData = currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2];
-          if (winningOptionData && winningOptionData.favors && winningOptionData.favors.includes(country)) {
-            points += 40; // Your country benefits from winning option
-          }
+          console.log(`   Player ${id} (${player.username}): ${countryCode} (${countryName}), vote=${vote}`);
           
-          // Penalty if winning option opposes your country
-          if (winningOptionData && winningOptionData.opposes && winningOptionData.opposes.includes(country)) {
-            points -= 10; // Your country hurt by winning option
-          }
+          let points = 0;
           
-          // Bonus for voting for option that favors you
-          if (votedOption.favors && votedOption.favors.includes(country)) {
-            points += 15; // Strategic vote for your interests
+          // Base points for participation
+          points += 10;
+          
+          // Find the option they voted for
+          const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : 2;
+          const votedOption = currentIssueOptions[optionIndex];
+          
+          if (votedOption) {
+            // Bonus for voting for winning option
+            if (vote === winningOption) {
+              points += 20; // Voted with winning side
+            }
+            
+            // Major bonus if the winning option favors your country
+            const winningOptionData = currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2];
+            if (winningOptionData && winningOptionData.favors && winningOptionData.favors.includes(countryName)) {
+              points += 40; // Your country benefits from winning option
+              console.log(`      → Winning option favors ${countryName}: +40 pts`);
+            }
+            
+            // Penalty if winning option opposes your country
+            if (winningOptionData && winningOptionData.opposes && winningOptionData.opposes.includes(countryName)) {
+              points -= 10; // Your country hurt by winning option
+              console.log(`      → Winning option opposes ${countryName}: -10 pts`);
+            }
+            
+            // Bonus for voting for option that favors you
+            if (votedOption.favors && votedOption.favors.includes(countryName)) {
+              points += 15; // Strategic vote for your interests
+              console.log(`      → Voted for option favoring ${countryName}: +15 pts`);
+            }
           }
-        }
+
         
         roundScores[country] = points;
         room.scores[country] = (room.scores[country] || 0) + points;
