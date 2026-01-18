@@ -2063,7 +2063,7 @@ io.on('connection', (socket) => {
         const delay = room.autoAdvanceDelay || 5000;
         console.log(`Auto-advancing to next round in ${delay}ms...`);
         
-        setTimeout(async() => {
+        setTimeout( () => {
           // Re-fetch room state in case it changed
           const currentRoom = globalState.rooms[roomId];
           if (!currentRoom || currentRoom.gamePhase !== 'results') {
@@ -2850,4 +2850,4 @@ async function startServer() {
   });
 }
 
-startServer();v
+startServer();
