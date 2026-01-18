@@ -1553,20 +1553,18 @@
              
             // Helper: Convert country code to name used in voting options
             const getCountryNameForVoting = (countryCode) => {
-              // Map country codes to the names used in game-data.json options
+              // Map country codes to the short names used in game-data.json options
+              // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
               const codeToName = {
-                'USA': 'United States',
-                'UK': 'United Kingdom',
-                'USSR': 'Soviet Union',
+                'USA': 'USA',
+                'UK': 'UK',
+                'USS': 'USSR',      // Database code → game-data name
                 'FRA': 'France',
-                'CHN': 'China',
-                'IND': 'India (British Raj)',
+                'CHN': 'China',     // Database code → game-data name
+                'IND': 'India',
                 'ARG': 'Argentina'
               };
-                console.log(countryCode)
-  
               return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
-               
             };
           // Login screen
           if (!isAuthenticated) {
