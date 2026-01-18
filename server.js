@@ -10,13 +10,15 @@ const crypto = require('crypto');
   const db = require('./db');
   
   // Country code to full name mapping for voting checks
+    // Country code to short name mapping (matching game-data.json naming)
+  // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
   const COUNTRY_CODE_TO_NAME = {
-    'USA': 'United States',
-    'UK': 'United Kingdom',
-    'USSR': 'Soviet Union',
+    'USA': 'USA',
+    'UK': 'UK',
+    'USS': 'USSR',      // Database code → game-data name
     'FRA': 'France',
-    'CHN': 'China',
-    'IND': 'India (British Raj)',
+    'CHN': 'China',     // Database code → game-data name
+    'IND': 'India',
     'ARG': 'Argentina'
   };
   
@@ -658,12 +660,13 @@ function calculateAgreementBonus(roomId) {
 }
 
  // Map crisis country names to database country codes
+   // Map crisis country names to database country codes
   const CRISIS_COUNTRY_MAPPING = {
     'USA': 'USA',
     'UK': 'UK',
     'France': 'FRA',
-    'USSR': 'USSR',
-    'China': 'CHI',
+    'USSR': 'USS',      // Crisis uses 'USSR', database uses 'USS'
+    'China': 'CHN',
     'India': 'IND',
     'Argentina': 'ARG'
   };
@@ -1999,10 +2002,10 @@ io.on('connection', (socket) => {
           }
 
         
-       roundScores[countryCode] = points;
-          room.scores[countryCode] = (room.scores[countryCode] || 0) + points;
-          console.log(`      ✓ ${countryName} (${countryCode}): +${points} pts (total: ${room.scores[countryCode]})`);
-      });
+         roundScores[countryName] = points;
+          room.scores[countryName] = (room.scores[countryName] || 0) + points;
+          console.log(`      ✓ ${countryName} (${countryCode}): +${points} pts (total: ${room.scores[countryName]})`);
+ });
       
       // Store results
       room.voteTally = voteTally;
