@@ -2187,11 +2187,12 @@
                                   gridTemplateColumns: currentIssue.options?.length === 3 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
                                   gap: '12px'
                                 }}>
-                                  {currentIssue.options && currentIssue.options.map((option, idx) => {
-                                    const optionLetter = String.fromCharCode(65 + idx); // A, B, C
-                                    const favorsYou = option.favors && option.favors.includes(playerCountry);
-                                    const opposesYou = option.opposes && option.opposes.includes(playerCountry);
-                                    
+                                     {currentIssue.options && currentIssue.options.map((option, idx) => {
+                                      const optionLetter = String.fromCharCode(65 + idx); // A, B, C
+                                      const countryNameForVoting = getCountryNameForVoting(playerCountry);
+                                      const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
+                                      const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
+ 
                                     return (
                                       <button
                                         key={idx}
