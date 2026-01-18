@@ -1998,10 +1998,10 @@ io.on('connection', (socket) => {
             }
           }
 
-        roundScores[countryCode] = points;
-          room.scores[countryCode] = (room.scores[countryCode] || 0) + points;
-          console.log(`      ✓ ${countryName} (${countryCode}): +${points} pts (total: ${room.scores[countryCode]})`);
-
+        
+        roundScores[country] = points;
+        room.scores[country] = (room.scores[country] || 0) + points;
+      });
       
       // Store results
       room.voteTally = voteTally;
