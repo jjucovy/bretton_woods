@@ -2085,10 +2085,10 @@ io.on('connection', (socket) => {
             }
           }, delay);
       }
-    
+      }
              broadcastToRoom(roomId);
             saveState();
-      }
+      
     
     // Sync vote to MySQL with full details
     (async () => {
