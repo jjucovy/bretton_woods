@@ -2050,7 +2050,7 @@
                                     fontSize: '0.9rem',
                                     color: '#1e40af'
                                   }}>
-                                    Your Country's Interest:
+                                    Your Country's Interest: alert(countries[playerCountry]?.name)
                                   </h4>
                                   {currentIssue.options.map((option, idx) => {
                                     const favorsYou = option.favors && option.favors.includes(countries[playerCountry]?.name);
@@ -2064,7 +2064,6 @@
                                           color: '#1e3a8a'
                                         }}>
                                             
-                                     alert(Object.values(countries))
                                           ✓ Option {String.fromCharCode(65 + idx)} favors {countries[playerCountry]?.name || playerCountry}
                                         </p>
                                       );
