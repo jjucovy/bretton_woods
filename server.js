@@ -2062,31 +2062,29 @@ io.on('connection', (socket) => {
       if (room.autoAdvance) {
         const delay = room.autoAdvanceDelay || 5000;
         console.log(`Auto-advancing to next round in ${delay}ms...`);
-        
-        setTimeout(() => {
-          // Re-fetch room state in case it changed
-          const currentRoom = globalState.rooms[roomId];
-          if (!currentRoom || currentRoom.gamePhase !== 'results') {
-            console.log('Auto-advance cancelled: room state changed');
-            return;
-          }
-          
-          // Advance round
-          currentRoom.currentRound++;
-          console.log(`[AUTO] Advancing to round ${currentRoom.currentRound}`);
+          setTimeout(async () => {
+            // Re-fetch room state in case it changed
+            const currentRoom = globalState.rooms[roomId];
+            if (!currentRoom || currentRoom.gamePhase !== 'results') {
+              console.log('Auto-advance cancelled: room state changed');
+              return;
+            }
             
-          // Check if Phase 1 is complete - start Phase 2
+            // Advance round
+            currentRoom.currentRound++;
+            console.log(`[AUTO] Advancing to round ${currentRoom.currentRound}`);
+            
+            // Check if Phase 1 is complete - start Phase 2
             if (currentRoom.currentRound > 10) {
               initializePhase2(roomId);
-              dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
-              console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management'); } 
-            
-                 } else {
+              await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+              console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
+            } else {
               currentRoom.gamePhase = 'voting';
               currentRoom.votes = {}; // Clear votes for new round
             }
           }, delay);
-      }
+}
     }
     
     broadcastToRoom(roomId);
