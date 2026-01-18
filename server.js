@@ -2090,7 +2090,7 @@ io.on('connection', (socket) => {
           saveState();
         }, delay);
       }
-    }
+    })
     
     
     // Sync vote to MySQL with full details
