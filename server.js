@@ -424,13 +424,14 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           console.log(`✅ Set gamePhase = 'complete'`);
         }
         
-                // Restore players from database
+                 // Restore players from database
           try {
             const players = await db.getPlayers(SINGLE_ROOM_ID);
             console.log('   Restored', players.length, 'players from database');
             for (const p of players) {
               // Use user_id with player_db_ prefix (consistent format)
               const playerId = `player_db_${p.user_id}`;
+              const countryName = getCountryName(p.country_code);
               globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
                 playerId: playerId,
                 userId: p.user_id,
@@ -438,6 +439,13 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
                 country: p.country_code,
                 countryId: p.country_id
               };
+              // Restore player's accumulated points
+              if (p.total_points && !isNaN(parseInt(p.total_points))) {
+                globalState.rooms[SINGLE_ROOM_ID].scores[countryName] = parseInt(p.total_points);
+                console.log(`   Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - Points restored: ${p.total_points}`);
+              } else {
+                console.log(`   Player ${playerId}: ${p.username} → ${p.country_code} (${countryName})`);
+              }
             }
           } catch (err) {
             console.log('   Warning: Could not restore players:', err.message);
