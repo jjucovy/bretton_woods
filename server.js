@@ -2081,14 +2081,11 @@ io.on('connection', (socket) => {
               dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
               console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management'); } 
             
-            else {
-            currentRoom.gamePhase = 'voting';
-            currentRoom.votes = {}; // Clear votes for new round
-          }
-          
-             broadcastToRoom(roomId);
-          saveState();
-        }, delay);
+                 } else {
+              currentRoom.gamePhase = 'voting';
+              currentRoom.votes = {}; // Clear votes for new round
+            }
+          }, delay);
       }
     }
     
