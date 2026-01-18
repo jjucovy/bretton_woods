@@ -64,9 +64,11 @@ async function addPlayer(gameCode, userId, countryCode, countryName) {
   return callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
 }
 
-async function getPlayers(gameCode) {
-  return callAPI('getPlayers', { gameCode });
-}
+  async function getPlayers(gameCode) {
+    const result = await callAPI('getPlayers', { gameCode });
+    console.log('🔍 [getPlayers API Result]', JSON.stringify(result, null, 2).substring(0, 1000));
+    return result;
+  }
 
   async function getPlayerActiveGame(userId) {
     return callAPI('getPlayerActiveGame', { userId });
