@@ -1575,8 +1575,14 @@ io.on('connection', (socket) => {
       const userId = await getUserId(username);
       if (userId) {
         activeGame = await db.getPlayerActiveGame(userId);
-        if (activeGame) {
-          console.log(`📊 User ${username} has active game: ${activeGame.game_code} as ${activeGame.country_name}`);
+        // Only return the game if it's actually active (phase1_active or phase2_active)
+        if (activeGame && activeGame.game_status) {
+          if (activeGame.game_status === 'phase1_active' || activeGame.game_status === 'phase2_active') {
+            console.log(`📊 User ${username} has active game: ${activeGame.game_code} as ${activeGame.country_name}`);
+          } else {
+            console.log(`⚠️ User ${username} was in game ${activeGame.game_code} but it's no longer active (status: ${activeGame.game_status})`);
+            activeGame = null; // Don't restore - game is no longer active
+          }
         }
       }
     } catch (err) {
@@ -1977,17 +1983,69 @@ io.on('connection', (socket) => {
         }
       });
       
-      // Determine winning option (most votes)
-      let winningOption = 'a';
-      let maxVotes = voteTally.a;
-      if (voteTally.b > maxVotes) {
-        winningOption = 'b';
-        maxVotes = voteTally.b;
+      // Initialize vote attempt tracker if needed
+      if (!room.voteAttempts) room.voteAttempts = {};
+      const roundKey = `round_${room.currentRound}`;
+      if (!room.voteAttempts[roundKey]) room.voteAttempts[roundKey] = 0;
+      room.voteAttempts[roundKey]++;
+      
+      // Check for tie - find highest vote count
+      const voteArray = Object.values(voteTally);
+      const maxVotes = Math.max(...voteArray);
+      const tiedOptions = Object.entries(voteTally)
+        .filter(([_, count]) => count === maxVotes)
+        .map(([option, _]) => option);
+      
+      // Handle tie votes
+      if (tiedOptions.length > 1) {
+        console.log(`⚠️ TIE DETECTED in round ${room.currentRound}: options ${tiedOptions.join(', ')} tied with ${maxVotes} votes each`);
+        console.log(`   Vote attempt ${room.voteAttempts[roundKey]} of 3`);
+        
+        if (room.voteAttempts[roundKey] >= 3) {
+          // After 3 attempts, declare no resolution and skip to next round
+          console.log(`❌ No resolution after 3 vote attempts - skipping policy and moving to next round (NO POINTS AWARDED)`);
+          room.gamePhase = 'voting';
+          room.roundOutcome = `UNRESOLVED TIE - No consensus after 3 votes (${tiedOptions.map(o => voteTally[o]).join('-')}). Moving to next round.`;
+          room.winningOption = null;
+          room.voteTally = voteTally;
+          room.roundScores = {}; // No points awarded for unresolved tie
+          
+          broadcastToRoom(roomId);
+          saveState();
+          
+          // Auto-advance after showing unresolved tie message
+          if (room.autoAdvance) {
+            const delay = room.autoAdvanceDelay || 5000;
+            setTimeout(async () => {
+              room.currentRound++;
+              if (room.currentRound > 10) {
+                initializePhase2(roomId);
+                await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+              } else {
+                room.gamePhase = 'voting';
+                room.votes = {};
+              }
+              broadcastToRoom(roomId);
+              saveState();
+            }, delay);
+          }
+          return;
+        } else {
+          // Trigger revote
+          console.log(`🔄 Triggering revote - clearing votes and waiting for new submissions`);
+          room.gamePhase = 'revoting';
+          room.votes = {}; // Clear votes for revote
+          room.voteTally = voteTally;
+          room.roundOutcome = `TIE! Revoting required (attempt ${room.voteAttempts[roundKey]}/3)`;
+          
+          broadcastToRoom(roomId);
+          saveState();
+          return; // Stop processing, wait for revotes
+        }
       }
-      if (voteTally.c > maxVotes) {
-        winningOption = 'c';
-        maxVotes = voteTally.c;
-      }
+      
+      // No tie - determine winning option (most votes)
+      let winningOption = tiedOptions[0]; // Since no tie, tiedOptions has exactly 1 element
       
       room.voteTally = voteTally;
       room.roundOutcome = `Option ${winningOption.toUpperCase()} wins (${maxVotes} votes)`;
@@ -2096,7 +2154,7 @@ io.on('connection', (socket) => {
       // AUTO-ADVANCE: After all votes, auto-advance to next round
       if (room.autoAdvance) {
         const delay = room.autoAdvanceDelay || 5000;
-        console.log(`Auto-advancing to next round in ${delay}ms...`);
+        console.log(`✅ Auto-advancing to next round in ${delay}ms...`);
         
         setTimeout(async () => {
           // Re-fetch room state in case it changed
@@ -2119,6 +2177,10 @@ io.on('connection', (socket) => {
             currentRoom.gamePhase = 'voting';
             currentRoom.votes = {}; // Clear votes for new round
           }
+          
+          // CRITICAL: Broadcast the updated state so clients see the new round
+          broadcastToRoom(roomId);
+          saveState();
         }, delay);
       }
     }

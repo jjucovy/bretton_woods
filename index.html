@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bretton Woods 1944</title>
-    <link rel="stylesheet" href="styles.css">f
+    <link rel="stylesheet" href="styles.css">
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -327,13 +327,13 @@
 
         // Troop Deployment Interface Component
         function TroopDeploymentInterface({ playerCountry, gameState, socket, playerId, roomId }) {
-        const [selectedRegion, setSelectedRegion] = useState('');
+          const [selectedRegion, setSelectedRegion] = useState('');
           const [troopCount, setTroopCount] = useState(50000);
           const [deploymentLog, setDeploymentLog] = useState([]);
 
           const handleDeploy = () => {
             if (!selectedRegion) {
-              alert('Please select a region');
+              // Validation: must select a region
               return;
             }
 
@@ -809,36 +809,23 @@
           
           const totalMilitary = armySize + navySize + airForceSize;
 
-            const handleSubmit = () => {
-              try {
-                alert('Button clicked! Socket=' + (socket ? 'exists' : 'MISSING'));
-                
-                if (!socket) {
-                  alert('ERROR: Socket is undefined');
-                  return;
-                }
-                
-                alert('About to emit...');
-                socket.emit('submitPolicy', {
-                  roomId,
-                  playerId,
-                  policy: { 
-                    centralBankRate, 
-                    exchangeRate, 
-                    tariffRate,
-                    militarySpending,
-                    armySize,
-                    navySize,
-                    airForceSize,
-                    isCommandEconomy: false
-                  }
-                });
-                alert('Policy submitted!');
-              } catch (error) {
-                alert('ERROR: ' + error.message);
-                console.error('submitPolicy error:', error);
+          const handleSubmit = () => {
+            console.log('📤 Submitting policy for player:', playerId);
+            socket.emit('submitPolicy', {
+              roomId,
+              playerId,
+              policy: { 
+                centralBankRate, 
+                exchangeRate, 
+                tariffRate,
+                militarySpending,
+                armySize,
+                navySize,
+                airForceSize,
+                isCommandEconomy: false
               }
-            };
+            });
+          };
 
           return (
             <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
@@ -1007,7 +994,10 @@
               </div>
 
               <button
-                onClick={handleSubmit}
+                onClick={(e) => {
+                  console.log('🔵 Button click fired!', e);
+                  handleSubmit();
+                }}
                 style={{
                   width: '100%',
                   padding: '18px',
@@ -1018,7 +1008,9 @@
                   fontSize: '1.1rem',
                   fontWeight: 'bold',
                   cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  transition: 'all 0.2s',
+                  zIndex: 100,
+                  position: 'relative'
                 }}
                 onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
                 onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
@@ -1059,13 +1051,13 @@
               
               const result = await response.json();
               if (result.success) {
-                alert('✅ User deleted');
+                // User deleted successfully
                 loadUsers(); // Refresh list
               } else {
-                alert('❌ ' + result.error);
+                console.error('Delete user error:', result.error);
               }
             } catch (err) {
-              alert('❌ Error: ' + err.message);
+              console.error('Error deleting user:', err.message);
             }
           };
           
@@ -1309,11 +1301,11 @@
               setConnected(true);
               console.log('Connected to server');
               
-                         // Auto-join the single room when connected and authenticated
-                if (isAuthenticated && playerId) {
-                  console.log('Auto-joining single room:', SINGLE_ROOM_ID, 'with playerId:', playerId);
-                  socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: playerId });
-                }
+              // Auto-join the single room when connected and authenticated
+              if (isAuthenticated && playerId) {
+                console.log('Auto-joining single room:', SINGLE_ROOM_ID, 'with playerId:', playerId);
+                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: playerId });
+              }
             });
 
             socket.on('disconnect', () => {
@@ -1321,19 +1313,19 @@
               console.log('Disconnected from server');
             });
 
-                         socket.on('stateUpdate', (state) => {
-                console.log('=== STATE UPDATE ===');
-                console.log('Game started:', state.gameStarted);
-                console.log('Game phase:', state.gamePhase);
-                console.log('Current round:', state.currentRound);
-                console.log('Players:', Object.keys(state.players).length);
-                console.log('Phase 2 active:', state.phase2?.active);
-                console.log('Phase 2 year:', state.phase2?.currentYear);
-                console.log('Ready players:', state.readyPlayers?.length);
-                console.log('📊 Scores received:', state.scores);
-                console.log('📊 Round scores received:', state.roundScores);
-                
-                setGameState(state);
+            socket.on('stateUpdate', (state) => {
+              console.log('=== STATE UPDATE ===');
+              console.log('Game started:', state.gameStarted);
+              console.log('Game phase:', state.gamePhase);
+              console.log('Current round:', state.currentRound);
+              console.log('Players:', Object.keys(state.players).length);
+              console.log('Phase 2 active:', state.phase2?.active);
+              console.log('Phase 2 year:', state.phase2?.currentYear);
+              console.log('Ready players:', state.readyPlayers?.length);
+              console.log('📊 Scores received:', state.scores);
+              console.log('📊 Round scores received:', state.roundScores);
+              
+              setGameState(state);
               
               // Check if we're in this room
               if (state.players[playerId]) {
@@ -1373,23 +1365,19 @@
             
             socket.on('startGameResult', ({ success, message }) => {
               if (!success) {
-                alert(message || 'Failed to start game');
-              } else {
-                console.log('Game started successfully');
+                console.error('Failed to start game:', message);
               }
             });
             
             socket.on('resetRoomResult', ({ success, message }) => {
               if (!success) {
-                alert(message || 'Failed to reset room');
-              } else {
-                console.log('Room reset successfully');
+                console.error('Failed to reset room:', message);
               }
             });
             
             socket.on('joinResult', ({ success, message }) => {
               if (!success) {
-                alert(message || 'Failed to join game');
+                console.error('Failed to join game:', message);
               }
             });
             
@@ -1405,7 +1393,6 @@
             });
 
             socket.on('advanceYearError', ({ message }) => {
-              alert('❌ ' + message);
               console.error('Advance year error:', message);
             });
 
@@ -1442,13 +1429,10 @@
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
                 // Auto-join single room after registration
-                  socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: newPlayerId });
-                  
-                if (role === 'superadmin') {
-                  alert('🎉 Welcome, Administrator! You have full control over the game.');
-                }
+                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: newPlayerId });
+                
               } else {
-                alert(message);
+                console.error('Registration failed:', message);
               }
             });
           };
@@ -1462,11 +1446,6 @@
             socket.emit('login', { username, password });
             
             socket.once('loginResult', ({ success, playerId: returnedPlayerId, role, message, activeGame }) => {
-              console.log('=== LOGIN RESULT ===');
-              console.log('Success:', success);
-              console.log('Role received:', role);
-              console.log('Player ID:', returnedPlayerId);
-              console.log('Active game:', activeGame);
               
               if (success) {
                 setUsername(username);
@@ -1479,46 +1458,43 @@
                 
                 // If user has an active game, restore them immediately
                 if (activeGame && activeGame.country && activeGame.gameCode) {
-                  console.log(`✅ Active game found: ${activeGame.gameCode} as ${activeGame.countryName}`);
-                  console.log(`Game status: ${activeGame.game_status || activeGame.status}`);
-                  setPlayerCountry(activeGame.country);
-                  setGameRoom(activeGame.gameCode);
-                  // Check if game is in active phase (phase1_active, phase1_complete, or phase2_active)
                   const gameStatus = activeGame.game_status || activeGame.status;
-                  const isGameActive = gameStatus && (gameStatus.includes('active') || gameStatus === 'active');
-                  setCurrentPhase(isGameActive ? 'game' : 'lobby');
-                  sessionStorage.setItem('brettonWoodsCountry', activeGame.country);
-                  sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
+                  const isGameActive = gameStatus === 'phase1_active' || gameStatus === 'phase2_active';
                   
-                     // Wait for server to fully load game state before joining
+                  if (isGameActive) {
+                    setPlayerCountry(activeGame.country);
+                    setGameRoom(activeGame.gameCode);
+                    setCurrentPhase('game');
+                    sessionStorage.setItem('brettonWoodsCountry', activeGame.country);
+                    sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
+                    
+                    // Wait for server to fully load game state before joining
                     setTimeout(() => {
                       // Join their active game room
                       socket.emit('joinRoom', { roomId: activeGame.gameCode, playerId: returnedPlayerId });
-                        
-                    // Restore their country selection in the game
-                    setTimeout(() => {
-                      socket.emit('select-country', { 
-                        playerId: returnedPlayerId, 
-                        roomId: activeGame.gameCode, 
-                        country: activeGame.country 
-                      });
-                    }, 300);
-                  }, 1000); // Give server time to load game state from DB
-                                } else {
-                    // No active game - join default room to see available games
-                    console.log('No active game - joining lobby');
+                      
+                      // Restore their country selection in the game
+                      setTimeout(() => {
+                        socket.emit('select-country', { 
+                          playerId: returnedPlayerId, 
+                          roomId: activeGame.gameCode, 
+                          country: activeGame.country 
+                        });
+                      }, 300);
+                    }, 1000); // Give server time to load game state from DB
+                  } else {
+                    // Game exists but isn't active anymore - go to lobby for new game
                     socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: returnedPlayerId });
                   }
+                } else {
+                  // No active game - join default room to see available games
+                  socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: returnedPlayerId });
+                }
                 
-                console.log('Stored in session:', {
-                  username: sessionStorage.getItem('brettonWoodsUsername'),
-                  playerId: sessionStorage.getItem('brettonWoodsPlayerId'),
-                  role: sessionStorage.getItem('brettonWoodsUserRole')
-                });
-                console.log('===================');
+
               } else {
                 console.log('Login failed:', message);
-                alert(message || 'Login failed. If you recently registered but the server restarted, you may need to register again or click "Clear Saved Session" to start fresh.');
+
               }
             });
           };
@@ -1532,7 +1508,7 @@
           // Game handlers
           const handleJoinGame = (country) => {
             if (userRole === 'superadmin') {
-              alert('As administrator, you are an observer and cannot select a country.');
+              console.log('Admin cannot join as player');
               return;
             }
             
@@ -1549,28 +1525,29 @@
             socket.emit('setReady', { roomId: SINGLE_ROOM_ID, playerId, ready: !isReady });
           };
 
-         // Get countries and issues from game data
-            const countries = gameData?.countries || {};
-            const issues = gameData?.issues || [];
-            const economicData = gameData?.economicData || {};
-            const historicalEvents = gameData?.historicalEvents || {};
-            const currentIssue = gameState?.currentRound ? issues[gameState.currentRound - 1] : null;
-             
-            // Helper: Convert country code to name used in voting options
-            const getCountryNameForVoting = (countryCode) => {
-              // Map country codes to the short names used in game-data.json options
-              // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
-              const codeToName = {
-                'USA': 'USA',
-                'UK': 'UK',
-                'USS': 'USSR',      // Database code → game-data name
-                'FRA': 'France',
-                'CHN': 'China',     // Database code → game-data name
-                'IND': 'India',
-                'ARG': 'Argentina'
-              };
-              return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
+          // Get countries and issues from game data
+          const countries = gameData?.countries || {};
+          const issues = gameData?.issues || [];
+          const economicData = gameData?.economicData || {};
+          const historicalEvents = gameData?.historicalEvents || {};
+          const currentIssue = gameState?.currentRound ? issues[gameState.currentRound - 1] : null;
+
+          // Helper: Convert country code to name used in voting options
+          const getCountryNameForVoting = (countryCode) => {
+            // Map country codes to the short names used in game-data.json options
+            // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
+            const codeToName = {
+              'USA': 'USA',
+              'UK': 'UK',
+              'USS': 'USSR',      // Database code → game-data name
+              'FRA': 'France',
+              'CHN': 'China',     // Database code → game-data name
+              'IND': 'India',
+              'ARG': 'Argentina'
             };
+            return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
+          };
+
           // Login screen
           if (!isAuthenticated) {
             return (
@@ -1775,7 +1752,7 @@
                               const importData = JSON.parse(event.target.result);
                               
                               if (!importData.roomData) {
-                                alert('Invalid game state file!');
+                                console.error('Invalid game state file');
                                 return;
                               }
                               
@@ -1795,13 +1772,13 @@
                               const result = await response.json();
                               
                               if (result.success) {
-                                alert('✅ Game state imported successfully!');
+                                console.log('Game state imported successfully');
                                 window.location.reload();
                               } else {
-                                alert('❌ Failed to import: ' + result.error);
+                                console.error('Failed to import:', result.error);
                               }
                             } catch (err) {
-                              alert('❌ Error reading file: ' + err.message);
+                              console.error('Error reading file:', err.message);
                             }
                           };
                           reader.readAsText(file);
@@ -1954,17 +1931,17 @@
                                 Phase 1: Conference Voting
                               </p>
                             </div>
-                              {userRole !== 'superadmin' && (() => {
-                                const countryNameForScoring = getCountryNameForVoting(playerCountry);
-                                return (
-                                <div style={{ textAlign: 'right' }}>
-                                  <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
-                                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
-                                    {gameState.scores?.[countryNameForScoring] || 0} pts
-                                  </div>
+                            {userRole !== 'superadmin' && (() => {
+                              const countryNameForScoring = getCountryNameForVoting(playerCountry);
+                              return (
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
+                                  {gameState.scores?.[countryNameForScoring] || 0} pts
                                 </div>
-                                );
-                              })()}
+                              </div>
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -2073,36 +2050,36 @@
                                     fontSize: '0.9rem',
                                     color: '#1e40af'
                                   }}>
-                                    Your Country's Interest:</h4>
+                                    Your Country's Interest:
+                                  </h4>
+                                  {currentIssue.options.map((option, idx) => {
+                                    const countryNameForVoting = getCountryNameForVoting(playerCountry);
+                                    const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
+                                    const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
                                     
-                                         {currentIssue.options.map((option, idx) => {
-                                      const countryNameForVoting = getCountryNameForVoting(playerCountry);
-                                      const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
-                                      const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
-                                      
-                                      if (favorsYou) {
-                                        return (
-                                          <p key={idx} style={{ 
-                                            margin: 0,
-                                            fontSize: '0.875rem',
-                                            color: '#1e3a8a'
-                                          }}>
-                                            ✓ Option {String.fromCharCode(65 + idx)} favors {countryNameForVoting}
-                                          </p>
-                                        );
-                                      } else if (opposesYou) {
-                                        return (
-                                          <p key={idx} style={{ 
-                                            margin: 0,
-                                            fontSize: '0.875rem',
-                                            color: '#991b1b'
-                                          }}>
-                                            ✗ Option {String.fromCharCode(65 + idx)} opposes {countryNameForVoting}
-                                          </p>
-                                        );
-                                      }
-                                      return null;
-                                    }).filter(Boolean)}
+                                    if (favorsYou) {
+                                      return (
+                                        <p key={idx} style={{ 
+                                          margin: 0,
+                                          fontSize: '0.875rem',
+                                          color: '#1e3a8a'
+                                        }}>
+                                          ✓ Option {String.fromCharCode(65 + idx)} favors {countryNameForVoting}
+                                        </p>
+                                      );
+                                    } else if (opposesYou) {
+                                      return (
+                                        <p key={idx} style={{ 
+                                          margin: 0,
+                                          fontSize: '0.875rem',
+                                          color: '#991b1b'
+                                        }}>
+                                          ✗ Option {String.fromCharCode(65 + idx)} opposes {countryNameForVoting}
+                                        </p>
+                                      );
+                                    }
+                                    return null;
+                                  }).filter(Boolean)}
                                 </div>
                               )}
 
@@ -2195,12 +2172,12 @@
                                   gridTemplateColumns: currentIssue.options?.length === 3 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
                                   gap: '12px'
                                 }}>
-                                     {currentIssue.options && currentIssue.options.map((option, idx) => {
-                                      const optionLetter = String.fromCharCode(65 + idx); // A, B, C
-                                      const countryNameForVoting = getCountryNameForVoting(playerCountry);
-                                      const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
-                                      const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
- 
+                                  {currentIssue.options && currentIssue.options.map((option, idx) => {
+                                    const optionLetter = String.fromCharCode(65 + idx); // A, B, C
+                                    const countryNameForVoting = getCountryNameForVoting(playerCountry);
+                                    const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
+                                    const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
+                                    
                                     return (
                                       <button
                                         key={idx}
@@ -2418,28 +2395,29 @@
                             </div>
                           </div>
 
-  {/* Your score this round */}
-                            {userRole !== 'superadmin' && (() => {
-                              const countryNameForScoring = getCountryNameForVoting(playerCountry);
-                              return (
-                              <div style={{
-                                padding: '20px',
-                                background: 'white',
-                                borderRadius: '8px',
-                                marginBottom: '20px'
-                              }}>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
-                                  Your Score This Round
-                                </div>
-                                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
-                                  +{gameState.roundScores?.[countryNameForScoring] || 0} pts
-                                </div>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
-                                  Total: {gameState.scores?.[countryNameForScoring] || 0} pts
-                                </div>
+                          {/* Your score this round */}
+                          {userRole !== 'superadmin' && (() => {
+                            const countryNameForScoring = getCountryNameForVoting(playerCountry);
+                            return (
+                            <div style={{
+                              padding: '20px',
+                              background: 'white',
+                              borderRadius: '8px',
+                              marginBottom: '20px'
+                            }}>
+                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
+                                Your Score This Round
                               </div>
-                              );
-                            })()}
+                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                                +{gameState.roundScores?.[countryNameForScoring] || 0} pts
+                              </div>
+                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
+                                Total: {gameState.scores?.[countryNameForScoring] || 0} pts
+                              </div>
+                            </div>
+                            );
+                          })()}
+
                           {/* Continue button - only admin can advance */}
                           {userRole === 'superadmin' && (
                             <button
@@ -2519,6 +2497,16 @@
                       const crisisResponses = gameState.phase2?.crises?.responses || {};
                       const myCountryOptions = activeCrisis?.options?.[playerCountry] || [];
                       const hasRespondedToCrisis = crisisResponses[playerCountry];
+                      
+                      // Debug crisis options
+                      if (activeCrisis) {
+                        console.log('🔍 Crisis Debug:');
+                        console.log('  Title:', activeCrisis.title);
+                        console.log('  Affected countries:', activeCrisis.affectedCountries);
+                        console.log('  My country:', playerCountry);
+                        console.log('  Options keys:', Object.keys(activeCrisis.options || {}));
+                        console.log('  My options:', myCountryOptions);
+                      }
                       
                       return (
                         <div>
@@ -3457,7 +3445,7 @@
                           if (confirmCode === 'CLEAR_ALL_DATA') {
                             socket.emit('clearAllData', { playerId, confirmCode });
                             socket.once('clearDataResult', ({ success, message }) => {
-                              alert(message);
+                              console.log(message);
                               if (success) {
                                 window.location.reload();
                               }
