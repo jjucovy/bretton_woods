@@ -2930,13 +2930,7 @@ async function startServer() {
       await db.setupSchema();
       console.log('✅ Database schema verified');
       
-      // Ensure score columns exist on players table
-      try {
-        await db.ensureScoreColumns();
-        console.log('✅ Score columns verified on players table');
-      } catch (err) {
-        console.warn('⚠️ Score columns warning:', err.message);
-      }
+      // Score columns already exist in database (phase1_score, phase2_score)
     } catch (err) {
       console.warn('⚠️ Schema setup warning:', err.message);
     }

@@ -45,9 +45,7 @@ async function setupSchema() {
   return callAPI('setupSchema');
 }
 
-async function ensureScoreColumns() {
-  return callAPI('ensureScoreColumns');
-}
+
 
 // ============ USERS ============
 async function getAllUsers() {
@@ -202,7 +200,7 @@ async function testConnection() {
 module.exports = {
   // Schema
   setupSchema,
-  ensureScoreColumns,
+
   
   // Users
   getAllUsers,
