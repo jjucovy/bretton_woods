@@ -92,6 +92,14 @@ async function updatePlayerPoints(gameCode, userId, points, phase = 'phase1', ad
   return callAPI('updatePlayerPoints', { gameCode, userId, points, phase, addPoints });
 }
 
+async function clearPlayerCountry(gameCode, userId) {
+  return callAPI('clearPlayerCountry', { gameCode, userId });
+}
+
+async function releaseAllPlayers(gameCode) {
+  return callAPI('releaseAllPlayers', { gameCode });
+}
+
 // ============ VOTES (Phase 1) ============
 async function saveVote(gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned = 0) {
   return callAPI('saveVote', { gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned });
@@ -217,6 +225,8 @@ module.exports = {
   getPlayers,
   getPlayerActiveGame,
   updatePlayerPoints,
+  clearPlayerCountry,
+  releaseAllPlayers,
   
   // Votes
   saveVote,

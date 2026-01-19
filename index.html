@@ -1375,6 +1375,12 @@
               }
             });
             
+            socket.on('startNewGameResult', ({ success, message }) => {
+              if (!success) {
+                console.error('Failed to start new game:', message);
+              }
+            });
+            
             socket.on('joinResult', ({ success, message }) => {
               if (!success) {
                 console.error('Failed to join game:', message);
@@ -3273,8 +3279,8 @@
                             
                             <button
                               onClick={() => {
-                                if (window.confirm('Reset this game? All progress will be lost.')) {
-                                  socket.emit('resetRoom', {
+                                if (window.confirm('Start a new game? All players will be released from their countries and can rejoin as new players.')) {
+                                  socket.emit('startNewGame', {
                                     roomId: SINGLE_ROOM_ID,
                                     playerId
                                   });
@@ -3282,7 +3288,7 @@
                               }}
                               style={{
                                 padding: '15px 30px',
-                                background: '#f59e0b',
+                                background: '#16a34a',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '8px',
@@ -3291,7 +3297,7 @@
                                 cursor: 'pointer'
                               }}
                             >
-                              🔄 Start New Game
+                              ✨ Start New Game
                             </button>
                           </div>
                         )}

@@ -2386,7 +2386,9 @@ io.on('connection', (socket) => {
         room.gamePhase = 'complete';
         room.phase2.active = false;
         dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
-        console.log('[AUTO] Phase 2 complete! Final scores calculated.');
+        // Release all players when game completes
+        dbSync(db.releaseAllPlayers, roomId);
+        console.log('[AUTO] Phase 2 complete! Final scores calculated. Players released.');
         broadcastToRoom(roomId);
         saveState();
         return;
@@ -2723,7 +2725,9 @@ io.on('connection', (socket) => {
       room.gamePhase = 'complete';
       room.phase2.active = false;
       dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
-      console.log('Phase 2 complete! Final scores calculated.');
+      // Release all players when game completes
+      dbSync(db.releaseAllPlayers, roomId);
+      console.log('Phase 2 complete! Final scores calculated. Players released.');
       broadcastToRoom(roomId);
       saveState();
       return;
@@ -2790,6 +2794,59 @@ io.on('connection', (socket) => {
     saveState();
     
     console.log(`Room ${roomId} reset by superadmin`);
+  });
+  
+  // ADMIN: Start new game (resets current game and releases all players)
+  socket.on('startNewGame', ({ roomId, playerId }) => {
+    console.log('=== START NEW GAME REQUEST ===');
+    console.log('Room ID:', roomId);
+    console.log('Player ID:', playerId);
+    
+    const room = globalState.rooms[roomId];
+    if (!room) {
+      console.log('ERROR: Room not found');
+      socket.emit('startNewGameResult', { success: false, message: 'Room not found' });
+      return;
+    }
+    
+    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+    const isSuperAdmin = user && user.role === 'superadmin';
+    const isRoomHost = room.hostId === playerId;
+    
+    if (!isSuperAdmin && !isRoomHost) {
+      socket.emit('startNewGameResult', { success: false, message: 'Only the game admin can start a new game' });
+      return;
+    }
+    
+    // Release all players from the old game
+    dbSync(db.releaseAllPlayers, roomId);
+    
+    // Reset game state
+    room.gameStarted = false;
+    room.currentRound = 0;
+    room.gamePhase = 'lobby';
+    room.votes = {};
+    room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
+    room.roundHistory = [];
+    room.readyPlayers = [];
+    room.players = {}; // Clear player assignments in memory
+    room.phase2 = {
+      active: false,
+      currentYear: 1946,
+      maxYears: 7,
+      policies: {},
+      yearlyData: {},
+      achievements: {}
+    };
+    
+    socket.emit('startNewGameResult', { success: true });
+    dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
+    broadcastToRoom(roomId);
+    broadcastRoomList();
+    saveState();
+    
+    console.log(`✅ New game started in room ${roomId} by ${isSuperAdmin ? 'superadmin' : 'room host'}. All players released.`);
+    console.log('========================');
   });
   
   // ADMIN: Toggle auto-advance setting
