@@ -7,33 +7,36 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 // Database module for MySQL persistence
-  const db = require('./db');
-  
-  // Country code to full name mapping for voting checks
-    // Country code to short name mapping (matching game-data.json naming)
-  // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
-  const COUNTRY_CODE_TO_NAME = {
-    'USA': 'USA',
-    'UK': 'UK',
-    'USS': 'USSR',      // Database code → game-data name
-    'FRA': 'France',
-    'CHN': 'China',     // Database code → game-data name
-    'IND': 'India',
-    'ARG': 'Argentina'
-  };
-  
-  // Helper function to convert country code to name for voting checks
+const db = require('./db');
 
-  function getCountryName(countryCode) {
-    return COUNTRY_CODE_TO_NAME[countryCode] || countryCode;
-  }
-  
-  // Helper to safely call DB functions (fails silently, logs errors)
+// Country code to short name mapping (matching game-data.json naming)
+// Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
+const COUNTRY_CODE_TO_NAME = {
+  'USA': 'USA',
+  'UK': 'UK',
+  'USS': 'USSR',      // Database code → game-data name
+  'FRA': 'France',
+  'CHN': 'China',     // Database code → game-data name
+  'IND': 'India',
+  'ARG': 'Argentina'
+};
+
+// Helper function to convert country code to name for voting checks
+function getCountryName(countryCode) {
+  return COUNTRY_CODE_TO_NAME[countryCode] || countryCode;
+}
+
+// Helper to safely call DB functions (fails silently, logs errors)
 async function dbSync(operation, ...args) {
   try {
-    return await operation(...args);
+    const result = await operation(...args);
+    if (!result || result.error) {
+      console.error(`❌ [DB Sync] ${operation.name || 'operation'} API error:`, result?.error || 'No result');
+    }
+    return result;
   } catch (err) {
-    console.warn(`[DB Sync] ${operation.name || 'operation'} failed: ${err.message}`);
+    console.error(`❌ [DB Sync] ${operation.name || 'operation'} failed:`, err.message);
+    console.error(`   Args:`, args);
     return null;
   }
 }
@@ -399,23 +402,23 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         
         console.log(`✅ Setting gameStarted = ${globalState.rooms[SINGLE_ROOM_ID].gameStarted}, gameStatus = ${gameData.game_status}`);
         
-              // Set correct gamePhase based on game status
-          if (gameData.game_status === 'phase2_active') {
-            globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'phase2';
-            // Calculate correct year from current round (round 11 = 1946, round 13 = 1948, etc.)
-            const currentYear = parseInt(gameData.current_round) + 1935;
-            globalState.rooms[SINGLE_ROOM_ID].phase2 = { 
-              active: true, 
-              currentYear: currentYear, 
-              policies: {}, 
-              yearlyData: {},
-              crises: {
-                active: null,
-                history: [],
-                responses: {}
-              }
-            };
-            console.log(`✅ Set gamePhase = 'phase2', currentYear = ${currentYear} (from round ${gameData.current_round})`);
+        // Set correct gamePhase based on game status
+        if (gameData.game_status === 'phase2_active') {
+          globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'phase2';
+          // Calculate correct year from current round (round 11 = 1946, round 13 = 1948, etc.)
+          const currentYear = parseInt(gameData.current_round) + 1935;
+          globalState.rooms[SINGLE_ROOM_ID].phase2 = { 
+            active: true, 
+            currentYear: currentYear, 
+            policies: {}, 
+            yearlyData: {},
+            crises: {
+              active: null,
+              history: [],
+              responses: {}
+            }
+          };
+          console.log(`✅ Set gamePhase = 'phase2', currentYear = ${currentYear} (from round ${gameData.current_round})`);
         } else if (gameData.game_status === 'phase1_active') {
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'voting'; // Phase 1 is voting
           console.log(`✅ Set gamePhase = 'voting'`);
@@ -424,39 +427,39 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           console.log(`✅ Set gamePhase = 'complete'`);
         }
         
-                 // Restore players from database
-          try {
-            const players = await db.getPlayers(SINGLE_ROOM_ID);
-            console.log('   📋 Restored', players.length, 'players from database');
-            if (players.length > 0) {
-              console.log('   🔍 First player object keys:', Object.keys(players[0]));
-              console.log('   🔍 First player object:', JSON.stringify(players[0], null, 2).substring(0, 500));
-            }
-            for (const p of players) {
-              // Use user_id with player_db_ prefix (consistent format)
-              const playerId = `player_db_${p.user_id}`;
-              const countryName = getCountryName(p.country_code);
-              globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
-                playerId: playerId,
-                userId: p.user_id,
-                username: p.username,
-                country: p.country_code,
-                countryId: p.country_id
-              };
-              // Restore player's accumulated points - check ALL possible field names
-              let pointsValue = p.total_points || p.totalPoints || p.points || p.phase1_score || 0;
-              console.log(`   Player ${p.username}: total_points=${p.total_points}, totalPoints=${p.totalPoints}, points=${p.points}, phase1_score=${p.phase1_score}, phase2_score=${p.phase2_score}`);
-              
-              if (pointsValue && !isNaN(parseInt(pointsValue))) {
-                globalState.rooms[SINGLE_ROOM_ID].scores[countryName] = parseInt(pointsValue);
-                console.log(`   ✅ Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - Points restored: ${pointsValue}`);
-              } else {
-                console.log(`   ⚠️  Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - No points found`);
-              }
-            }
-          } catch (err) {
-            console.log('   Warning: Could not restore players:', err.message);
+        // Restore players from database
+        try {
+          const players = await db.getPlayers(SINGLE_ROOM_ID);
+          console.log('   📋 Restored', players.length, 'players from database');
+          if (players.length > 0) {
+            console.log('   🔍 First player object keys:', Object.keys(players[0]));
+            console.log('   🔍 First player object:', JSON.stringify(players[0], null, 2).substring(0, 500));
           }
+          for (const p of players) {
+            // Use user_id with player_db_ prefix (consistent format)
+            const playerId = `player_db_${p.user_id}`;
+            const countryName = getCountryName(p.country_code);
+            globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
+              playerId: playerId,
+              userId: p.user_id,
+              username: p.username,
+              country: p.country_code,
+              countryId: p.country_id
+            };
+            // Restore player's accumulated points - check ALL possible field names
+            let pointsValue = p.total_points || p.totalPoints || p.points || p.phase1_score || 0;
+            console.log(`   Player ${p.username}: total_points=${p.total_points}, totalPoints=${p.totalPoints}, points=${p.points}, phase1_score=${p.phase1_score}, phase2_score=${p.phase2_score}`);
+            
+            if (pointsValue && !isNaN(parseInt(pointsValue))) {
+              globalState.rooms[SINGLE_ROOM_ID].scores[countryName] = parseInt(pointsValue);
+              console.log(`   ✅ Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - Points restored: ${pointsValue}`);
+            } else {
+              console.log(`   ⚠️  Player ${playerId}: ${p.username} → ${p.country_code} (${countryName}) - No points found`);
+            }
+          }
+        } catch (err) {
+          console.log('   Warning: Could not restore players:', err.message);
+        }
         
         updateRoomList();
         console.log('🎮 Game restored. Status:', gameData.game_status, 'Round:', gameData.current_round);
@@ -541,26 +544,26 @@ function updateRoomList() {
   });
 }
 
-  // Broadcast to specific room
-  function broadcastToRoom(roomId) {
-    const room = globalState.rooms[roomId];
-    if (!room) return;
-    
-    // DEBUG: Log what we're broadcasting
-    console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
-      gameStarted: room.gameStarted,
-      gamePhase: room.gamePhase,
-      currentRound: room.currentRound,
-      phase2Active: room.phase2?.active,
-      phase2Year: room.phase2?.currentYear,
-      readyPlayersCount: room.readyPlayers?.length,
-      playersCount: Object.keys(room.players).length,
-      scores: room.scores,
-      roundScores: room.roundScores
-    });
-    
-    io.to(roomId).emit('stateUpdate', room);
-  }
+// Broadcast to specific room
+function broadcastToRoom(roomId) {
+  const room = globalState.rooms[roomId];
+  if (!room) return;
+  
+  // DEBUG: Log what we're broadcasting
+  console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
+    gameStarted: room.gameStarted,
+    gamePhase: room.gamePhase,
+    currentRound: room.currentRound,
+    phase2Active: room.phase2?.active,
+    phase2Year: room.phase2?.currentYear,
+    readyPlayersCount: room.readyPlayers?.length,
+    playersCount: Object.keys(room.players).length,
+    scores: room.scores,
+    roundScores: room.roundScores
+  });
+  
+  io.to(roomId).emit('stateUpdate', room);
+}
 
 // Broadcast room list to lobby
 function broadcastRoomList() {
@@ -676,82 +679,85 @@ function calculateAgreementBonus(roomId) {
   return bonus;
 }
 
- // Map crisis country names to database country codes
-   // Map crisis country names to database country codes
-  const CRISIS_COUNTRY_MAPPING = {
-    'USA': 'USA',
-    'UK': 'UK',
-    'France': 'FRA',
-    'USSR': 'USS',      // Crisis uses 'USSR', database uses 'USS'
-    'China': 'CHN',
-    'India': 'IND',
-    'Argentina': 'ARG'
+// Map crisis country names to database country codes
+const CRISIS_COUNTRY_MAPPING = {
+  'USA': 'USA',
+  'UK': 'UK',
+  'France': 'FRA',
+  'USSR': 'USS',      // Crisis uses 'USSR', database uses 'USS'
+  'China': 'CHN',
+  'India': 'IND',
+  'Argentina': 'ARG'
+};
+
+// Transform crisis options from display names to country codes
+// Only include countries that are actually playing in the game
+function transformCrisisOptions(crisisEvent, playingCountryCodes = []) {
+  if (!crisisEvent.options) return crisisEvent;
+  
+  const transformedOptions = {};
+  for (const countryName in crisisEvent.options) {
+    const countryCode = CRISIS_COUNTRY_MAPPING[countryName] || countryName;
+    // Only include if country is playing, or if no filter provided (include all)
+    if (playingCountryCodes.length === 0 || playingCountryCodes.includes(countryCode)) {
+      transformedOptions[countryCode] = crisisEvent.options[countryName];
+    }
+  }
+  
+  // Filter affected countries to only those playing
+  const filteredAffectedCountries = playingCountryCodes.length > 0 
+    ? crisisEvent.affectedCountries.filter(name => {
+        const code = CRISIS_COUNTRY_MAPPING[name] || name;
+        return playingCountryCodes.includes(code);
+      })
+    : crisisEvent.affectedCountries;
+  
+  return {
+    ...crisisEvent,
+    affectedCountries: filteredAffectedCountries,
+    options: transformedOptions
   };
-   // Transform crisis options from display names to country codes
-  // Only include countries that are actually playing in the game
-  function transformCrisisOptions(crisisEvent, playingCountryCodes = []) {
-    if (!crisisEvent.options) return crisisEvent;
+}
+
+// Trigger crisis events if appropriate for current year
+function triggerCrisisIfNeeded(roomId, year) {
+  const room = globalState.rooms[roomId];
+  if (!room) return;
+  
+  // Check if there's already an active crisis
+  if (room.phase2.crises.active) {
+    console.log(`Crisis already active, skipping trigger for year ${year}`);
+    return;
+  }
+  
+  // Find crisis events for this year that haven't been triggered yet
+  const availableCrisis = crisisEventsData.crisisEvents.find(event => 
+    event.year === year && 
+    !room.phase2.crises.history.find(h => h.id === event.id)
+  );
+  
+  if (availableCrisis) {
+    // Get the list of countries that are actually playing
+    const playingCountryCodes = Object.values(room.players).map(p => p.country);
     
-    const transformedOptions = {};
-    for (const countryName in crisisEvent.options) {
-      const countryCode = CRISIS_COUNTRY_MAPPING[countryName] || countryName;
-      // Only include if country is playing, or if no filter provided (include all)
-      if (playingCountryCodes.length === 0 || playingCountryCodes.includes(countryCode)) {
-        transformedOptions[countryCode] = crisisEvent.options[countryName];
-      }
-    }
+    console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
+    console.log(`Playing countries:`, playingCountryCodes);
     
-    // Filter affected countries to only those playing
-    const filteredAffectedCountries = playingCountryCodes.length > 0 
-      ? crisisEvent.affectedCountries.filter(name => {
-          const code = CRISIS_COUNTRY_MAPPING[name] || name;
-          return playingCountryCodes.includes(code);
-        })
-      : crisisEvent.affectedCountries;
-    
-    return {
-      ...crisisEvent,
-      affectedCountries: filteredAffectedCountries,
-      options: transformedOptions
+    const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryCodes);
+    room.phase2.crises.active = {
+      ...transformedCrisis,
+      triggeredAt: Date.now(),
+      resolved: false
     };
+    room.phase2.crises.responses = {};
+    
+    console.log(`✋ Crisis active - waiting for player responses`);
+    console.log(`Affected countries (filtered):`, transformedCrisis.affectedCountries);
+    console.log(`Transformed options keys:`, Object.keys(room.phase2.crises.active.options));
+    console.log(`Playing countries:`, playingCountryCodes);
+    console.log(`Full transformed crisis options:`, JSON.stringify(Object.keys(room.phase2.crises.active.options)));
   }
-  // Trigger crisis events if appropriate for current year
-  function triggerCrisisIfNeeded(roomId, year) {
-    const room = globalState.rooms[roomId];
-    if (!room) return;
-    
-    // Check if there's already an active crisis
-    if (room.phase2.crises.active) {
-      console.log(`Crisis already active, skipping trigger for year ${year}`);
-      return;
-    }
-    
-    // Find crisis events for this year that haven't been triggered yet
-    const availableCrisis = crisisEventsData.crisisEvents.find(event => 
-      event.year === year && 
-      !room.phase2.crises.history.find(h => h.id === event.id)
-    );
-    
-    if (availableCrisis) {
-      // Get the list of countries that are actually playing
-      const playingCountryCodes = Object.values(room.players).map(p => p.country);
-      
-      console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
-      console.log(`Playing countries:`, playingCountryCodes);
-      
-      const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryCodes);
-      room.phase2.crises.active = {
-        ...transformedCrisis,
-        triggeredAt: Date.now(),
-        resolved: false
-      };
-      room.phase2.crises.responses = {};
-      
-      console.log(`✋ Crisis active - waiting for player responses`);
-      console.log(`Affected countries (filtered):`, transformedCrisis.affectedCountries);
-      console.log(`Transformed options keys:`, Object.keys(room.phase2.crises.active.options));
-    }
-  }
+}
 
 function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
@@ -1490,31 +1496,30 @@ io.on('connection', (socket) => {
     let user = globalState.users[username];
     
     // If not in memory, check database
-
-         if (!user) {
-        console.log('User not in memory, checking database...');
-        try {
-          const dbUser = await db.getUser(username);
-          if (dbUser) {
-            // Use user_id with player_db_ prefix (consistent format)
-            const playerId = `player_db_${dbUser.user_id}`;
-            
-            // Load user from database into memory
-            globalState.users[username] = {
-              password: dbUser.password_hash,
-              playerId: playerId,
-              userId: dbUser.user_id,
-              createdAt: Date.now(),
-              role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
-            };
-            user = globalState.users[username];
-            console.log('User loaded from database:', username, 'playerId:', playerId);
-            saveState();
-          }
-        } catch (err) {
-          console.warn('⚠️ Could not check DB for user:', err.message);
+    if (!user) {
+      console.log('User not in memory, checking database...');
+      try {
+        const dbUser = await db.getUser(username);
+        if (dbUser) {
+          // Use user_id with player_db_ prefix (consistent format)
+          const playerId = `player_db_${dbUser.user_id}`;
+          
+          // Load user from database into memory
+          globalState.users[username] = {
+            password: dbUser.password_hash,
+            playerId: playerId,
+            userId: dbUser.user_id,
+            createdAt: Date.now(),
+            role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
+          };
+          user = globalState.users[username];
+          console.log('User loaded from database:', username, 'playerId:', playerId);
+          saveState();
         }
+      } catch (err) {
+        console.warn('⚠️ Could not check DB for user:', err.message);
       }
+    }
     
     if (!user) {
       console.log('ERROR: User not found');
@@ -1902,10 +1907,12 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-       // Sync game start to MySQL
-      const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
-      dbSync(db.updateGame, roomId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
-      console.log(`📊 Game started synced to MySQL (status: ${gameStatus})`);
+    // Sync game start to MySQL
+    const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
+    dbSync(db.updateGame, roomId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
+    console.log(`📊 Game started synced to MySQL (status: ${gameStatus})`);
+    
+    console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
   });
   
@@ -1972,56 +1979,56 @@ io.on('connection', (socket) => {
       } catch (err) {
         console.error('Error loading game data for scoring:', err);
       }
-              // Calculate scores for this round
-        const roundScores = {};
-        console.log(`📝 Scoring Round ${room.currentRound}:`);
-        Object.entries(room.players).forEach(([id, player]) => {
-          const countryCode = player.country;
-          const countryName = getCountryName(countryCode);
-          const vote = room.votes[id].toLowerCase();
-          
-          console.log(`   Player ${id} (${player.username}): ${countryCode} (${countryName}), vote=${vote}`);
-          
-          let points = 0;
-          
-          // Base points for participation
-          points += 10;
-          
-          // Find the option they voted for
-          const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : 2;
-          const votedOption = currentIssueOptions[optionIndex];
-          
-          if (votedOption) {
-            // Bonus for voting for winning option
-            if (vote === winningOption) {
-              points += 20; // Voted with winning side
-            }
-            
-            // Major bonus if the winning option favors your country
-            const winningOptionData = currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2];
-            if (winningOptionData && winningOptionData.favors && winningOptionData.favors.includes(countryName)) {
-              points += 40; // Your country benefits from winning option
-              console.log(`      → Winning option favors ${countryName}: +40 pts`);
-            }
-            
-            // Penalty if winning option opposes your country
-            if (winningOptionData && winningOptionData.opposes && winningOptionData.opposes.includes(countryName)) {
-              points -= 10; // Your country hurt by winning option
-              console.log(`      → Winning option opposes ${countryName}: -10 pts`);
-            }
-            
-            // Bonus for voting for option that favors you
-            if (votedOption.favors && votedOption.favors.includes(countryName)) {
-              points += 15; // Strategic vote for your interests
-              console.log(`      → Voted for option favoring ${countryName}: +15 pts`);
-            }
-          }
-
+      
+      // Calculate scores for this round
+      const roundScores = {};
+      console.log(`📝 Scoring Round ${room.currentRound}:`);
+      Object.entries(room.players).forEach(([id, player]) => {
+        const countryCode = player.country;
+        const countryName = getCountryName(countryCode);
+        const vote = room.votes[id].toLowerCase();
         
-         roundScores[countryName] = points;
-          room.scores[countryName] = (room.scores[countryName] || 0) + points;
-          console.log(`      ✓ ${countryName} (${countryCode}): +${points} pts (total: ${room.scores[countryName]})`);
- });
+        console.log(`   Player ${id} (${player.username}): ${countryCode} (${countryName}), vote=${vote}`);
+        
+        let points = 0;
+        
+        // Base points for participation
+        points += 10;
+        
+        // Find the option they voted for
+        const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : 2;
+        const votedOption = currentIssueOptions[optionIndex];
+        
+        if (votedOption) {
+          // Bonus for voting for winning option
+          if (vote === winningOption) {
+            points += 20; // Voted with winning side
+          }
+          
+          // Major bonus if the winning option favors your country
+          const winningOptionData = currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2];
+          if (winningOptionData && winningOptionData.favors && winningOptionData.favors.includes(countryName)) {
+            points += 40; // Your country benefits from winning option
+            console.log(`      → Winning option favors ${countryName}: +40 pts`);
+          }
+          
+          // Penalty if winning option opposes your country
+          if (winningOptionData && winningOptionData.opposes && winningOptionData.opposes.includes(countryName)) {
+            points -= 10; // Your country hurt by winning option
+            console.log(`      → Winning option opposes ${countryName}: -10 pts`);
+          }
+          
+          // Bonus for voting for option that favors you
+          if (votedOption.favors && votedOption.favors.includes(countryName)) {
+            points += 15; // Strategic vote for your interests
+            console.log(`      → Voted for option favoring ${countryName}: +15 pts`);
+          }
+        }
+        
+        roundScores[countryName] = points;
+        room.scores[countryName] = (room.scores[countryName] || 0) + points;
+        console.log(`      ✓ ${countryName} (${countryCode}): +${points} pts (total: ${room.scores[countryName]})`);
+      });
       
       // Store results
       room.voteTally = voteTally;
@@ -2054,41 +2061,43 @@ io.on('connection', (socket) => {
           results: { voteTally, roundScores, issueTitle }
         });
         
-          // Update game state in DB
-          await dbSync(db.updateGame, roomId, { currentRound: room.currentRound });
-          console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
-        
+        // Update game state in DB
+        await dbSync(db.updateGame, roomId, { currentRound: room.currentRound });
+        console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
+      })();
+      
       // AUTO-ADVANCE: After all votes, auto-advance to next round
       if (room.autoAdvance) {
         const delay = room.autoAdvanceDelay || 5000;
         console.log(`Auto-advancing to next round in ${delay}ms...`);
-                 setTimeout(async () => {
-            // Re-fetch room state in case it changed
-            const currentRoom = globalState.rooms[roomId];
-            if (!currentRoom || currentRoom.gamePhase !== 'results') {
-              console.log('Auto-advance cancelled: room state changed');
-              return;
-            }
-            
-            // Advance round
-            currentRoom.currentRound++;
-            console.log(`[AUTO] Advancing to round ${currentRoom.currentRound}`);
-            
-            // Check if Phase 1 is complete - start Phase 2
-            if (currentRoom.currentRound > 10) {
-              initializePhase2(roomId);
-              await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
-              console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
-            } else {
-              currentRoom.gamePhase = 'voting';
-              currentRoom.votes = {}; // Clear votes for new round
-            }
-          }, delay);
+        
+        setTimeout(async () => {
+          // Re-fetch room state in case it changed
+          const currentRoom = globalState.rooms[roomId];
+          if (!currentRoom || currentRoom.gamePhase !== 'results') {
+            console.log('Auto-advance cancelled: room state changed');
+            return;
+          }
+          
+          // Advance round
+          currentRoom.currentRound++;
+          console.log(`[AUTO] Advancing to round ${currentRoom.currentRound}`);
+          
+          // Check if Phase 1 is complete - start Phase 2
+          if (currentRoom.currentRound > 10) {
+            initializePhase2(roomId);
+            await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+            console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
+          } else {
+            currentRoom.gamePhase = 'voting';
+            currentRoom.votes = {}; // Clear votes for new round
+          }
+        }, delay);
       }
-      }
-             broadcastToRoom(roomId);
-            saveState();
-      
+    }
+    
+    broadcastToRoom(roomId);
+    saveState();
     
     // Sync vote to MySQL with full details
     (async () => {
@@ -2115,18 +2124,18 @@ io.on('connection', (socket) => {
           `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned);
         console.log(`📊 Vote synced: ${username} (${voterCountry}) -> ${choice}`);
         
-                // Also update player total points
-          if (room.scores?.[voterCountry]) {
-            console.log(`💾 Saving points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
-            const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry]);
-            if (pointsResult?.error) {
-              console.error(`❌ Failed to save points to DB:`, pointsResult.error);
-            } else {
-              console.log(`✅ Points saved successfully`);
-            }
+        // Also update player total points
+        if (room.scores?.[voterCountry]) {
+          console.log(`💾 Saving points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
+          const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry]);
+          if (pointsResult?.error) {
+            console.error(`❌ Failed to save points to DB:`, pointsResult.error);
           } else {
-            console.log(`⚠️  No points to save for ${voterCountry}`);
+            console.log(`✅ Points saved successfully`);
           }
+        } else {
+          console.log(`⚠️  No points to save for ${voterCountry}`);
+        }
       }
     })();
   });
@@ -2281,15 +2290,14 @@ io.on('connection', (socket) => {
       
       // Check if we're already at the end
       console.log(`   year check: currentYear=${room.phase2.currentYear}, >= 1952=${room.phase2.currentYear >= 1952}`);
-              if (room.phase2.currentYear >= 1952) {
-          // Don't calculate more economics, just finalize
-          console.log(`   [FINAL] calculating scores and completing...`);
-          calculatePhase2Scores(roomId);
-          room.gamePhase = 'complete';
-          room.phase2.active = false;
-          dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
-          console.log('[AUTO] Phase 2 complete! Final scores calculated.');
-                
+      if (room.phase2.currentYear >= 1952) {
+        // Don't calculate more economics, just finalize
+        console.log(`   [FINAL] calculating scores and completing...`);
+        calculatePhase2Scores(roomId);
+        room.gamePhase = 'complete';
+        room.phase2.active = false;
+        dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+        console.log('[AUTO] Phase 2 complete! Final scores calculated.');
         broadcastToRoom(roomId);
         saveState();
         return;
@@ -2304,10 +2312,10 @@ io.on('connection', (socket) => {
       room.readyPlayers = [];
       console.log(`   advanced to year ${room.phase2.currentYear}`);
       
-          // Sync to database
-        const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-        dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round });
-        console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
+      // Sync to database
+      const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
+      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round });
+      console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
       // Check for crisis events this year
       console.log(`   checking crises...`);
@@ -2618,15 +2626,15 @@ io.on('connection', (socket) => {
       });
       return;
     }
-         // Check if we're already at the end
-      if (room.phase2.currentYear >= 1952) {
-        // Don't calculate more economics, just finalize
-        calculatePhase2Scores(roomId);
-        room.gamePhase = 'complete';
-        room.phase2.active = false;
-        dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
-        console.log('Phase 2 complete! Final scores calculated.');
-        
+    
+    // Check if we're already at the end
+    if (room.phase2.currentYear >= 1952) {
+      // Don't calculate more economics, just finalize
+      calculatePhase2Scores(roomId);
+      room.gamePhase = 'complete';
+      room.phase2.active = false;
+      dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+      console.log('Phase 2 complete! Final scores calculated.');
       broadcastToRoom(roomId);
       saveState();
       return;
@@ -2685,9 +2693,11 @@ io.on('connection', (socket) => {
       yearlyData: {},
       achievements: {}
     };
-      socket.emit('resetRoomResult', { success: true });
-      dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
-      broadcastToRoom(roomId);
+    
+    socket.emit('resetRoomResult', { success: true });
+    dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
+    broadcastToRoom(roomId);
+    broadcastRoomList();
     saveState();
     
     console.log(`Room ${roomId} reset by superadmin`);
@@ -2830,6 +2840,14 @@ async function startServer() {
     try {
       await db.setupSchema();
       console.log('✅ Database schema verified');
+      
+      // Ensure score columns exist on players table
+      try {
+        await db.ensureScoreColumns();
+        console.log('✅ Score columns verified on players table');
+      } catch (err) {
+        console.warn('⚠️ Score columns warning:', err.message);
+      }
     } catch (err) {
       console.warn('⚠️ Schema setup warning:', err.message);
     }
