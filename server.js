@@ -1921,6 +1921,7 @@ io.on('connection', (socket) => {
     }
     
     room.gameStarted = true;
+    room.isRevoting = false;
     
     // Check if skipping Phase 1
     if (skipPhase1) {
@@ -2004,6 +2005,7 @@ io.on('connection', (socket) => {
         if (room.voteAttempts[roundKey] >= 3) {
           // After 3 attempts, declare no resolution and skip to next round
           console.log(`❌ No resolution after 3 vote attempts - skipping policy and moving to next round (NO POINTS AWARDED)`);
+          room.isRevoting = false; // Clear revote flag
           room.gamePhase = 'voting';
           room.roundOutcome = `UNRESOLVED TIE - No consensus after 3 votes (${tiedOptions.map(o => voteTally[o]).join('-')}). Moving to next round.`;
           room.winningOption = null;
@@ -2031,12 +2033,12 @@ io.on('connection', (socket) => {
           }
           return;
         } else {
-          // Trigger revote
+          // Trigger revote (stay in same phase, just clear votes)
           console.log(`🔄 Triggering revote - clearing votes and waiting for new submissions`);
-          room.gamePhase = 'revoting';
           room.votes = {}; // Clear votes for revote
           room.voteTally = voteTally;
           room.roundOutcome = `TIE! Revoting required (attempt ${room.voteAttempts[roundKey]}/3)`;
+          room.isRevoting = true; // Flag to show revote state
           
           broadcastToRoom(roomId);
           saveState();
@@ -2047,6 +2049,7 @@ io.on('connection', (socket) => {
       // No tie - determine winning option (most votes)
       let winningOption = tiedOptions[0]; // Since no tie, tiedOptions has exactly 1 element
       
+      room.isRevoting = false; // Clear revote flag on successful vote
       room.voteTally = voteTally;
       room.roundOutcome = `Option ${winningOption.toUpperCase()} wins (${maxVotes} votes)`;
       room.winningOption = winningOption;
@@ -2265,6 +2268,7 @@ io.on('connection', (socket) => {
     } else {
       room.gamePhase = 'voting';
       room.votes = {}; // Clear votes for new round
+      room.isRevoting = false; // Clear revote flag
     }
     
     broadcastToRoom(roomId);
@@ -2775,6 +2779,7 @@ io.on('connection', (socket) => {
     room.currentRound = 0;
     room.gamePhase = 'lobby';
     room.votes = {};
+    room.isRevoting = false;
     room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
     room.roundHistory = [];
     room.readyPlayers = [];

@@ -2162,6 +2162,26 @@
                               </div>
                             </div>
 
+                            {/* Revoting Alert */}
+                            {gameState.isRevoting && (
+                              <div style={{
+                                padding: '20px',
+                                background: '#fef3c7',
+                                borderRadius: '8px',
+                                border: '2px solid #f59e0b',
+                                marginBottom: '20px',
+                                textAlign: 'center'
+                              }}>
+                                <div style={{ fontSize: '2rem', marginBottom: '10px' }}>🔄</div>
+                                <h3 style={{ color: '#92400e', margin: 0 }}>
+                                  {gameState.roundOutcome || 'Vote resulted in a tie!'}
+                                </h3>
+                                <p style={{ color: '#78350f', marginTop: '10px', marginBottom: 0 }}>
+                                  Please vote again to break the tie.
+                                </p>
+                              </div>
+                            )}
+
                             {/* Voting Buttons */}
                             {!gameState.votes?.[playerId] ? (
                               <div style={{ marginBottom: '20px' }}>
