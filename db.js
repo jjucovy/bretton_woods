@@ -8,22 +8,34 @@ const API_KEY = 'bretton-woods-secret-key-2024';
 
 async function callAPI(action, data = {}) {
   try {
+    const payload = { action, ...data };
+    // Log for critical data operations
+    if (['saveVote', 'saveRoundResult', 'saveGameResult', 'saveCrisisResponse'].includes(action)) {
+      console.log(`📡 API Call: ${action}`, JSON.stringify(payload).substring(0, 200));
+    }
+    
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': API_KEY
       },
-      body: JSON.stringify({ action, ...data })
+      body: JSON.stringify(payload)
     });
     
     const result = await response.json();
     if (!result.success) {
+      console.error(`❌ API Error (${action}):`, result.error || 'Unknown error');
       throw new Error(result.error || 'API call failed');
     }
+    
+    if (['saveVote', 'saveRoundResult', 'saveGameResult', 'saveCrisisResponse'].includes(action)) {
+      console.log(`✅ API Success: ${action}`, result.data);
+    }
+    
     return result.data;
   } catch (err) {
-    console.error(`API call failed (${action}):`, err.message);
+    console.error(`❌ API call failed (${action}):`, err.message);
     throw err;
   }
 }
@@ -31,6 +43,10 @@ async function callAPI(action, data = {}) {
 // ============ SCHEMA ============
 async function setupSchema() {
   return callAPI('setupSchema');
+}
+
+async function ensureScoreColumns() {
+  return callAPI('ensureScoreColumns');
 }
 
 // ============ USERS ============
@@ -64,19 +80,20 @@ async function addPlayer(gameCode, userId, countryCode, countryName) {
   return callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
 }
 
-  async function getPlayers(gameCode) {
-    const result = await callAPI('getPlayers', { gameCode });
-    console.log('🔍 [getPlayers API Result]', JSON.stringify(result, null, 2).substring(0, 1000));
-    return result;
-  }
+async function getPlayers(gameCode) {
+  const result = await callAPI('getPlayers', { gameCode });
+  console.log('🔍 [getPlayers API Result]', JSON.stringify(result, null, 2).substring(0, 1000));
+  return result;
+}
 
-  async function getPlayerActiveGame(userId) {
-    return callAPI('getPlayerActiveGame', { userId });
-  }
-  
-  async function updatePlayerPoints(gameCode, userId, points, addPoints = 0) {
-    return callAPI('updatePlayerPoints', { gameCode, userId, points, addPoints });
-  }
+async function getPlayerActiveGame(userId) {
+  return callAPI('getPlayerActiveGame', { userId });
+}
+
+async function updatePlayerPoints(gameCode, userId, points, phase = 'phase1', addPoints = 0) {
+  return callAPI('updatePlayerPoints', { gameCode, userId, points, phase, addPoints });
+}
+
 // ============ VOTES (Phase 1) ============
 async function saveVote(gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned = 0) {
   return callAPI('saveVote', { gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned });
@@ -185,6 +202,7 @@ async function testConnection() {
 module.exports = {
   // Schema
   setupSchema,
+  ensureScoreColumns,
   
   // Users
   getAllUsers,
@@ -196,11 +214,11 @@ module.exports = {
   getGame,
   updateGame,
   
-    // Players
-    addPlayer,
-    getPlayers,
-    getPlayerActiveGame,
-    updatePlayerPoints,
+  // Players
+  addPlayer,
+  getPlayers,
+  getPlayerActiveGame,
+  updatePlayerPoints,
   
   // Votes
   saveVote,

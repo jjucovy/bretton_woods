@@ -438,12 +438,13 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           for (const p of players) {
             // Use user_id with player_db_ prefix (consistent format)
             const playerId = `player_db_${p.user_id}`;
-            const countryName = getCountryName(p.country_code);
+            const countryName = getCountryName(p.country_code);  // Convert code to name
             globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
               playerId: playerId,
               userId: p.user_id,
               username: p.username,
-              country: p.country_code,
+              country: countryName,  // Store as NAME for consistency with new players
+              countryCode: p.country_code,  // Keep code as reference
               countryId: p.country_id
             };
             // Restore player's accumulated points - check ALL possible field names
@@ -690,24 +691,50 @@ const CRISIS_COUNTRY_MAPPING = {
   'Argentina': 'ARG'
 };
 
+// Reverse map: codes to names
+const CRISIS_CODE_TO_NAME = {
+  'USA': 'USA',
+  'UK': 'UK',
+  'FRA': 'France',
+  'USS': 'USSR',
+  'CHN': 'China',
+  'IND': 'India',
+  'ARG': 'Argentina'
+};
+
+// Convert country code to name for frontend
+function getCountryNameFromCode(countryCode) {
+  return CRISIS_CODE_TO_NAME[countryCode] || countryCode;
+}
+
+// Convert country name to code for database
+function getCountryCodeFromName(countryName) {
+  return CRISIS_COUNTRY_MAPPING[countryName] || countryName;
+}
+
 // Transform crisis options from display names to country codes
 // Only include countries that are actually playing in the game
-function transformCrisisOptions(crisisEvent, playingCountryCodes = []) {
+function transformCrisisOptions(crisisEvent, playingCountryNames = []) {
   if (!crisisEvent.options) return crisisEvent;
   
+  // Convert country names to codes for filtering
+  const playingCountryCodes = playingCountryNames.map(name => getCountryCodeFromName(name));
+  
+  // Keep options keyed by NAMES so frontend can look them up with playerCountry
   const transformedOptions = {};
   for (const countryName in crisisEvent.options) {
-    const countryCode = CRISIS_COUNTRY_MAPPING[countryName] || countryName;
+    const countryCode = getCountryCodeFromName(countryName);
     // Only include if country is playing, or if no filter provided (include all)
     if (playingCountryCodes.length === 0 || playingCountryCodes.includes(countryCode)) {
-      transformedOptions[countryCode] = crisisEvent.options[countryName];
+      // Store with NAME as key so frontend can look up by playerCountry (which is a name)
+      transformedOptions[countryName] = crisisEvent.options[countryName];
     }
   }
   
-  // Filter affected countries to only those playing
-  const filteredAffectedCountries = playingCountryCodes.length > 0 
+  // Filter affected countries to only those playing (keep as names for frontend)
+  const filteredAffectedCountries = playingCountryNames.length > 0 
     ? crisisEvent.affectedCountries.filter(name => {
-        const code = CRISIS_COUNTRY_MAPPING[name] || name;
+        const code = getCountryCodeFromName(name);
         return playingCountryCodes.includes(code);
       })
     : crisisEvent.affectedCountries;
@@ -737,13 +764,13 @@ function triggerCrisisIfNeeded(roomId, year) {
   );
   
   if (availableCrisis) {
-    // Get the list of countries that are actually playing
-    const playingCountryCodes = Object.values(room.players).map(p => p.country);
+    // Get the list of countries that are actually playing (as names)
+    const playingCountryNames = Object.values(room.players).map(p => p.country);
     
     console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
-    console.log(`Playing countries:`, playingCountryCodes);
+    console.log(`Playing countries:`, playingCountryNames);
     
-    const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryCodes);
+    const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryNames);
     room.phase2.crises.active = {
       ...transformedCrisis,
       triggeredAt: Date.now(),
@@ -754,7 +781,7 @@ function triggerCrisisIfNeeded(roomId, year) {
     console.log(`✋ Crisis active - waiting for player responses`);
     console.log(`Affected countries (filtered):`, transformedCrisis.affectedCountries);
     console.log(`Transformed options keys:`, Object.keys(room.phase2.crises.active.options));
-    console.log(`Playing countries:`, playingCountryCodes);
+    console.log(`Playing countries:`, playingCountryNames);
     console.log(`Full transformed crisis options:`, JSON.stringify(Object.keys(room.phase2.crises.active.options)));
   }
 }
@@ -2124,17 +2151,17 @@ io.on('connection', (socket) => {
           `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned);
         console.log(`📊 Vote synced: ${username} (${voterCountry}) -> ${choice}`);
         
-        // Also update player total points
+        // Also update player total points to phase1_score column
         if (room.scores?.[voterCountry]) {
-          console.log(`💾 Saving points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
-          const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry]);
+          console.log(`💾 Saving Phase 1 points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
+          const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry], 'phase1');
           if (pointsResult?.error) {
             console.error(`❌ Failed to save points to DB:`, pointsResult.error);
           } else {
-            console.log(`✅ Points saved successfully`);
+            console.log(`✅ Phase 1 points saved successfully`);
           }
         } else {
-          console.log(`⚠️  No points to save for ${voterCountry}`);
+          console.log(`⚠️  No Phase 1 points to save for ${voterCountry}`);
         }
       }
     })();
