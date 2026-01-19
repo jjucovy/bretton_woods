@@ -1624,12 +1624,23 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    // Sync to MySQL
+    // Sync to MySQL - capture the actual game_id returned
     (async () => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
-      await dbSync(db.createGame, roomId, userId);
-      console.log(`📊 Game created in MySQL: ${roomId}`);
+      
+      try {
+        // Create game and get back the database game_id
+        const result = await db.callAPI('createGame', { gameCode: roomId, createdBy: userId });
+        if (result && result.game_id) {
+          globalState.rooms[roomId].gameId = result.game_id;
+          console.log(`📊 Game created in MySQL: ${roomId} -> database game_id ${result.game_id}`);
+        } else {
+          console.log(`⚠️ Game created in MySQL but no game_id returned for: ${roomId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to create game in MySQL for ${roomId}:`, error);
+      }
     })();
     
     console.log(`Room created: ${roomName} (${roomId}) by ${playerId}`);
@@ -1778,7 +1789,7 @@ io.on('connection', (socket) => {
           
           // Get country name from countries list
           const countryNames = { USA: 'United States', UK: 'United Kingdom', USSR: 'Soviet Union', France: 'France', China: 'China', India: 'India', Argentina: 'Argentina' };
-          await dbSync(db.addPlayer, roomId, userId, country, countryNames[country] || country);
+          await dbSync(db.addPlayer, room.gameId, userId, country, countryNames[country] || country);
           console.log(`📊 Player ${username} (${country}) synced to MySQL`);
         } catch (err) {
           console.error(`❌ Error syncing player to MySQL:`, err.message);
@@ -1941,10 +1952,10 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    // Sync game start to MySQL
+    // Sync game start to MySQL using the actual game_id
     const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
-    dbSync(db.updateGame, roomId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
-    console.log(`📊 Game started synced to MySQL (status: ${gameStatus})`);
+    dbSync(db.updateGame, room.gameId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
+    console.log(`📊 Game ${room.gameId} started in room ${roomId} synced to MySQL (status: ${gameStatus})`);
     
     console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
@@ -2022,7 +2033,7 @@ io.on('connection', (socket) => {
               room.currentRound++;
               if (room.currentRound > 10) {
                 initializePhase2(roomId);
-                await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+                await dbSync(db.updateGame, room.gameId, { status: 'phase2_active', currentRound: 11 });
               } else {
                 room.gamePhase = 'voting';
                 room.votes = {};
@@ -2150,7 +2161,7 @@ io.on('connection', (socket) => {
         });
         
         // Update game state in DB
-        await dbSync(db.updateGame, roomId, { currentRound: room.currentRound });
+        await dbSync(db.updateGame, room.gameId, { currentRound: room.currentRound });
         console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
       })();
       
@@ -2174,7 +2185,7 @@ io.on('connection', (socket) => {
           // Check if Phase 1 is complete - start Phase 2
           if (currentRoom.currentRound > 10) {
             initializePhase2(roomId);
-            await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+            await dbSync(db.updateGame, currentRoom.gameId, { status: 'phase2_active', currentRound: 11 });
             console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
           } else {
             currentRoom.gamePhase = 'voting';
@@ -2389,9 +2400,9 @@ io.on('connection', (socket) => {
         calculatePhase2Scores(roomId);
         room.gamePhase = 'complete';
         room.phase2.active = false;
-        dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+        dbSync(db.updateGame, room.gameId, { status: 'completed', currentRound: 12 });
         // Release all players when game completes
-        dbSync(db.releaseAllPlayers, roomId);
+        dbSync(db.releaseAllPlayers, room.gameId);
         console.log('[AUTO] Phase 2 complete! Final scores calculated. Players released.');
         broadcastToRoom(roomId);
         saveState();
@@ -2409,7 +2420,7 @@ io.on('connection', (socket) => {
       
       // Sync to database
       const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round });
+      dbSync(db.updateGame, room.gameId, { currentRound: 10 + phase2Round });
       console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
       // Check for crisis events this year
@@ -2728,9 +2739,9 @@ io.on('connection', (socket) => {
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
-      dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+      dbSync(db.updateGame, room.gameId, { status: 'completed', currentRound: 12 });
       // Release all players when game completes
-      dbSync(db.releaseAllPlayers, roomId);
+      dbSync(db.releaseAllPlayers, room.gameId);
       console.log('Phase 2 complete! Final scores calculated. Players released.');
       broadcastToRoom(roomId);
       saveState();
@@ -2793,7 +2804,7 @@ io.on('connection', (socket) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
+    dbSync(db.updateGame, room.gameId, { status: 'lobby', currentRound: 0 });
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
@@ -2823,35 +2834,65 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Release all players from the old game
-    dbSync(db.releaseAllPlayers, roomId);
+    // Release all players from the OLD game in database
+    if (room.gameId) {
+      dbSync(db.releaseAllPlayers, room.gameId);
+      console.log(`Released all players from old game ${room.gameId}`);
+    }
     
-    // Reset game state
-    room.gameStarted = false;
-    room.currentRound = 0;
-    room.gamePhase = 'lobby';
-    room.votes = {};
-    room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
-    room.roundHistory = [];
-    room.readyPlayers = [];
-    room.players = {}; // Clear player assignments in memory
-    room.phase2 = {
-      active: false,
-      currentYear: 1946,
-      maxYears: 7,
-      policies: {},
-      yearlyData: {},
-      achievements: {}
-    };
+    // Create a NEW game in the database
+    const newGameCode = `${roomId}-${Date.now()}`;
+    console.log(`Creating new game with code: ${newGameCode}`);
     
-    socket.emit('startNewGameResult', { success: true });
-    dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
-    broadcastToRoom(roomId);
-    broadcastRoomList();
-    saveState();
-    
-    console.log(`✅ New game started in room ${roomId} by ${isSuperAdmin ? 'superadmin' : 'room host'}. All players released.`);
-    console.log('========================');
+    // Use async API call to get the new game_id
+    db.callAPI('createGame', { gameCode: newGameCode, createdBy: playerId })
+      .then(result => {
+        console.log('Create game result:', result);
+        
+        if (!result || !result.game_id) {
+          console.error('ERROR: Failed to create new game in database');
+          socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database' });
+          return;
+        }
+        
+        // Update room to point to NEW game
+        const oldGameId = room.gameId;
+        room.gameId = result.game_id;
+        
+        // Reset game state
+        room.gameStarted = false;
+        room.currentRound = 0;
+        room.gamePhase = 'lobby';
+        room.votes = {};
+        room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
+        room.roundHistory = [];
+        room.readyPlayers = [];
+        room.players = {}; // Clear player assignments in memory
+        room.phase2 = {
+          active: false,
+          currentYear: 1946,
+          maxYears: 7,
+          policies: {},
+          yearlyData: {},
+          achievements: {}
+        };
+        
+        // Update the NEW game in database
+        dbSync(db.updateGame, result.game_id, { status: 'lobby', currentRound: 0 });
+        
+        socket.emit('startNewGameResult', { success: true, gameId: result.game_id });
+        broadcastToRoom(roomId);
+        broadcastRoomList();
+        saveState();
+        
+        console.log(`✅ New game ${result.game_id} created in room ${roomId} (old game was ${oldGameId})`);
+        console.log(`   Created by: ${isSuperAdmin ? 'superadmin' : 'room host'}`);
+        console.log('========================');
+      })
+      .catch(error => {
+        console.error('ERROR creating new game:', error);
+        socket.emit('startNewGameResult', { success: false, message: 'Error creating new game: ' + error.message });
+      });
   });
   
   // ADMIN: Toggle auto-advance setting
