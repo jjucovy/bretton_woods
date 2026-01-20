@@ -2844,8 +2844,8 @@ io.on('connection', (socket) => {
     const newGameCode = `${roomId}-${Date.now()}`;
     console.log(`Creating new game with code: ${newGameCode}`);
     
-    // Use async API call to get the new game_id
-    db.callAPI('createGame', { gameCode: newGameCode, createdBy: playerId })
+    // Use the proper db function to create a new game
+    db.createGame(newGameCode, playerId)
       .then(result => {
         console.log('Create game result:', result);
         
