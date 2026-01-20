@@ -1388,7 +1388,6 @@
             });
             
             socket.on('rejoinResult', ({ success, message, country }) => {
-                debugger
               if (success) {
                 console.log('✅ Successfully rejoined as:', country);
                 setPlayerCountry(country);
