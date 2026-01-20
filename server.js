@@ -122,17 +122,18 @@ function createGameState(roomId, roomName, hostId) {
     roundHistory: [],
     militaryDeployments: militaryDeploymentsData,
     phase2: {
-      active: false,
-      currentYear: 1946,
-      maxYears: 7, // 1946-1952
-      policies: {}, // year -> country -> policy
-      yearlyData: {}, // year -> country -> economic data
-      achievements: {},
-      crises: {
-        active: null, // Current active crisis
-        history: [], // Resolved crises
-        responses: {} // playerId -> response choice
-      }
+  active: false,
+  currentYear: 1946,
+  maxYears: 7,
+  policies: {},
+  yearlyData: {},
+  achievements: {},
+  crises: {
+    active: null,
+    history: [],
+    responses: {},
+    queue: []  // NEW: Add this line
+  }
     },
     maxPlayers: 7,
     createdAt: Date.now(),
@@ -163,33 +164,37 @@ function loadState() {
           console.log(`⚠️ Added missing gameCode to room ${roomId}`);
         }
         
-        // Ensure phase2.crises structure exists for old saved states
-        if (!room.phase2) {
-          room.phase2 = {
-            active: false,
-            currentYear: 1946,
-            maxYears: 7,
-            policies: {},
-            yearlyData: {},
-            achievements: {},
-            crises: {
-              active: null,
-              history: [],
-              responses: {}
-            }
-          };
-        }
-        if (!room.phase2.crises) {
-          room.phase2.crises = {
-            active: null,
-            history: [],
-            responses: {}
-          };
-        }
-        if (!room.phase2.crises.history) {
-          room.phase2.crises.history = [];
-        }
-        
+// Ensure phase2.crises structure exists for old saved states
+if (!room.phase2) {
+  room.phase2 = {
+    active: false,
+    currentYear: 1946,
+    maxYears: 7,
+    policies: {},
+    yearlyData: {},
+    achievements: {},
+    crises: {
+      active: null,
+      history: [],
+      responses: {},
+      queue: []  // NEW
+    }
+  };
+}
+if (!room.phase2.crises) {
+  room.phase2.crises = {
+    active: null,
+    history: [],
+    responses: {},
+    queue: []  // NEW
+  };
+}
+if (!room.phase2.crises.history) {
+  room.phase2.crises.history = [];
+}
+if (!room.phase2.crises.queue) {
+  room.phase2.crises.queue = [];  // NEW
+}
         // CRITICAL: Ensure scores are initialized
         if (!room.scores) {
           room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
@@ -831,7 +836,8 @@ function transformCrisisOptions(crisisEvent, playingCountryNames = []) {
   };
 }
 
-// Trigger crisis events if appropriate for current year
+// Replace the triggerCrisisIfNeeded function (lines 701-747):
+
 function triggerCrisisIfNeeded(roomId, year) {
   const room = globalState.rooms[roomId];
   if (!room) return;
@@ -839,50 +845,74 @@ function triggerCrisisIfNeeded(roomId, year) {
   // Only check for crises if phase 2 is active
   if (!room.phase2 || !room.phase2.active) return;
   
-  // Check if there's already an active crisis
-  if (room.phase2.crises && room.phase2.crises.active) {
-    console.log(`Crisis already active, skipping trigger for year ${year}`);
-    return;
-  }
-  
-  // Ensure crises object is properly initialized with history array
+  // Ensure crises object is properly initialized
   if (!room.phase2.crises) {
     room.phase2.crises = {
       active: null,
       history: [],
-      responses: {}
+      responses: {},
+      queue: []  // NEW: Crisis queue
     };
   }
   if (!room.phase2.crises.history) {
     room.phase2.crises.history = [];
   }
+  if (!room.phase2.crises.queue) {
+    room.phase2.crises.queue = [];
+  }
   
-  // Find crisis events for this year that haven't been triggered yet
-  const availableCrisis = crisisEventsData.crisisEvents.find(event => 
+  // If there's an active crisis, don't queue more (let it resolve first)
+  if (room.phase2.crises.active) {
+    console.log(`Crisis already active, skipping trigger for year ${year}`);
+    return;
+  }
+  
+  // Check if we have queued crises for this year
+  if (room.phase2.crises.queue.length > 0) {
+    // Pop next crisis from queue
+    const nextCrisis = room.phase2.crises.queue.shift();
+    room.phase2.crises.active = nextCrisis;
+    room.phase2.crises.responses = {};
+    console.log(`🚨 Activating queued crisis: ${nextCrisis.title}`);
+    return;
+  }
+  
+  // Find ALL crisis events for this year that haven't been triggered yet
+  const availableCrises = crisisEventsData.crisisEvents.filter(event => 
     event.year === year && 
     !room.phase2.crises.history.find(h => h.id === event.id)
   );
   
-  if (availableCrisis) {
-    // Get the list of countries that are actually playing (as names)
-    const playingCountryNames = Object.values(room.players).map(p => p.country);
-    
-    console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
-    console.log(`Playing countries:`, playingCountryNames);
-    
-    const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryNames);
-    room.phase2.crises.active = {
-      ...transformedCrisis,
+  if (availableCrises.length === 0) {
+    console.log(`No crises available for year ${year}`);
+    return;
+  }
+  
+  // Get playing countries
+  const playingCountryNames = Object.values(room.players).map(p => p.country);
+  
+  console.log(`🚨 Found ${availableCrises.length} crisis(es) for year ${year}`);
+  
+  // Transform all crises
+  const transformedCrises = availableCrises.map(crisis => {
+    const transformed = transformCrisisOptions(crisis, playingCountryNames);
+    return {
+      ...transformed,
       triggeredAt: Date.now(),
       resolved: false
     };
-    room.phase2.crises.responses = {};
-    
-    console.log(`✋ Crisis active - waiting for player responses`);
-    console.log(`Affected countries (filtered):`, transformedCrisis.affectedCountries);
-    console.log(`Transformed options keys:`, Object.keys(room.phase2.crises.active.options));
-    console.log(`Playing countries:`, playingCountryNames);
-    console.log(`Full transformed crisis options:`, JSON.stringify(Object.keys(room.phase2.crises.active.options)));
+  });
+  
+  // Activate first crisis immediately
+  room.phase2.crises.active = transformedCrises[0];
+  room.phase2.crises.responses = {};
+  console.log(`🚨 Activating crisis: ${transformedCrises[0].title}`);
+  console.log(`Affected countries (filtered):`, transformedCrises[0].affectedCountries);
+  
+  // Queue remaining crises for this year
+  if (transformedCrises.length > 1) {
+    room.phase2.crises.queue.push(...transformedCrises.slice(1));
+    console.log(`📋 Queued ${transformedCrises.length - 1} additional crisis(es) for ${year}`);
   }
 }
 
@@ -1476,7 +1506,6 @@ function calculatePhase2Scores(roomId) {
   return phase2Scores;
 }
 
-// Helper function to resolve crisis and apply effects
 function resolveCrisisEffects(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return false;
@@ -1486,7 +1515,8 @@ function resolveCrisisEffects(roomId) {
     room.phase2.crises = {
       active: null,
       history: [],
-      responses: {}
+      responses: {},
+      queue: []
     };
   }
   
@@ -1508,7 +1538,6 @@ function resolveCrisisEffects(roomId) {
       room.phase2.yearlyData[currentYear] = {};
     }
     if (!room.phase2.yearlyData[currentYear][country]) {
-      // Initialize with previous year data if missing
       const prevYear = currentYear - 1;
       room.phase2.yearlyData[currentYear][country] = {
         ...room.phase2.yearlyData[prevYear]?.[country]
@@ -1523,7 +1552,7 @@ function resolveCrisisEffects(roomId) {
     if (effects.inflation) yearData.inflation = (yearData.inflation || 0) + effects.inflation;
     if (effects.unemployment) yearData.unemployment = (yearData.unemployment || 0) + effects.unemployment;
     
-    // Apply diplomatic points (stored separately, counted in final scoring)
+    // Apply diplomatic points
     if (effects.diplomaticPoints) {
       if (!room.phase2.diplomaticPoints) room.phase2.diplomaticPoints = {};
       room.phase2.diplomaticPoints[country] = (room.phase2.diplomaticPoints[country] || 0) + effects.diplomaticPoints;
@@ -1543,17 +1572,13 @@ function resolveCrisisEffects(roomId) {
     autoResolved: true
   });
   
-  room.phase2.crises.active = null;
-  room.phase2.crises.responses = {};
-  
-  // UPDATE SCORES IMMEDIATELY: Award diplomatic points as crisis scores
+  // UPDATE SCORES IMMEDIATELY
   Object.entries(responses).forEach(([country, response]) => {
     const choice = response.choice;
     const effects = choice.effects || {};
     
-    // Award diplomatic points immediately as crisis points
     if (effects.diplomaticPoints) {
-      const crisisPointsAwarded = effects.diplomaticPoints * 2; // 2 pts per diplomatic point
+      const crisisPointsAwarded = effects.diplomaticPoints * 2;
       room.scores[country] = (room.scores[country] || 0) + crisisPointsAwarded;
       console.log(`📊 ${country}: +${crisisPointsAwarded} crisis points (diplomatic: ${effects.diplomaticPoints})`);
     }
@@ -1561,6 +1586,19 @@ function resolveCrisisEffects(roomId) {
   
   console.log(`✅ Crisis auto-resolved - ${Object.keys(responses).length} countries responded`);
   console.log(`Updated scores after crisis:`, room.scores);
+  
+  // NEW: Check for queued crises and activate next one
+  if (room.phase2.crises.queue.length > 0) {
+    const nextCrisis = room.phase2.crises.queue.shift();
+    room.phase2.crises.active = nextCrisis;
+    room.phase2.crises.responses = {};
+    console.log(`🚨 Activating next queued crisis: ${nextCrisis.title} (${room.phase2.crises.queue.length} remaining in queue)`);
+  } else {
+    // No more crises in queue
+    room.phase2.crises.active = null;
+    room.phase2.crises.responses = {};
+    console.log(`✅ All crises for year ${currentYear} resolved`);
+  }
   
   saveState();
   return true;
