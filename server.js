@@ -1792,7 +1792,7 @@ io.on('connection', (socket) => {
           
           // Get country name from countries list
           const countryNames = { USA: 'United States', UK: 'United Kingdom', USSR: 'Soviet Union', France: 'France', China: 'China', India: 'India', Argentina: 'Argentina' };
-          await dbSync(db.addPlayer, room.gameId, userId, country, countryNames[country] || country);
+          await dbSync(db.addPlayer, room.gameCode, userId, country, countryNames[country] || country);
           console.log(`📊 Player ${username} (${country}) synced to MySQL`);
         } catch (err) {
           console.error(`❌ Error syncing player to MySQL:`, err.message);
@@ -1955,10 +1955,10 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    // Sync game start to MySQL using the actual game_id
+    // Sync game start to MySQL using the game code
     const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
-    dbSync(db.updateGame, room.gameId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
-    console.log(`📊 Game ${room.gameId} started in room ${roomId} synced to MySQL (status: ${gameStatus})`);
+    dbSync(db.updateGame, room.gameCode, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
+    console.log(`📊 Game ${room.gameCode} started in room ${roomId} synced to MySQL (status: ${gameStatus})`);
     
     console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
@@ -2036,7 +2036,7 @@ io.on('connection', (socket) => {
               room.currentRound++;
               if (room.currentRound > 10) {
                 initializePhase2(roomId);
-                await dbSync(db.updateGame, room.gameId, { status: 'phase2_active', currentRound: 11 });
+                await dbSync(db.updateGame, room.gameCode, { status: 'phase2_active', currentRound: 11 });
               } else {
                 room.gamePhase = 'voting';
                 room.votes = {};
@@ -2156,7 +2156,7 @@ io.on('connection', (socket) => {
           }
         } catch (err) { /* ignore */ }
         
-        await dbSync(db.saveRoundResult, roomId, room.currentRound, 1, {
+        await dbSync(db.saveRoundResult, room.gameCode, room.currentRound, 1, {
           winningOptionId: winningOption,
           winningOptionText: winningOptionText,
           totalVotes: playerIds.length,
@@ -2164,7 +2164,7 @@ io.on('connection', (socket) => {
         });
         
         // Update game state in DB
-        await dbSync(db.updateGame, room.gameId, { currentRound: room.currentRound });
+        await dbSync(db.updateGame, room.gameCode, { currentRound: room.currentRound });
         console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
       })();
       
@@ -2226,14 +2226,14 @@ io.on('connection', (socket) => {
         } catch (err) { /* ignore */ }
         
         const pointsEarned = room.roundScores?.[voterCountry] || 0;
-        await dbSync(db.saveVote, roomId, userId, room.currentRound, 
+        await dbSync(db.saveVote, room.gameCode, userId, room.currentRound, 
           `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned);
         console.log(`📊 Vote synced: ${username} (${voterCountry}) -> ${choice}`);
         
         // Also update player total points to phase1_score column
         if (room.scores?.[voterCountry]) {
           console.log(`💾 Saving Phase 1 points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
-          const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry], 'phase1');
+          const pointsResult = await dbSync(db.updatePlayerPoints, room.gameCode, userId, room.scores[voterCountry], 'phase1');
           if (pointsResult?.error) {
             console.error(`❌ Failed to save points to DB:`, pointsResult.error);
           } else {
@@ -2358,7 +2358,7 @@ io.on('connection', (socket) => {
       const userId = username ? await getUserId(username) : null;
       if (userId) {
         const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-        await dbSync(db.savePolicy, roomId, userId, phase2Round, {
+        await dbSync(db.savePolicy, room.gameCode, userId, phase2Round, {
           year: currentYear,
           interestRate: submittedPolicy.centralBankRate || 0,
           govtSpending: submittedPolicy.militarySpending || 0,
@@ -2403,9 +2403,9 @@ io.on('connection', (socket) => {
         calculatePhase2Scores(roomId);
         room.gamePhase = 'complete';
         room.phase2.active = false;
-        dbSync(db.updateGame, room.gameId, { status: 'completed', currentRound: 12 });
+        dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
         // Release all players when game completes
-        dbSync(db.releaseAllPlayers, room.gameId);
+        dbSync(db.releaseAllPlayers, room.gameCode);
         console.log('[AUTO] Phase 2 complete! Final scores calculated. Players released.');
         broadcastToRoom(roomId);
         saveState();
@@ -2423,7 +2423,7 @@ io.on('connection', (socket) => {
       
       // Sync to database
       const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, room.gameId, { currentRound: 10 + phase2Round });
+      dbSync(db.updateGame, room.gameCode, { currentRound: 10 + phase2Round });
       console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
       // Check for crisis events this year
@@ -2508,7 +2508,7 @@ io.on('connection', (socket) => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       if (userId) {
-        await dbSync(db.saveDeployment, roomId, userId, {
+        await dbSync(db.saveDeployment, room.gameCode, userId, {
           country: deployment.country,
           region: deployment.region,
           troops: deployment.troops,
@@ -2590,11 +2590,7 @@ io.on('connection', (socket) => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       if (userId) {
-        await dbSync(db.saveCrisisResponse, roomId, userId, {
-          crisisId: crisis.id,
-          optionId: choiceId,
-          year: room.phase2.currentYear
-        });
+        await dbSync(db.saveCrisisResponse, room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear);
         console.log(`📊 Crisis response synced to MySQL: ${username}`);
       }
     })();
@@ -2742,9 +2738,9 @@ io.on('connection', (socket) => {
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
-      dbSync(db.updateGame, room.gameId, { status: 'completed', currentRound: 12 });
+      dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
       // Release all players when game completes
-      dbSync(db.releaseAllPlayers, room.gameId);
+      dbSync(db.releaseAllPlayers, room.gameCode);
       console.log('Phase 2 complete! Final scores calculated. Players released.');
       broadcastToRoom(roomId);
       saveState();
@@ -2807,7 +2803,7 @@ io.on('connection', (socket) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, room.gameId, { status: 'lobby', currentRound: 0 });
+    dbSync(db.updateGame, room.gameCode, { status: 'lobby', currentRound: 0 });
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
@@ -2838,9 +2834,9 @@ io.on('connection', (socket) => {
     }
     
     // Release all players from the OLD game in database
-    if (room.gameId) {
-      dbSync(db.releaseAllPlayers, room.gameId);
-      console.log(`Released all players from old game ${room.gameId}`);
+    if (room.gameCode) {
+      dbSync(db.releaseAllPlayers, room.gameCode);
+      console.log(`Released all players from old game ${room.gameCode}`);
     }
     
     // Create a NEW game in the database
