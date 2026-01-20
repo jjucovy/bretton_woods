@@ -751,8 +751,11 @@ function triggerCrisisIfNeeded(roomId, year) {
   const room = globalState.rooms[roomId];
   if (!room) return;
   
+  // Only check for crises if phase 2 is active
+  if (!room.phase2 || !room.phase2.active) return;
+  
   // Check if there's already an active crisis
-  if (room.phase2.crises.active) {
+  if (room.phase2.crises && room.phase2.crises.active) {
     console.log(`Crisis already active, skipping trigger for year ${year}`);
     return;
   }
