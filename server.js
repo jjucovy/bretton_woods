@@ -703,6 +703,10 @@ function initializePhase2(roomId) {
   });
   
   console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)`);
+  
+  // NEW: Trigger crises for the starting year (1946)
+  triggerCrisisIfNeeded(roomId, 1946);
+  console.log(`✅ Checked for crises in starting year 1946`);
 }
 
 function calculateAgreementBonus(roomId) {
@@ -851,7 +855,7 @@ function triggerCrisisIfNeeded(roomId, year) {
       active: null,
       history: [],
       responses: {},
-      queue: []  // NEW: Crisis queue
+      queue: []
     };
   }
   if (!room.phase2.crises.history) {
@@ -877,11 +881,19 @@ function triggerCrisisIfNeeded(roomId, year) {
     return;
   }
   
+  // DEBUG: Log ALL crises in the data file
+  console.log(`🔍 DEBUG: Total crises in file: ${crisisEventsData.crisisEvents.length}`);
+  console.log(`🔍 DEBUG: Crises for year ${year}:`, crisisEventsData.crisisEvents.filter(e => e.year === year).map(e => e.title));
+  console.log(`🔍 DEBUG: Already in history:`, room.phase2.crises.history.map(h => h.id));
+  
   // Find ALL crisis events for this year that haven't been triggered yet
   const availableCrises = crisisEventsData.crisisEvents.filter(event => 
     event.year === year && 
     !room.phase2.crises.history.find(h => h.id === event.id)
   );
+  
+  console.log(`🔍 DEBUG: Available crises after filtering: ${availableCrises.length}`);
+  console.log(`🔍 DEBUG: Available crisis IDs:`, availableCrises.map(c => c.id));
   
   if (availableCrises.length === 0) {
     console.log(`No crises available for year ${year}`);
@@ -913,6 +925,7 @@ function triggerCrisisIfNeeded(roomId, year) {
   if (transformedCrises.length > 1) {
     room.phase2.crises.queue.push(...transformedCrises.slice(1));
     console.log(`📋 Queued ${transformedCrises.length - 1} additional crisis(es) for ${year}`);
+    console.log(`📋 Queue now contains:`, room.phase2.crises.queue.map(c => c.title));
   }
 }
 
