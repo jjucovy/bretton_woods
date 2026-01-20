@@ -154,11 +154,38 @@ function loadState() {
         roomList: loadedState.roomList || []
       };
       
-      // CRITICAL: Ensure all loaded rooms have gameCode set
+      // CRITICAL: Ensure all loaded rooms have gameCode set and phase2.crises initialized
       Object.keys(globalState.rooms).forEach(roomId => {
         if (!globalState.rooms[roomId].gameCode) {
           globalState.rooms[roomId].gameCode = roomId;
           console.log(`⚠️ Added missing gameCode to room ${roomId}`);
+        }
+        
+        // Ensure phase2.crises structure exists for old saved states
+        if (!globalState.rooms[roomId].phase2) {
+          globalState.rooms[roomId].phase2 = {
+            active: false,
+            currentYear: 1946,
+            maxYears: 7,
+            policies: {},
+            yearlyData: {},
+            achievements: {},
+            crises: {
+              active: null,
+              history: [],
+              responses: {}
+            }
+          };
+        }
+        if (!globalState.rooms[roomId].phase2.crises) {
+          globalState.rooms[roomId].phase2.crises = {
+            active: null,
+            history: [],
+            responses: {}
+          };
+        }
+        if (!globalState.rooms[roomId].phase2.crises.history) {
+          globalState.rooms[roomId].phase2.crises.history = [];
         }
       });
       
@@ -286,6 +313,33 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res
     // CRITICAL: Ensure imported room has gameCode set
     if (!globalState.rooms[roomId].gameCode) {
       globalState.rooms[roomId].gameCode = roomId;
+    }
+    
+    // Ensure phase2.crises structure exists for imported states
+    if (!globalState.rooms[roomId].phase2) {
+      globalState.rooms[roomId].phase2 = {
+        active: false,
+        currentYear: 1946,
+        maxYears: 7,
+        policies: {},
+        yearlyData: {},
+        achievements: {},
+        crises: {
+          active: null,
+          history: [],
+          responses: {}
+        }
+      };
+    }
+    if (!globalState.rooms[roomId].phase2.crises) {
+      globalState.rooms[roomId].phase2.crises = {
+        active: null,
+        history: [],
+        responses: {}
+      };
+    }
+    if (!globalState.rooms[roomId].phase2.crises.history) {
+      globalState.rooms[roomId].phase2.crises.history = [];
     }
     
     // Save to disk
@@ -772,6 +826,18 @@ function triggerCrisisIfNeeded(roomId, year) {
   if (room.phase2.crises && room.phase2.crises.active) {
     console.log(`Crisis already active, skipping trigger for year ${year}`);
     return;
+  }
+  
+  // Ensure crises object is properly initialized with history array
+  if (!room.phase2.crises) {
+    room.phase2.crises = {
+      active: null,
+      history: [],
+      responses: {}
+    };
+  }
+  if (!room.phase2.crises.history) {
+    room.phase2.crises.history = [];
   }
   
   // Find crisis events for this year that haven't been triggered yet
@@ -1397,6 +1463,15 @@ function calculatePhase2Scores(roomId) {
 function resolveCrisisEffects(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return false;
+  
+  // Ensure phase2.crises is initialized
+  if (!room.phase2.crises) {
+    room.phase2.crises = {
+      active: null,
+      history: [],
+      responses: {}
+    };
+  }
   
   const crisis = room.phase2.crises.active;
   if (!crisis) return false;
@@ -2541,6 +2616,15 @@ io.on('connection', (socket) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.phase2.active) return;
     
+    // Ensure phase2.crises is initialized
+    if (!room.phase2.crises) {
+      room.phase2.crises = {
+        active: null,
+        history: [],
+        responses: {}
+      };
+    }
+    
     const player = room.players[playerId];
     if (!player) return;
     
@@ -2668,6 +2752,15 @@ io.on('connection', (socket) => {
     if (!room) {
       console.log('ERROR: Room not found');
       return;
+    }
+    
+    // Ensure phase2.crises is initialized
+    if (!room.phase2.crises) {
+      room.phase2.crises = {
+        active: null,
+        history: [],
+        responses: {}
+      };
     }
     
     console.log('Room found:', room.roomName);
