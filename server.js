@@ -482,6 +482,8 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
       
       if (gameData) {
         console.log('✅ Found existing game in database, restoring state...');
+        console.log(gameData);
+        
         // Create room structure from DB data
         globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
         
