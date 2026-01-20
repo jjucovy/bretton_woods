@@ -2127,10 +2127,13 @@ io.on('connection', (socket) => {
     saveState();
     
     // Sync game start to MySQL using the game code
-    const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
-    dbSync(db.updateGame, room.gameCode, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
-    console.log(`📊 Game ${room.gameCode} started in room ${roomId} synced to MySQL (status: ${gameStatus})`);
-    
+ // In startGame handler (around line 2122)
+const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
+dbSync(db.updateGame, room.gameCode, { 
+  game_status: gameStatus,  // Changed from 'status' to 'game_status'
+  started_at: Date.now(),
+  current_round: skipPhase1 ? 11 : 1 
+});
     console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
   });
@@ -2358,10 +2361,13 @@ io.on('connection', (socket) => {
           
           // Check if Phase 1 is complete - start Phase 2
           if (currentRoom.currentRound > 10) {
-            initializePhase2(roomId);
-            await dbSync(db.updateGame, currentRoom.gameId, { status: 'phase2_active', currentRound: 11 });
-            console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
-          } else {
+  initializePhase2(roomId);
+  await dbSync(db.updateGame, currentRoom.gameCode, { 
+    game_status: 'phase2_active',  // was: status
+    current_round: 11 
+  });
+  console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
+} else {
             currentRoom.gamePhase = 'voting';
             currentRoom.votes = {}; // Clear votes for new round
           }
@@ -2927,7 +2933,7 @@ io.on('connection', (socket) => {
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
-      dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
+      dbSync(db.updateGame, room.gameCode, { game_status: 'completed', currentRound: 12 });
       // Release all players when game completes
       dbSync(db.releaseAllPlayers, room.gameCode);
       console.log('Phase 2 complete! Final scores calculated. Players released.');
@@ -2992,7 +2998,7 @@ io.on('connection', (socket) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, room.gameCode, { status: 'lobby', currentRound: 0 });
+    dbSync(db.updateGame, room.gameCode, { game_status: 'lobby', currentRound: 0 });
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
@@ -3067,7 +3073,7 @@ io.on('connection', (socket) => {
         };
         
         // Update the NEW game in database
-        dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
+        dbSync(db.updateGame, newGameCode, { game_status: 'lobby', currentRound: 0 });
         
         socket.emit('startNewGameResult', { success: true, gameId: result.game_id });
         broadcastToRoom(roomId);
