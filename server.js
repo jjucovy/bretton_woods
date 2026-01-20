@@ -108,6 +108,7 @@ const crisisEventsData = require('./crisis-events.json');
 function createGameState(roomId, roomName, hostId) {
   return {
     roomId: roomId,
+    gameCode: roomId, // CRITICAL: gameCode must be set to roomId for API to work
     roomName: roomName,
     hostId: hostId,
     gameId: Date.now(),
@@ -152,6 +153,14 @@ function loadState() {
         rooms: loadedState.rooms || {},
         roomList: loadedState.roomList || []
       };
+      
+      // CRITICAL: Ensure all loaded rooms have gameCode set
+      Object.keys(globalState.rooms).forEach(roomId => {
+        if (!globalState.rooms[roomId].gameCode) {
+          globalState.rooms[roomId].gameCode = roomId;
+          console.log(`⚠️ Added missing gameCode to room ${roomId}`);
+        }
+      });
       
       console.log('✅ Multi-room state loaded from file');
       console.log(`   - Users: ${Object.keys(globalState.users).length}`);
@@ -273,6 +282,11 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res
   try {
     // Restore room state
     globalState.rooms[roomId] = roomData;
+    
+    // CRITICAL: Ensure imported room has gameCode set
+    if (!globalState.rooms[roomId].gameCode) {
+      globalState.rooms[roomId].gameCode = roomId;
+    }
     
     // Save to disk
     saveState();
@@ -2857,6 +2871,7 @@ io.on('connection', (socket) => {
         // Update room to point to NEW game
         const oldGameId = room.gameId;
         room.gameId = result.game_id;
+        room.gameCode = newGameCode; // CRITICAL: Update gameCode to new game code
         
         // Reset game state
         room.gameStarted = false;
@@ -2877,7 +2892,7 @@ io.on('connection', (socket) => {
         };
         
         // Update the NEW game in database
-        dbSync(db.updateGame, result.game_id, { status: 'lobby', currentRound: 0 });
+        dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
         
         socket.emit('startNewGameResult', { success: true, gameId: result.game_id });
         broadcastToRoom(roomId);
