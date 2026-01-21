@@ -598,8 +598,10 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         console.log('📝 No game found in database, creating new room...');
         globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
         
-        // Create initial game with timestamp-based gameCode
-        const initialGameCode = `${SINGLE_ROOM_ID}-${Date.now()}`;
+        // Create initial game with timestamp+random-based gameCode for uniqueness
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(2, 8);
+        const initialGameCode = `${SINGLE_ROOM_ID}-${timestamp}-${random}`;
         console.log(`   Creating initial game with code: ${initialGameCode}`);
         
         updateRoomList();
@@ -3295,9 +3297,11 @@ io.on('connection', (socket) => {
         console.log(`✅ Old game completed and players released`);
       }
       
-      // Create a NEW game with UNIQUE gameCode (timestamp-based)
-      // This creates a NEW game_id in the database
-      const newGameCode = `${roomId}-${Date.now()}`;
+      // Create a NEW game with UNIQUE gameCode (timestamp + random)
+      // This ALWAYS creates a NEW game_id in the database
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 8); // 6 char random string
+      const newGameCode = `${roomId}-${timestamp}-${random}`;
       console.log(`Creating NEW game with unique code: ${newGameCode}, creator userId: ${userId}`);
       
       const result = await db.createGame(newGameCode, userId);
