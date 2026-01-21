@@ -1,3 +1,4 @@
+const deploymentSystem = require('./deployment-impacts');
 // server-multiroom.js - Bretton Woods Multi-Room Server
 const express = require('express');
 const http = require('http');
@@ -8,6 +9,7 @@ const crypto = require('crypto');
 
 // Database module for MySQL persistence
 const db = require('./db');
+const deploymentSystem = require('./deployment-impacts');
 
 // Country code to short name mapping (matching game-data.json naming)
 // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
@@ -132,7 +134,12 @@ function createGameState(roomId, roomName, hostId) {
         active: null, // Current active crisis
         history: [], // Resolved crises
         responses: {} // playerId -> response choice
-      }
+      },
+
+  deployments: [],           // Array of all deployments
+  conflicts: [],             // Array of detected conflicts
+  regionalControl: {},       // Regional control status
+  crisisDeploymentBonuses: {} // Bonuses from crisis deployments
     },
     maxPlayers: 7,
     createdAt: Date.now(),
@@ -919,14 +926,38 @@ function calculateYearEconomics(roomId) {
     
     if (!policy || !prevData) {
       // If no policy submitted, use defaults with penalty
-      tempResults[country] = {
-        ...prevData,
-        gdpGrowth: -2.0,
-        industrialOutput: prevData.industrialOutput * 0.98
-      };
-      return;
-    }
+      
+    // NEW: Apply deployment effects BEFORE storing results
+    const deploymentEffects = deploymentSystem.applyDeploymentEffects(
+      room,
+      country,
+      room.phase2.deployments || [],
+      tempResults[country],
+      currentYear
+    );
     
+    // Add deployment bonuses to economics
+    tempResults[country].gdpGrowth += deploymentEffects.gdpGrowth;
+    tempResults[country].tradeBalance += deploymentEffects.tradeBalance;
+    
+    // Store deployment details for display
+    tempResults[country].deploymentBonuses = {
+      gdpBonus: deploymentEffects.gdpGrowth,
+      tradeBonus: deploymentEffects.tradeBalance,
+      influence: deploymentEffects.influence,
+      details: deploymentEffects.details,
+      regionalControl: deploymentEffects.regionalControl
+    };
+    
+    console.log(`   📍 Deployment effects for ${country}:`, {
+      gdp: deploymentEffects.gdpGrowth.toFixed(2),
+      trade: Math.round(deploymentEffects.tradeBalance),
+      details: deploymentEffects.details.join('; ')
+    });
+    
+    // Store all results (keep existing code)
+    tempResults[country] = { ...tempResults[country] };
+
     // Economic calculation model with DYNAMIC CROSS-COUNTRY EFFECTS
     const isCommandEconomy = policy.isCommandEconomy || false;
     
@@ -1431,6 +1462,34 @@ function calculatePhase2Scores(roomId) {
         score += breakdown.brettonWoods;
       }
       
+// NEW: Deployment influence points
+      if (room.phase2.deployments && room.phase2.deployments.length > 0) {
+        const regionalControl = deploymentSystem.calculateRegionalControl(
+          room.phase2.deployments,
+          1952
+        );
+        
+        const influence = deploymentSystem.calculateDiplomaticInfluence(
+          room.phase2.deployments,
+          regionalControl,
+          1952
+        );
+        
+        if (influence[country]) {
+          const influencePoints = influence[country].total;
+          breakdown.deploymentInfluence = influencePoints;
+          score += influencePoints;
+          
+          console.log(`   🎖️ ${country} deployment influence: ${influencePoints} pts (${influence[country].controlledRegions.length} regions controlled)`);
+        }
+      }
+      
+      // Crisis deployment bonuses
+      if (room.phase2.crisisDeploymentBonuses && room.phase2.crisisDeploymentBonuses[country]) {
+        const crisisBonus = room.phase2.crisisDeploymentBonuses[country] * 2; // 2 pts per bonus
+        breakdown.crisisDeploymentBonus = crisisBonus;
+        score += crisisBonus;
+      }
       // Crisis diplomatic points
       if (room.phase2.diplomaticPoints && room.phase2.diplomaticPoints[country]) {
         breakdown.crisisDiplomacy = room.phase2.diplomaticPoints[country] * 2; // 2 pts per diplomatic point
@@ -1538,7 +1597,39 @@ function resolveCrisisEffects(roomId) {
 // ============================================
 // END PHASE 2 FUNCTIONS
 // ============================================
-
+app.get('/api/deployment-map/:roomId', (req, res) => {
+  const { roomId } = req.params;
+  const room = globalState.rooms[roomId];
+  
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+  
+  const currentYear = room.phase2?.currentYear || 1946;
+  const deployments = room.phase2?.deployments || [];
+  
+  // Calculate regional control
+  const regionalControl = deploymentSystem.calculateRegionalControl(deployments, currentYear);
+  
+  // Calculate diplomatic influence
+  const influence = deploymentSystem.calculateDiplomaticInfluence(
+    deployments, 
+    regionalControl, 
+    currentYear
+  );
+  
+  // Get conflicts
+  const conflicts = deploymentSystem.detectDeploymentConflicts(deployments, currentYear);
+  
+  res.json({
+    year: currentYear,
+    regions: deploymentSystem.REGIONS,
+    control: regionalControl,
+    influence: influence,
+    conflicts: conflicts,
+    deployments: deployments.filter(d => d.year === currentYear)
+  });
+});
 // Socket connection
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
@@ -2536,80 +2627,94 @@ io.on('connection', (socket) => {
   });
   
   // PLAYER: Deploy troops
-  socket.on('deployTroops', ({ roomId, playerId, deployment }) => {
-    const room = globalState.rooms[roomId];
-    if (!room) return;
-    
-    const player = room.players[playerId];
-    if (!player) return;
-    
-    // Verify the deployment is for the player's own country
-    if (deployment.country !== player.country) {
-      console.log('Deploy troops rejected: country mismatch');
-      return;
-    }
-    
-    // Initialize deployments array if doesn't exist
-    if (!room.phase2.deployments) {
-      room.phase2.deployments = [];
-    }
-    
-    // Add deployment with timestamp
-    const deploymentRecord = {
-      ...deployment,
-      timestamp: Date.now(),
-      year: room.phase2.currentYear
-    };
-    
-    room.phase2.deployments.push(deploymentRecord);
-    
-    // Check for conflicts
-    const conflictZones = ['Eastern Europe', 'East Asia', 'Middle East', 'Southeast Asia'];
-    if (conflictZones.includes(deployment.region)) {
-      // Find if another country has troops there
-      const otherDeployments = room.phase2.deployments.filter(d => 
-        d.region === deployment.region && 
-        d.country !== deployment.country &&
-        d.year === room.phase2.currentYear
-      );
+  
+socket.on('deployTroops', ({ roomId, playerId, deployment }) => {
+  const room = globalState.rooms[roomId];
+  if (!room) return;
+  
+  const player = room.players[playerId];
+  if (!player) return;
+  
+  // Verify the deployment is for the player's own country
+  if (deployment.country !== player.country) {
+    console.log('❌ Deploy troops rejected: country mismatch');
+    return;
+  }
+  
+  // NEW: Validate deployment has required fields
+  if (!deployment.branch || !['army', 'navy', 'airForce'].includes(deployment.branch)) {
+    socket.emit('deploymentError', { message: 'Invalid military branch' });
+    return;
+  }
+  
+  if (!deployment.region || !deploymentSystem.REGIONS[deployment.region]) {
+    socket.emit('deploymentError', { message: 'Invalid region' });
+    return;
+  }
+  
+  // Initialize deployments array if doesn't exist
+  if (!room.phase2.deployments) {
+    room.phase2.deployments = [];
+  }
+  
+  // Add deployment with timestamp
+  const deploymentRecord = {
+    ...deployment,
+    timestamp: Date.now(),
+    year: room.phase2.currentYear
+  };
+  
+  room.phase2.deployments.push(deploymentRecord);
+  
+  // NEW: Use deployment system to detect conflicts
+  const conflicts = deploymentSystem.detectDeploymentConflicts(
+    room.phase2.deployments, 
+    room.phase2.currentYear
+  );
+  
+  // Store conflicts
+  room.phase2.conflicts = conflicts;
+  
+  if (conflicts.length > 0) {
+    const relevantConflict = conflicts.find(c => c.region === deployment.region);
+    if (relevantConflict) {
+      console.log(`⚠️ CONFLICT (${relevantConflict.level}): ${relevantConflict.description}`);
       
-      if (otherDeployments.length > 0) {
-        // Create conflict alert
-        if (!room.phase2.conflicts) {
-          room.phase2.conflicts = [];
+      // Send alert to all players in conflict
+      relevantConflict.countries.forEach(country => {
+        const conflictPlayer = Object.values(room.players).find(p => p.country === country);
+        if (conflictPlayer?.socketId) {
+          io.to(conflictPlayer.socketId).emit('conflictAlert', {
+            region: deployment.region,
+            level: relevantConflict.level,
+            message: `⚠️ Military tension in ${deployment.region}!`
+          });
         }
-        
-        room.phase2.conflicts.push({
-          region: deployment.region,
-          countries: [deployment.country, ...otherDeployments.map(d => d.country)],
-          year: room.phase2.currentYear,
-          timestamp: Date.now()
-        });
-        
-        console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
-      }
+      });
     }
-    
-    console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
-    
-    // Sync deployment to MySQL
-    (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
-      if (userId) {
-        await dbSync(db.saveDeployment, room.gameCode, userId, {
-          country: deployment.country,
-          region: deployment.region,
-          troops: deployment.troops,
-          year: room.phase2.currentYear
-        });
-        console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`)
-      }
-    })();
-    
-    broadcastToRoom(roomId);
-    saveState();
-  });
+  }
+  
+  console.log(`🎖️ ${player.country} deployed ${deployment.troops.toLocaleString()} ${deployment.branch} to ${deployment.region}`);
+  
+  // Sync deployment to MySQL
+  (async () => {
+    const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+    const userId = username ? await getUserId(username) : null;
+    if (userId) {
+      await dbSync(db.saveDeployment, room.gameCode, userId, {
+        country: deployment.country,
+        region: deployment.region,
+        branch: deployment.branch,
+        troops: deployment.troops,
+        year: room.phase2.currentYear
+      });
+      console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`);
+    }
+  })();
+  
+  broadcastToRoom(roomId);
+  saveState();
+});
 
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
@@ -2673,6 +2778,27 @@ io.on('connection', (socket) => {
       }
     }
     
+
+  // NEW: Check deployment bonuses for crisis response
+  const deploymentBonus = deploymentSystem.getCrisisDeploymentBonus(
+    country,
+    crisis,
+    room.phase2.deployments || [],
+    deploymentSystem.calculateRegionalControl(room.phase2.deployments || [], room.phase2.currentYear)
+  );
+  
+  // Apply deployment bonus to crisis effects
+  if (deploymentBonus.responseBonus > 0) {
+    console.log(`${country} gets +${deploymentBonus.responseBonus} diplomatic points from deployments (${deploymentBonus.reason})`);
+    
+    // Add to diplomatic points (will be scored later)
+    if (!room.phase2.crisisDeploymentBonuses) {
+      room.phase2.crisisDeploymentBonuses = {};
+    }
+    room.phase2.crisisDeploymentBonuses[country] = 
+      (room.phase2.crisisDeploymentBonuses[country] || 0) + deploymentBonus.responseBonus;
+  }
+
     // Store the response
     room.phase2.crises.responses[country] = {
       playerId,
