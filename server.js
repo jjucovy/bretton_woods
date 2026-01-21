@@ -3267,61 +3267,42 @@ io.on('connection', (socket) => {
       const oldGameCode = room.gameCode;
       const oldGameId = room.gameId;
       
-      if (oldGameCode) {
-        console.log(`Marking old game ${oldGameCode} as completed...`);
+      if (oldGameCode && oldGameId) {
+        console.log(`Marking old game ${oldGameCode} (game_id: ${oldGameId}) as completed...`);
         await dbSync(db.updateGame, oldGameCode, { status: 'complete' });
         
         // Release all players from the OLD game
         await dbSync(db.releaseAllPlayers, oldGameCode);
-        console.log(`✅ Released all players from old game ${oldGameCode}`);
+        console.log(`✅ Old game completed and players released`);
       }
       
-      // IMPORTANT: Use roomId as gameCode for consistency
-      // This keeps the same gameCode across game resets in the same room
-      const newGameCode = roomId;
-      console.log(`Using gameCode: ${newGameCode} (same as roomId), creator userId: ${userId}`);
+      // Create a NEW game with UNIQUE gameCode (timestamp-based)
+      // This creates a NEW game_id in the database
+      const newGameCode = `${roomId}-${Date.now()}`;
+      console.log(`Creating NEW game with unique code: ${newGameCode}, creator userId: ${userId}`);
       
-      // Check if game already exists with this gameCode
-      let gameId;
-      const existingGame = await db.getGame(newGameCode);
+      const result = await db.createGame(newGameCode, userId);
+      console.log('Create game result:', JSON.stringify(result));
       
-      if (existingGame && existingGame.game_id) {
-        // Game exists - reuse the same game_id and reset it
-        console.log(`✅ Game ${newGameCode} exists (game_id: ${existingGame.game_id}) - resetting to lobby`);
-        gameId = existingGame.game_id;
-        
-        // Update status to lobby and reset
-        await dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
-        
-        // Release all players from this game
-        await dbSync(db.releaseAllPlayers, newGameCode);
-      } else {
-        // Game doesn't exist - create new one
-        console.log(`Game ${newGameCode} doesn't exist - creating new`);
-        const result = await db.createGame(newGameCode, userId);
-        
-        if (!result || !result.game_id) {
-          console.error('ERROR: Failed to create new game in database');
-          socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database' });
-          return;
-        }
-        
-        gameId = result.game_id;
-        console.log(`✅ New game created: game_id=${gameId}`);
-        
-        // Set initial status
-        await dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
+      if (!result || !result.game_id) {
+        console.error('ERROR: Failed to create new game in database');
+        socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database' });
+        return;
       }
       
-      console.log(`Using game_id: ${gameId} with gameCode: ${newGameCode}`);
+      const newGameId = result.game_id;
+      console.log(`✅ NEW game created with game_id: ${newGameId}, gameCode: ${newGameCode}`);
       
-      // Update room to point to the game (gameCode = roomId for consistency)
+      // Set initial status
+      await dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
+      
+      // Update room to point to NEW game
       console.log(`Updating room state:`);
       console.log(`  Old: gameId=${oldGameId}, gameCode=${oldGameCode}`);
-      console.log(`  New: gameId=${gameId}, gameCode=${newGameCode}`);
+      console.log(`  New: gameId=${newGameId}, gameCode=${newGameCode}`);
       
-      room.gameId = gameId;
-      room.gameCode = newGameCode; // CRITICAL: gameCode = roomId for consistency
+      room.gameId = newGameId;
+      room.gameCode = newGameCode;
       
       // CRITICAL: Reset game state completely
       room.gameStarted = false;
@@ -3354,7 +3335,7 @@ io.on('connection', (socket) => {
       console.log(`  Current gameCode: ${room.gameCode}`);
       console.log(`  Current gameId: ${room.gameId}`);
       
-      socket.emit('startNewGameResult', { success: true, gameId: gameId, gameCode: newGameCode });
+      socket.emit('startNewGameResult', { success: true, gameId: newGameId, gameCode: newGameCode });
       
       console.log(`Broadcasting room state and saving...`);
       broadcastToRoom(roomId);
@@ -3362,13 +3343,14 @@ io.on('connection', (socket) => {
       saveState();
       
       console.log(`✅ ========================================`);
-      console.log(`✅ NEW GAME SETUP COMPLETE`);
+      console.log(`✅ NEW GAME CREATED SUCCESSFULLY`);
       console.log(`✅ Room ID: ${roomId}`);
-      console.log(`✅ Game Code: ${newGameCode} (consistent with roomId)`);
-      console.log(`✅ Game ID: ${gameId}`);
+      console.log(`✅ NEW Game Code: ${newGameCode}`);
+      console.log(`✅ NEW Game ID: ${newGameId}`);
       console.log(`✅ Old game: ${oldGameCode || 'none'} (game_id: ${oldGameId || 'none'}) - marked as complete`);
       console.log(`✅ Created by: ${username || 'unknown'} (${isSuperAdmin ? 'superadmin' : 'room host'})`);
-      console.log(`✅ All players must now choose countries in lobby`);
+      console.log(`✅ This is a brand new game with a new database record`);
+      console.log(`✅ Players must now choose countries in lobby`);
       console.log(`✅ ========================================`);
     } catch (error) {
       console.error('❌ ERROR creating new game:', error);
