@@ -3177,7 +3177,7 @@ io.on('connection', (socket) => {
       
       if (oldGameCode) {
         console.log(`Marking old game ${oldGameCode} as completed...`);
-        await dbSync(db.updateGame, oldGameCode, { status: 'complete', completedAt: true });
+        await dbSync(db.updateGame, oldGameCode, { status: 'complete' });
         
         // Release all players from the OLD game
         await dbSync(db.releaseAllPlayers, oldGameCode);
