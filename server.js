@@ -2082,7 +2082,7 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', ({ roomId, playerId, skipPhase1 }) => {
+  socket.on('startGame', async ({ roomId, playerId, skipPhase1 }) => {
     console.log('=== START GAME REQUEST ===');
     console.log('Room ID:', roomId);
     console.log('Player ID:', playerId);
@@ -2495,7 +2495,7 @@ io.on('connection', (socket) => {
   });
   
   // PHASE 2: Submit economic policy
-  socket.on('submitPolicy', ({ roomId, playerId, policy }) => {
+  socket.on('submitPolicy', async ({ roomId, playerId, policy }) => {
     console.log(`🔵 submitPolicy event: roomId=${roomId}, playerId=${playerId}, policy exists=${!!policy}`);
     
     const room = globalState.rooms[roomId];
@@ -3084,7 +3084,7 @@ io.on('connection', (socket) => {
   });
   
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', ({ roomId, playerId }) => {
+  socket.on('resetRoom', async ({ roomId, playerId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
@@ -3125,7 +3125,7 @@ io.on('connection', (socket) => {
   });
   
   // ADMIN: Start new game (resets current game and releases all players)
-  socket.on('startNewGame', ({ roomId, playerId }) => {
+  socket.on('startNewGame', async ({ roomId, playerId }) => {
     console.log('=== START NEW GAME REQUEST ===');
     console.log('Room ID:', roomId);
     console.log('Player ID:', playerId);
