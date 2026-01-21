@@ -3224,15 +3224,6 @@ io.on('connection', (socket) => {
     console.log('✅ Players must choose countries again');
     console.log('');
   });
-    
-    socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, room.gameCode, { status: 'lobby', currentRound: 0 });
-    broadcastToRoom(roomId);
-    broadcastRoomList();
-    saveState();
-    
-    console.log(`Room ${roomId} reset by superadmin`);
-  });
   
   // ADMIN: Start new game (resets current game and releases all players)
   socket.on('startNewGame', async ({ roomId, playerId }) => {
