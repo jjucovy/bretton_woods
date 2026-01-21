@@ -536,9 +536,16 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         } else if (gameData.game_status === 'phase1_active') {
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'voting'; // Phase 1 is voting
           console.log(`✅ Set gamePhase = 'voting'`);
-        } else if (gameData.game_status === 'completed') {
+        } else if (gameData.game_status === 'complete' || gameData.game_status === 'completed') {
+          // Handle both 'complete' (correct) and 'completed' (legacy)
           globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'complete';
-          console.log(`✅ Set gamePhase = 'complete'`);
+          console.log(`✅ Set gamePhase = 'complete' (from database status: ${gameData.game_status})`);
+        } else if (gameData.game_status === 'lobby') {
+          globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
+          console.log(`✅ Set gamePhase = 'lobby'`);
+        } else {
+          // Unknown status - log warning but keep default 'lobby'
+          console.log(`⚠️  Unknown game_status: ${gameData.game_status}, defaulting to 'lobby'`);
         }
         
         // Restore players from database
@@ -3093,20 +3100,88 @@ io.on('connection', (socket) => {
   });
   
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', ({ roomId, playerId }) => {
+  socket.on('resetRoom', async ({ roomId, playerId }) => {
+    console.log('');
+    console.log('╔════════════════════════════════════════════════════════╗');
+    console.log('║              RESET ROOM REQUEST RECEIVED               ║');
+    console.log('╚════════════════════════════════════════════════════════╝');
+    console.log('📋 Room ID:', roomId);
+    console.log('👤 Player ID:', playerId);
+    
     const room = globalState.rooms[roomId];
-    if (!room) return;
+    if (!room) {
+      console.log('❌ Room not found');
+      return;
+    }
     
     const user = Object.values(globalState.users).find(u => u.playerId === playerId);
     const isSuperAdmin = user && user.role === 'superadmin';
     const isRoomHost = room.hostId === playerId;
     
+    console.log('🔐 Permission check:');
+    console.log('   Is superadmin:', isSuperAdmin);
+    console.log('   Is room host:', isRoomHost);
+    
     if (!isSuperAdmin && !isRoomHost) {
       socket.emit('resetRoomResult', { success: false, message: 'Only the game admin can reset games' });
+      console.log('❌ Permission denied');
       return;
     }
     
-    // Reset game state but keep players
+    console.log('✅ Permission granted - resetting game');
+    
+    // Get username and userId
+    const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+    let userId = null;
+    if (username) {
+      userId = await getUserId(username);
+    }
+    
+    try {
+      // Mark old game as complete and update database
+      const gameCode = room.gameCode || roomId;
+      console.log('📦 Updating database for gameCode:', gameCode);
+      
+      // Mark old game complete
+      if (room.gameId) {
+        console.log('   Marking game as complete...');
+        await dbSync(db.updateGame, gameCode, { status: 'complete' });
+        console.log('   ✅ Game marked as complete');
+      }
+      
+      // Release all players
+      console.log('   Releasing all players...');
+      await dbSync(db.releaseAllPlayers, gameCode);
+      console.log('   ✅ Players released');
+      
+      // Check if game exists, create or reset
+      const existingGame = await db.getGame(gameCode);
+      let gameId;
+      
+      if (existingGame && existingGame.game_id) {
+        console.log('   Game exists, resetting to lobby...');
+        gameId = existingGame.game_id;
+        await dbSync(db.updateGame, gameCode, { status: 'lobby', currentRound: 0 });
+      } else {
+        console.log('   Game doesn\'t exist, creating...');
+        const result = await db.createGame(gameCode, userId);
+        gameId = result.game_id;
+        await dbSync(db.updateGame, gameCode, { status: 'lobby', currentRound: 0 });
+      }
+      
+      console.log('   ✅ Database updated, game_id:', gameId);
+      
+      // Update room state
+      room.gameId = gameId;
+      room.gameCode = gameCode;
+      
+    } catch (err) {
+      console.error('⚠️ Error updating database:', err.message);
+      console.log('Continuing with memory-only reset...');
+    }
+    
+    // Reset game state in memory
+    console.log('📦 Resetting room state in memory...');
     room.gameStarted = false;
     room.currentRound = 0;
     room.gamePhase = 'lobby';
@@ -3115,14 +3190,40 @@ io.on('connection', (socket) => {
     room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
     room.roundHistory = [];
     room.readyPlayers = [];
+    room.players = {}; // Clear players to force re-selection
     room.phase2 = {
       active: false,
       currentYear: 1946,
       maxYears: 7,
       policies: {},
       yearlyData: {},
-      achievements: {}
+      achievements: {},
+      crises: {
+        active: null,
+        history: [],
+        responses: {}
+      },
+      deployments: [],
+      conflicts: [],
+      regionalControl: {},
+      crisisDeploymentBonuses: {}
     };
+    console.log('   ✅ Room state reset');
+    
+    socket.emit('resetRoomResult', { success: true });
+    broadcastToRoom(roomId);
+    broadcastRoomList();
+    saveState();
+    
+    console.log('');
+    console.log('╔════════════════════════════════════════════════════════╗');
+    console.log('║              ROOM RESET COMPLETE                       ║');
+    console.log('╚════════════════════════════════════════════════════════╝');
+    console.log('✅ Game reset to lobby');
+    console.log('✅ Database updated');
+    console.log('✅ Players must choose countries again');
+    console.log('');
+  });
     
     socket.emit('resetRoomResult', { success: true });
     dbSync(db.updateGame, room.gameCode, { status: 'lobby', currentRound: 0 });
