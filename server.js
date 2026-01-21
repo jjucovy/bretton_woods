@@ -1532,12 +1532,31 @@ function calculatePhase2Scores(roomId) {
   console.log(`Phase 2 final scores:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);
   
-  // Sync final results to MySQL (hybrid persistence)
-  Object.entries(phase2Scores).forEach(([country, score]) => {
-    db.saveGameResult(roomId, country, score, scoreBreakdowns[country])
-      .then(() => console.log(`📊 Final result synced to MySQL: ${country} -> ${score}`))
-      .catch(err => console.error(`MySQL sync error (result ${country}):`, err.message));
-  });
+  // Sync Phase 2 scores to players table AND game_results table
+  (async () => {
+    for (const [country, score] of Object.entries(phase2Scores)) {
+      try {
+        // Save to game_results table
+        await db.saveGameResult(room.gameCode, country, score, scoreBreakdowns[country]);
+        console.log(`📊 Final result synced to MySQL: ${country} -> ${score}`);
+        
+        // Update player's phase2_score column
+        const player = Object.values(room.players).find(p => p.country === country);
+        if (player) {
+          const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === player.playerId);
+          if (username) {
+            const userId = await getUserId(username);
+            if (userId) {
+              await db.updatePlayerPoints(room.gameCode, userId, score, 2); // phase=2
+              console.log(`✅ Phase 2 score saved to players table: ${country} (${username}) -> ${score} points`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`❌ Error syncing scores for ${country}:`, err.message);
+      }
+    }
+  })();
   
   return phase2Scores;
 }
@@ -2581,11 +2600,19 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Check if we're already at the end
-      console.log(`   year check: currentYear=${room.phase2.currentYear}, >= 1952=${room.phase2.currentYear >= 1952}`);
-      if (room.phase2.currentYear >= 1952) {
-        // Don't calculate more economics, just finalize
-        console.log(`   [FINAL] calculating scores and completing...`);
+      // Calculate this year's economics (this creates data for next year)
+      console.log(`   calculating economics for ${room.phase2.currentYear}...`);
+      calculateYearEconomics(roomId);
+      
+      // Advance year
+      room.phase2.currentYear++;
+      room.readyPlayers = [];
+      console.log(`   advanced to year ${room.phase2.currentYear}`);
+      
+      // Check if we've completed all years (after advancing past 1952)
+      if (room.phase2.currentYear > 1952) {
+        // Game is complete - finalize
+        console.log(`   [FINAL] Year is now ${room.phase2.currentYear}, game completing...`);
         calculatePhase2Scores(roomId);
         room.gamePhase = 'complete';
         room.phase2.active = false;
@@ -2601,15 +2628,6 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Calculate this year's economics (this creates data for next year)
-      console.log(`   calculating economics for ${room.phase2.currentYear}...`);
-      calculateYearEconomics(roomId);
-      
-      // Advance year
-      room.phase2.currentYear++;
-      room.readyPlayers = [];
-      console.log(`   advanced to year ${room.phase2.currentYear}`);
-      
       // Sync to database
       const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
       dbSync(db.updateGame, room.gameCode, { currentRound: 10 + phase2Round });
@@ -2622,8 +2640,8 @@ io.on('connection', (socket) => {
       console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
       
       // Check if we've reached the final year
-      if (room.phase2.currentYear >= 1952) {
-        console.log('[AUTO] Reached final year 1952. Next advance will complete Phase 2.');
+      if (room.phase2.currentYear === 1952) {
+        console.log('[AUTO] Now at final year 1952. After this year completes, Phase 2 will end.');
       }
     } else {
       console.log(`   no auto-advance: allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
@@ -3029,9 +3047,16 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check if we're already at the end
-    if (room.phase2.currentYear >= 1952) {
-      // Don't calculate more economics, just finalize
+    // Calculate this year's economics (this creates data for next year)
+    calculateYearEconomics(roomId);
+    
+    // Advance year
+    room.phase2.currentYear++;
+    room.readyPlayers = [];
+    
+    // Check if we've completed all years (after advancing past 1952)
+    if (room.phase2.currentYear > 1952) {
+      // Game is complete - finalize
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
@@ -3047,21 +3072,14 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Calculate this year's economics (this creates data for next year)
-    calculateYearEconomics(roomId);
-    
-    // Advance year
-    room.phase2.currentYear++;
-    room.readyPlayers = [];
-    
     // Check for crisis events this year
     triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
     
     console.log(`✅ Advanced to year ${room.phase2.currentYear}`);
     
     // Check if we've reached the final year
-    if (room.phase2.currentYear >= 1952) {
-      console.log('Reached final year 1952. Next advance will complete Phase 2.');
+    if (room.phase2.currentYear === 1952) {
+      console.log('Now at final year 1952. After this year completes, Phase 2 will end.');
     }
     
     console.log('Broadcasting updated game state...');
