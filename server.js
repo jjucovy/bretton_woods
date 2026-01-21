@@ -502,12 +502,21 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
   (async () => {
     try {
       console.log('📂 Loading game from database...');
-      const gameData = await db.getGame(SINGLE_ROOM_ID);
+      // Get the LATEST game for this room (handles timestamped gameCodes)
+      const gameData = await db.getLatestGameForRoom(SINGLE_ROOM_ID);
       
       if (gameData) {
         console.log('✅ Found existing game in database, restoring state...');
+        console.log(`   Game Code: ${gameData.game_code}`);
+        console.log(`   Game ID: ${gameData.game_id}`);
+        console.log(`   Status: ${gameData.game_status}`);
+        
         // Create room structure from DB data
         globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        
+        // CRITICAL: Use the actual gameCode from database, not SINGLE_ROOM_ID
+        globalState.rooms[SINGLE_ROOM_ID].gameCode = gameData.game_code;
+        globalState.rooms[SINGLE_ROOM_ID].gameId = gameData.game_id;
         
         // Restore game status and round
         globalState.rooms[SINGLE_ROOM_ID].gameStatus = gameData.game_status;
@@ -548,9 +557,9 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           console.log(`⚠️  Unknown game_status: ${gameData.game_status}, defaulting to 'lobby'`);
         }
         
-        // Restore players from database
+        // Restore players from database using the actual gameCode
         try {
-          const players = await db.getPlayers(SINGLE_ROOM_ID);
+          const players = await db.getPlayers(gameData.game_code);
           console.log('   📋 Restored', players.length, 'players from database');
           if (players.length > 0) {
             console.log('   🔍 First player object keys:', Object.keys(players[0]));
@@ -588,10 +597,20 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
       } else {
         console.log('📝 No game found in database, creating new room...');
         globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        
+        // Create initial game with timestamp-based gameCode
+        const initialGameCode = `${SINGLE_ROOM_ID}-${Date.now()}`;
+        console.log(`   Creating initial game with code: ${initialGameCode}`);
+        
         updateRoomList();
         saveState();
-        await db.createGame(SINGLE_ROOM_ID, null);
-        console.log('✅ New main game room created and synced to MySQL');
+        
+        const result = await db.createGame(initialGameCode, null);
+        if (result && result.game_id) {
+          globalState.rooms[SINGLE_ROOM_ID].gameCode = initialGameCode;
+          globalState.rooms[SINGLE_ROOM_ID].gameId = result.game_id;
+          console.log(`✅ New main game room created: game_id=${result.game_id}, gameCode=${initialGameCode}`);
+        }
       }
     } catch (err) {
       console.error('❌ Error loading game on startup:', err.message);

@@ -74,6 +74,15 @@ async function getGame(gameCode) {
   return callAPI('getGame', { gameCode });
 }
 
+/**
+ * Get the most recent game for a room (by roomId prefix)
+ * @param {string} roomId - The room ID (e.g., 'main-game')
+ * @returns {Promise<Object>} The latest game record for this room
+ */
+async function getLatestGameForRoom(roomId) {
+  return callAPI('getLatestGameForRoom', { roomId });
+}
+
 async function updateGame(gameCode, updates) {
   return callAPI('updateGame', { gameCode, ...updates });
 }
@@ -275,6 +284,7 @@ module.exports = {
   // Games
   createGame,
   getGame,
+  getLatestGameForRoom,
   updateGame,
   
   // Countries
