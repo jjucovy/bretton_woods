@@ -1783,13 +1783,17 @@ io.on('connection', (socket) => {
       const userId = await getUserId(username);
       if (userId) {
         activeGame = await db.getPlayerActiveGame(userId);
-        // Only return the game if it's actually active (phase1_active or phase2_active)
+        // Only return the game if it's actually in progress (not just in lobby)
         if (activeGame && activeGame.game_status) {
+          // Only restore to games that are actually playing (not lobby or completed)
           if (activeGame.game_status === 'phase1_active' || activeGame.game_status === 'phase2_active') {
             console.log(`📊 User ${username} has active game: ${activeGame.game_code} as ${activeGame.country_name}`);
+          } else if (activeGame.game_status === 'lobby') {
+            console.log(`⚠️ User ${username} was in game ${activeGame.game_code} but it's in lobby - not restoring`);
+            activeGame = null; // Don't restore - let them choose country again
           } else {
             console.log(`⚠️ User ${username} was in game ${activeGame.game_code} but it's no longer active (status: ${activeGame.game_status})`);
-            activeGame = null; // Don't restore - game is no longer active
+            activeGame = null; // Don't restore - game is completed or inactive
           }
         }
       }
@@ -3130,7 +3134,7 @@ io.on('connection', (socket) => {
   });
   
   // ADMIN: Start new game (resets current game and releases all players)
-  socket.on('startNewGame', ({ roomId, playerId }) => {
+  socket.on('startNewGame', async ({ roomId, playerId }) => {
     console.log('=== START NEW GAME REQUEST ===');
     console.log('Room ID:', roomId);
     console.log('Player ID:', playerId);
@@ -3151,66 +3155,83 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Get the username and userId for the creator
+    const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+    let userId = null;
+    if (username) {
+      userId = await getUserId(username);
+    }
+    
     // Release all players from the OLD game in database
     if (room.gameCode) {
-      dbSync(db.releaseAllPlayers, room.gameCode);
+      await dbSync(db.releaseAllPlayers, room.gameCode);
       console.log(`Released all players from old game ${room.gameCode}`);
     }
     
-    // Create a NEW game in the database
+    // Create a NEW game in the database with proper userId
     const newGameCode = `${roomId}-${Date.now()}`;
-    console.log(`Creating new game with code: ${newGameCode}`);
+    console.log(`Creating new game with code: ${newGameCode}, creator userId: ${userId}`);
     
-    // Use the proper db function to create a new game
-    db.createGame(newGameCode, playerId)
-      .then(result => {
-        console.log('Create game result:', result);
-        
-        if (!result || !result.game_id) {
-          console.error('ERROR: Failed to create new game in database');
-          socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database' });
-          return;
-        }
-        
-        // Update room to point to NEW game
-        const oldGameId = room.gameId;
-        room.gameId = result.game_id;
-        room.gameCode = newGameCode; // CRITICAL: Update gameCode to new game code
-        
-        // Reset game state
-        room.gameStarted = false;
-        room.currentRound = 0;
-        room.gamePhase = 'lobby';
-        room.votes = {};
-        room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
-        room.roundHistory = [];
-        room.readyPlayers = [];
-        room.players = {}; // Clear player assignments in memory
-        room.phase2 = {
-          active: false,
-          currentYear: 1946,
-          maxYears: 7,
-          policies: {},
-          yearlyData: {},
-          achievements: {}
-        };
-        
-        // Update the NEW game in database
-        dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
-        
-        socket.emit('startNewGameResult', { success: true, gameId: result.game_id });
-        broadcastToRoom(roomId);
-        broadcastRoomList();
-        saveState();
-        
-        console.log(`✅ New game ${result.game_id} created in room ${roomId} (old game was ${oldGameId})`);
-        console.log(`   Created by: ${isSuperAdmin ? 'superadmin' : 'room host'}`);
-        console.log('========================');
-      })
-      .catch(error => {
-        console.error('ERROR creating new game:', error);
-        socket.emit('startNewGameResult', { success: false, message: 'Error creating new game: ' + error.message });
-      });
+    try {
+      const result = await db.createGame(newGameCode, userId);
+      console.log('Create game result:', result);
+      
+      if (!result || !result.game_id) {
+        console.error('ERROR: Failed to create new game in database');
+        socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database' });
+        return;
+      }
+      
+      // Update room to point to NEW game
+      const oldGameId = room.gameId;
+      const oldGameCode = room.gameCode;
+      room.gameId = result.game_id;
+      room.gameCode = newGameCode; // CRITICAL: Update gameCode to new game code
+      
+      // CRITICAL: Reset game state completely
+      room.gameStarted = false;
+      room.currentRound = 0;
+      room.gamePhase = 'lobby';
+      room.votes = {};
+      room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
+      room.roundHistory = [];
+      room.readyPlayers = [];
+      room.players = {}; // Clear player assignments in memory - forces everyone back to lobby
+      room.phase2 = {
+        active: false,
+        currentYear: 1946,
+        maxYears: 7,
+        policies: {},
+        yearlyData: {},
+        achievements: {},
+        crises: {
+          active: null,
+          history: [],
+          responses: {}
+        },
+        deployments: [],
+        conflicts: [],
+        regionalControl: {},
+        crisisDeploymentBonuses: {}
+      };
+      
+      // Update the NEW game status in database
+      await dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
+      
+      socket.emit('startNewGameResult', { success: true, gameId: result.game_id, gameCode: newGameCode });
+      broadcastToRoom(roomId);
+      broadcastRoomList();
+      saveState();
+      
+      console.log(`✅ New game ${result.game_id} (${newGameCode}) created in room ${roomId}`);
+      console.log(`   Old game was ${oldGameId} (${oldGameCode})`);
+      console.log(`   Created by: ${username || 'unknown'} (${isSuperAdmin ? 'superadmin' : 'room host'})`);
+      console.log(`   All players must now choose countries in lobby`);
+      console.log('========================');
+    } catch (error) {
+      console.error('ERROR creating new game:', error);
+      socket.emit('startNewGameResult', { success: false, message: 'Error creating new game: ' + error.message });
+    }
   });
   
   // ADMIN: Toggle auto-advance setting
