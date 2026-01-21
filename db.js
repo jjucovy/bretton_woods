@@ -151,13 +151,13 @@ async function saveDeployment(gameCode, userId, deploymentData) {
   });
 }
 
-async function saveCrisisResponse(gameCode, playerId, crisisId, optionId, responseDetails = null) {
+async function saveCrisisResponse(gameCode, userId, crisisId, optionId, year = null) {
   return callAPI('saveCrisisResponse', { 
     gameCode, 
-    playerId, 
+    userId,  // ✅ API expects userId, not playerId
     crisisId, 
     optionId,
-    responseDetails 
+    year
   });
 }
 

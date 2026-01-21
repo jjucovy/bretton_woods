@@ -665,17 +665,32 @@ function broadcastToRoom(roomId) {
   if (!room) return;
   
   // DEBUG: Log what we're broadcasting
-  console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, {
+  // Build broadcast state
+  let broadcastState = {
     gameStarted: room.gameStarted,
     gamePhase: room.gamePhase,
-    currentRound: room.currentRound,
-    phase2Active: room.phase2?.active,
-    phase2Year: room.phase2?.currentYear,
-    readyPlayersCount: room.readyPlayers?.length,
     playersCount: Object.keys(room.players).length,
-    scores: room.scores,
-    roundScores: room.roundScores
-  });
+    scores: room.scores
+  };
+  
+  // Add phase-specific info
+  if (room.gamePhase === 'phase1') {
+    broadcastState.currentRound = room.currentRound;
+    broadcastState.readyPlayersCount = room.readyPlayers?.length;
+    broadcastState.roundScores = room.roundScores;
+  } else if (room.gamePhase === 'phase2') {
+    broadcastState.phase2Active = room.phase2?.active;
+    broadcastState.phase2Year = room.phase2?.currentYear;
+    broadcastState.currentCrisis = room.phase2?.crises?.current ? {
+      id: room.phase2.crises.current.id,
+      title: room.phase2.crises.current.title,
+      affectedCountries: room.phase2.crises.current.affectedCountries
+    } : null;
+    broadcastState.crisisResponses = room.phase2?.crises?.responses || {};
+    broadcastState.submissions = room.readyPlayers?.length || 0;
+  }
+  
+  console.log(`📡 Broadcasting stateUpdate for ${roomId}:`, broadcastState);
   
   io.to(roomId).emit('stateUpdate', room);
 }
@@ -886,17 +901,22 @@ function triggerCrisisIfNeeded(roomId, year) {
     room.phase2.crises.history = [];
   }
   
-  // Find crisis events for this year that haven't been triggered yet
-  const availableCrisis = crisisEventsData.crisisEvents.find(event => 
+  // Find ALL crisis events for this year that haven't been triggered yet
+  const availableCrises = crisisEventsData.crisisEvents.filter(event => 
     event.year === year && 
     !room.phase2.crises.history.find(h => h.id === event.id)
   );
+  
+  // Randomly select one if multiple available
+  const availableCrisis = availableCrises.length > 0 
+    ? availableCrises[Math.floor(Math.random() * availableCrises.length)]
+    : null;
   
   if (availableCrisis) {
     // Get the list of countries that are actually playing (as names)
     const playingCountryNames = Object.values(room.players).map(p => p.country);
     
-    console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
+    console.log(`🎲 Random selection: ${availableCrises.length} crisis options for ${year}, chose: ${availableCrisis.title}`);
     console.log(`Playing countries:`, playingCountryNames);
     
     const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryNames);
@@ -2695,17 +2715,35 @@ io.on('connection', (socket) => {
     
     // Sync deployment to MySQL
     (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
-      if (userId) {
-        await dbSync(db.saveDeployment, room.gameCode, userId, {
+      try {
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        if (!username) {
+          console.error(`❌ [Deployment] Cannot find username for playerId: ${playerId}`);
+          return;
+        }
+        
+        const userId = await getUserId(username);
+        if (!userId) {
+          console.error(`❌ [Deployment] Cannot find userId for username: ${username}`);
+          return;
+        }
+        
+        console.log(`💾 Saving deployment: username=${username}, userId=${userId}, region=${deployment.region}, troops=${deployment.troops}, branch=${deployment.branch}`);
+        
+        const result = await dbSync(db.saveDeployment, room.gameCode, userId, {
           country: deployment.country,
           region: deployment.region,
           troops: deployment.troops,
           branch: deployment.branch,
           year: room.phase2.currentYear
         });
-        console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`)
+        if (result) {
+          console.log(`✅ Deployment synced to MySQL: ${username} (${deployment.region})`);
+        } else {
+          console.error(`❌ Deployment failed to sync for ${username}`);
+        }
+      } catch (err) {
+        console.error(`❌ [Deployment Sync] Error:`, err.message);
       }
     })();
     
@@ -2816,11 +2854,29 @@ io.on('connection', (socket) => {
     
     // Sync crisis response to MySQL
     (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
-      if (userId) {
-        await dbSync(db.saveCrisisResponse, room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear);
-        console.log(`📊 Crisis response synced to MySQL: ${username}`);
+      try {
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        if (!username) {
+          console.error(`❌ [Crisis Response] Cannot find username for playerId: ${playerId}`);
+          return;
+        }
+        
+        const userId = await getUserId(username);
+        if (!userId) {
+          console.error(`❌ [Crisis Response] Cannot find userId for username: ${username}`);
+          return;
+        }
+        
+        console.log(`💾 Saving crisis response: username=${username}, userId=${userId}, crisisId=${crisis.id}, optionId=${choiceId}, year=${room.phase2.currentYear}`);
+        
+        const result = await dbSync(db.saveCrisisResponse, room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear);
+        if (result) {
+          console.log(`✅ Crisis response synced to MySQL: ${username}`);
+        } else {
+          console.error(`❌ Crisis response failed to sync for ${username}`);
+        }
+      } catch (err) {
+        console.error(`❌ [Crisis Response Sync] Error:`, err.message);
       }
     })();
     
