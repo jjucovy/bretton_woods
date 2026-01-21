@@ -3308,12 +3308,12 @@
                             
                             <button
                               onClick={() => {
-                                if (window.confirm('Reset this game? All progress will be lost.')) {
-                                  socket.emit('resetRoom', {
-                                    roomId: SINGLE_ROOM_ID,
-                                    playerId
-                                  });
-                                }
+                                if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
+  socket.emit('startNewGame', {
+    roomId: SINGLE_ROOM_ID,
+    playerId
+  });
+}
                               }}
                               style={{
                                 padding: '15px 30px',
