@@ -32,14 +32,33 @@ function getCountryName(countryCode) {
 // Helper to safely call DB functions (fails silently, logs errors)
 async function dbSync(operation, ...args) {
   try {
+    // Guard: Check if operation is valid
+    if (!operation || typeof operation !== 'function') {
+      console.error(`❌ [DB Sync] Invalid operation:`, operation);
+      console.error(`   Type:`, typeof operation);
+      console.error(`   Args:`, JSON.stringify(args));
+      return null;
+    }
+
     const result = await operation(...args);
-    if (!result || result.error) {
-      console.error(`❌ [DB Sync] ${operation.name || 'operation'} API error:`, result?.error || 'No result');
+    if (!result) {
+      console.error(`❌ [DB Sync] ${operation.name || 'operation'} returned null/undefined`);
+      console.error(`   Operation: ${operation.name}`);
+      console.error(`   Args:`, JSON.stringify(args));
+      return null;
+    }
+    if (result.error) {
+      console.error(`❌ [DB Sync] ${operation.name || 'operation'} API error:`, result.error);
+      console.error(`   Args:`, JSON.stringify(args));
+      return null;
     }
     return result;
   } catch (err) {
-    console.error(`❌ [DB Sync] ${operation.name || 'operation'} failed:`, err.message);
-    console.error(`   Args:`, args);
+    const opName = operation?.name || 'unknown';
+    console.error(`❌ [DB Sync] ${opName} threw error`);
+    console.error(`   Error: ${err.message}`);
+    console.error(`   Stack: ${err.stack?.substring(0, 300)}`);
+    console.error(`   Args:`, JSON.stringify(args));
     return null;
   }
 }
@@ -2143,7 +2162,7 @@ io.on('connection', (socket) => {
     
     // Sync game start to MySQL using the game code
     const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
-    dbSync(db.updateGame, room.gameCode, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
+    await dbSync(db.updateGame, room.gameCode, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
     console.log(`📊 Game ${room.gameCode} started in room ${roomId} synced to MySQL (status: ${gameStatus})`);
     
     console.log(`Game started in room ${roomId} by admin`);
@@ -2589,9 +2608,9 @@ io.on('connection', (socket) => {
         calculatePhase2Scores(roomId);
         room.gamePhase = 'complete';
         room.phase2.active = false;
-        dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
+        await dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
         // Release all players when game completes
-        dbSync(db.releaseAllPlayers, room.gameCode);
+        await dbSync(db.releaseAllPlayers, room.gameCode);
         console.log('[AUTO] Phase 2 complete! Final scores calculated. Players released.');
         broadcastToRoom(roomId);
         saveState();
@@ -2609,7 +2628,7 @@ io.on('connection', (socket) => {
       
       // Sync to database
       const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, room.gameCode, { currentRound: 10 + phase2Round });
+      await dbSync(db.updateGame, room.gameCode, { currentRound: 10 + phase2Round });
       console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
       // Check for crisis events this year
@@ -3032,9 +3051,9 @@ io.on('connection', (socket) => {
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
-      dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
+      await dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
       // Release all players when game completes
-      dbSync(db.releaseAllPlayers, room.gameCode);
+      await dbSync(db.releaseAllPlayers, room.gameCode);
       console.log('Phase 2 complete! Final scores calculated. Players released.');
       broadcastToRoom(roomId);
       saveState();
@@ -3097,7 +3116,7 @@ io.on('connection', (socket) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, room.gameCode, { status: 'lobby', currentRound: 0 });
+    await dbSync(db.updateGame, room.gameCode, { status: 'lobby', currentRound: 0 });
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
@@ -3129,7 +3148,7 @@ io.on('connection', (socket) => {
     
     // Release all players from the OLD game in database
     if (room.gameCode) {
-      dbSync(db.releaseAllPlayers, room.gameCode);
+      await dbSync(db.releaseAllPlayers, room.gameCode);
       console.log(`Released all players from old game ${room.gameCode}`);
     }
     
@@ -3172,7 +3191,7 @@ io.on('connection', (socket) => {
         };
         
         // Update the NEW game in database
-        dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
+        await dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
         
         socket.emit('startNewGameResult', { success: true, gameId: result.game_id });
         broadcastToRoom(roomId);

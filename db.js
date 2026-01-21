@@ -147,7 +147,9 @@ async function saveDeployment(gameCode, userId, deploymentData) {
     country: deploymentData.country,
     region: deploymentData.region,
     troops: deploymentData.troops,
-    year: deploymentData.year
+    branch: deploymentData.branch,  // ✅ CRITICAL: API requires this
+    year: deploymentData.year,
+    deploymentInfluence: deploymentData.deploymentInfluence || 0
   });
 }
 
@@ -192,6 +194,11 @@ async function saveGameResult(gameCode, countryCode, finalScore, breakdown = nul
 
 async function getGameResults(gameCode) {
   return callAPI('getGameResults', { gameCode });
+}
+
+// ============ GAME STATE MANAGEMENT ============
+async function releaseAllPlayers(gameCode) {
+  return callAPI('releaseAllPlayers', { gameCode });
 }
 
 // ============ TEST ============
@@ -252,6 +259,9 @@ module.exports = {
   getCrises,
   getCrisisOptions,
   saveCrisisResponse,
+  
+  // Game state management
+  releaseAllPlayers,
   
   // Test
   testConnection
