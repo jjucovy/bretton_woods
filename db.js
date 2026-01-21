@@ -45,7 +45,9 @@ async function setupSchema() {
   return callAPI('setupSchema');
 }
 
-
+async function ensureScoreColumns() {
+  return callAPI('ensureScoreColumns');
+}
 
 // ============ USERS ============
 async function getAllUsers() {
@@ -88,35 +90,8 @@ async function getPlayerActiveGame(userId) {
   return callAPI('getPlayerActiveGame', { userId });
 }
 
-/**
- * Save military deployment to database
- */
-async function saveDeployment(gameCode, userId, deploymentData) {
-  return callAPI('saveDeployment', {
-    gameCode,
-    userId,
-    region: deploymentData.region,
-    branch: deploymentData.branch,
-    troops: deploymentData.troops,
-    year: deploymentData.year
-  });
-}
-
-module.exports = {
-  // ... existing exports ...
-  saveDeployment
-};
-
 async function updatePlayerPoints(gameCode, userId, points, phase = 'phase1', addPoints = 0) {
   return callAPI('updatePlayerPoints', { gameCode, userId, points, phase, addPoints });
-}
-
-async function clearPlayerCountry(gameCode, userId) {
-  return callAPI('clearPlayerCountry', { gameCode, userId });
-}
-
-async function releaseAllPlayers(gameCode) {
-  return callAPI('releaseAllPlayers', { gameCode });
 }
 
 // ============ VOTES (Phase 1) ============
@@ -176,13 +151,13 @@ async function saveDeployment(gameCode, userId, deploymentData) {
   });
 }
 
-async function saveCrisisResponse(gameCode, userId, crisisId, optionId, year) {
+async function saveCrisisResponse(gameCode, playerId, crisisId, optionId, responseDetails = null) {
   return callAPI('saveCrisisResponse', { 
     gameCode, 
-    userId, 
+    playerId, 
     crisisId, 
     optionId,
-    year 
+    responseDetails 
   });
 }
 
@@ -227,7 +202,7 @@ async function testConnection() {
 module.exports = {
   // Schema
   setupSchema,
-
+  ensureScoreColumns,
   
   // Users
   getAllUsers,
@@ -244,8 +219,6 @@ module.exports = {
   getPlayers,
   getPlayerActiveGame,
   updatePlayerPoints,
-  clearPlayerCountry,
-  releaseAllPlayers,
   
   // Votes
   saveVote,
