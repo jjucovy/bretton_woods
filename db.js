@@ -88,6 +88,25 @@ async function getPlayerActiveGame(userId) {
   return callAPI('getPlayerActiveGame', { userId });
 }
 
+/**
+ * Save military deployment to database
+ */
+async function saveDeployment(gameCode, userId, deploymentData) {
+  return callAPI('saveDeployment', {
+    gameCode,
+    userId,
+    region: deploymentData.region,
+    branch: deploymentData.branch,
+    troops: deploymentData.troops,
+    year: deploymentData.year
+  });
+}
+
+module.exports = {
+  // ... existing exports ...
+  saveDeployment
+};
+
 async function updatePlayerPoints(gameCode, userId, points, phase = 'phase1', addPoints = 0) {
   return callAPI('updatePlayerPoints', { gameCode, userId, points, phase, addPoints });
 }
