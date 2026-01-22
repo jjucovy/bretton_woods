@@ -2632,12 +2632,12 @@ io.on('connection', (socket) => {
       
       // Handle tie votes
       if (tiedOptions.length > 1) {
-        console.log(`⚠️ TIE DETECTED in round ${room.currentRound}: options ${tiedOptions.join(', ')} tied with ${maxVotes} votes each`);
-        console.log(`   Vote attempt ${room.voteAttempts[roundKey]} of 3`);
+        alert(`⚠️ TIE DETECTED in round ${room.currentRound}: options ${tiedOptions.join(', ')} tied with ${maxVotes} votes each`);
+        alert(`   Vote attempt ${room.voteAttempts[roundKey]} of 3`);
         
         if (room.voteAttempts[roundKey] >= 3) {
           // After 3 attempts, declare no resolution and skip to next round
-          console.log(`❌ No resolution after 3 vote attempts - skipping policy and moving to next round (NO POINTS AWARDED)`);
+          alert(`❌ No resolution after 3 vote attempts - skipping policy and moving to next round (NO POINTS AWARDED)`);
           room.isRevoting = false; // Clear revote flag
           room.gamePhase = 'voting';
           room.roundOutcome = `UNRESOLVED TIE - No consensus after 3 votes (${tiedOptions.map(o => voteTally[o]).join('-')}). Moving to next round.`;
