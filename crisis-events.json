@@ -430,6 +430,29 @@
             "outcome": "Catastrophic for credibility. Every ally panics."
           }
         ],
+        "UK": [
+          {
+            "id": "full-intervention",
+            "text": "🪖 Participate in UN Military Forces",
+            "militaryRequired": { "army": 50000, "navy": 30000, "airForce": 10000 },
+            "cost": 500,
+            "effects": {
+              "gdpGrowth": 1.0,
+              "tradeBalance": 200,
+              "diplomaticPoints": 15
+            },
+            "outcome": "Push to 38th parallel. If advance to China border, China intervenes!"
+          },
+          {
+            "id": "accept-unification",
+            "text": "🏳️ Accept Communist Unification",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": -25
+            },
+            "outcome": "Catastrophic for credibility. Every ally panics."
+          }
+        ],
         "China": [
           {
             "id": "enter-war",
