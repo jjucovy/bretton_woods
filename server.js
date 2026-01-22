@@ -2632,11 +2632,6 @@ io.on('connection', (socket) => {
       
       // Handle tie votes
       if (tiedOptions.length > 1) {
-        const alert = (message) => {
-  console.log(`ALERT: ${message}`);
-};
-
-alert('⚠️ TIE DETECTED in round votes each. Vote again.');
         
         console.log(`⚠️ TIE DETECTED in round ${room.currentRound}: options ${tiedOptions.join(', ')} tied with ${maxVotes} votes each`);
         console.log(`   Vote attempt ${room.voteAttempts[roundKey]} of 3`);
