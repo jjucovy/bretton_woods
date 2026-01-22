@@ -770,6 +770,15 @@ function initializePhase2(roomId) {
   });
   
   console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)`);
+  
+  // Trigger the FIRST crisis immediately when Phase 2 starts (1946)
+  console.log(`🚨 Triggering initial crisis for year 1946...`);
+  triggerCrisisIfNeeded(roomId, 1946);
+  
+  if (room.phase2.crises?.active) {
+    console.log(`⚠️  Initial crisis triggered: ${room.phase2.crises.active.title}`);
+    console.log(`   Players must respond BEFORE submitting first policies`);
+  }
 }
 
 function calculateAgreementBonus(roomId) {
@@ -779,59 +788,249 @@ function calculateAgreementBonus(roomId) {
   const bonus = {};
   const roundHistory = room.roundHistory || [];
   
-  // Analyze each country's Bretton Woods positions
+  // Track what was actually adopted in Phase 1
+  const adoptedPolicies = {
+    currencySystem: null,
+    tradePolicy: null,
+    capitalControls: null,
+    exchangeRates: null,
+    imfPowers: null,
+    debtRelief: null,
+    goldStandard: null,
+    worldBankFocus: null,
+    tariffReductions: null,
+    developmentAid: null
+  };
+  
+  // Extract adopted policies from round history
+  roundHistory.forEach((round, idx) => {
+    const issue = round.issueTitle || '';
+    const winner = round.winningOptionText || '';
+    
+    // Categorize each round's decision
+    if (issue.includes('currency') || issue.includes('monetary')) {
+      adoptedPolicies.currencySystem = winner;
+    } else if (issue.includes('trade') || issue.includes('tariff')) {
+      adoptedPolicies.tradePolicy = winner;
+    } else if (issue.includes('capital') || issue.includes('flow')) {
+      adoptedPolicies.capitalControls = winner;
+    } else if (issue.includes('exchange rate')) {
+      adoptedPolicies.exchangeRates = winner;
+    } else if (issue.includes('IMF')) {
+      adoptedPolicies.imfPowers = winner;
+    } else if (issue.includes('debt')) {
+      adoptedPolicies.debtRelief = winner;
+    } else if (issue.includes('gold')) {
+      adoptedPolicies.goldStandard = winner;
+    } else if (issue.includes('World Bank') || issue.includes('development')) {
+      adoptedPolicies.worldBankFocus = winner;
+    }
+  });
+  
+  console.log('📜 Bretton Woods Adopted Policies:', adoptedPolicies);
+  
+  // Calculate effects for each country based on WHAT WAS ADOPTED
   Object.values(room.players).forEach(player => {
     const country = player.country;
     let gdpBonus = 0;
     let tradeBonus = 0;
-    let cooperationBonus = 0;
+    let inflationMod = 0;
+    let stabilityBonus = 0;
+    const details = [];
     
-    roundHistory.forEach((round, idx) => {
-      const playerVote = room.votes[player.playerId];
-      const winningOption = round.winningOption;
+    // === CURRENCY SYSTEM EFFECTS ===
+    if (adoptedPolicies.currencySystem) {
+      const policy = adoptedPolicies.currencySystem.toLowerCase();
       
-      if (!playerVote || !winningOption) return;
-      
-      // Issue-specific bonuses based on historical outcomes
-      const issueTitle = round.issueTitle || '';
-      
-      // Voted with majority = cooperation benefit
-      if (playerVote === winningOption) {
-        cooperationBonus += 0.3; // GDP bonus for being part of consensus
+      if (policy.includes('gold standard')) {
+        // Gold Standard: Stable but inflexible
+        inflationMod -= 0.5;      // Lower inflation
+        gdpBonus -= 0.3;          // Less flexible monetary policy
+        stabilityBonus += 0.8;    // Very stable
+        tradeBonus -= 200;        // Harder to adjust to shocks
+        details.push('Gold Standard: Low inflation, high stability, less flexibility');
         
-        // Specific issue bonuses
-        if (issueTitle.includes('IMF') || issueTitle.includes('loans')) {
-          // Supporting IMF/loans = better access to capital
-          tradeBonus += 200; // Million USD trade balance improvement
-        }
-        
-        if (issueTitle.includes('tariff') || issueTitle.includes('trade')) {
-          // Supporting free trade = trade benefits
-          gdpBonus += 0.4;
-          tradeBonus += 300;
-        }
-        
-        if (issueTitle.includes('gold') || issueTitle.includes('currency')) {
-          // Supporting gold standard = monetary stability
-          gdpBonus += 0.2;
-        }
-        
-        if (issueTitle.includes('World Bank') || issueTitle.includes('development')) {
-          // Supporting development aid = reconstruction benefits
+      } else if (policy.includes('dollar') || policy.includes('usd')) {
+        // Dollar Standard: Benefits USA most
+        if (country === 'USA') {
+          gdpBonus += 1.5;
+          tradeBonus += 1000;
+          details.push('Dollar Standard: MAJOR benefit for USA (reserve currency)');
+        } else {
           gdpBonus += 0.3;
+          tradeBonus += 200;
+          details.push('Dollar Standard: Moderate benefit (stable system)');
         }
-      } else {
-        // Voted against majority = isolation penalty
-        cooperationBonus -= 0.1;
+        inflationMod += 0.2;      // Slightly more inflation
+        stabilityBonus += 0.5;
+        
+      } else if (policy.includes('floating') || policy.includes('flexible')) {
+        // Floating Rates: Very flexible but volatile
+        gdpBonus += 0.5;          // Can adjust to conditions
+        tradeBonus += 400;        // Easy to stay competitive
+        inflationMod += 0.8;      // Risk of inflation
+        stabilityBonus -= 0.5;    // Less stable
+        details.push('Floating Rates: High flexibility, moderate instability');
+        
+      } else if (policy.includes('fixed') || policy.includes('peg')) {
+        // Fixed Exchange Rates: Balanced
+        gdpBonus += 0.2;
+        tradeBonus += 300;
+        inflationMod -= 0.2;
+        stabilityBonus += 0.6;
+        details.push('Fixed Rates: Balanced approach');
+      }
+    }
+    
+    // === TRADE POLICY EFFECTS ===
+    if (adoptedPolicies.tradePolicy) {
+      const policy = adoptedPolicies.tradePolicy.toLowerCase();
+      
+      if (policy.includes('free trade') || policy.includes('low tariff')) {
+        // Free Trade: Benefits export-oriented economies
+        const exporters = ['USA', 'UK', 'France', 'Argentina'];
+        if (exporters.includes(country)) {
+          gdpBonus += 1.2;
+          tradeBonus += 800;
+          details.push('Free Trade: MAJOR benefit for exporters');
+        } else {
+          gdpBonus += 0.3;
+          tradeBonus += 200;
+          details.push('Free Trade: Moderate benefit');
+        }
+        
+      } else if (policy.includes('protect') || policy.includes('high tariff')) {
+        // Protectionism: Benefits developing economies
+        const developers = ['China', 'India', 'USSR'];
+        if (developers.includes(country)) {
+          gdpBonus += 0.8;
+          tradeBonus -= 200;
+          details.push('Protectionism: Benefits developing industry');
+        } else {
+          gdpBonus -= 0.5;
+          tradeBonus -= 500;
+          details.push('Protectionism: Hurts established exporters');
+        }
+        
+      } else if (policy.includes('gradual') || policy.includes('moderate')) {
+        // Moderate Tariffs: Balanced
+        gdpBonus += 0.4;
+        tradeBonus += 300;
+        details.push('Moderate Trade: Balanced approach');
+      }
+    }
+    
+    // === CAPITAL CONTROLS EFFECTS ===
+    if (adoptedPolicies.capitalControls) {
+      const policy = adoptedPolicies.capitalControls.toLowerCase();
+      
+      if (policy.includes('free') || policy.includes('open')) {
+        // Free Capital Flows: Benefits capital-rich countries
+        const capitalRich = ['USA', 'UK'];
+        if (capitalRich.includes(country)) {
+          gdpBonus += 0.8;
+          tradeBonus += 400;
+          details.push('Free Capital: Major benefit for capital exporters');
+        } else {
+          gdpBonus -= 0.3;
+          details.push('Free Capital: Risk of capital flight');
+        }
+        
+      } else if (policy.includes('restrict') || policy.includes('control')) {
+        // Capital Controls: Protects developing economies
+        const developing = ['China', 'India', 'Argentina'];
+        if (developing.includes(country)) {
+          gdpBonus += 0.5;
+          stabilityBonus += 0.4;
+          details.push('Capital Controls: Protects from speculation');
+        } else {
+          gdpBonus -= 0.2;
+          details.push('Capital Controls: Limits investment opportunities');
+        }
+      }
+    }
+    
+    // === IMF POWERS EFFECTS ===
+    if (adoptedPolicies.imfPowers) {
+      const policy = adoptedPolicies.imfPowers.toLowerCase();
+      
+      if (policy.includes('strong') || policy.includes('enforce')) {
+        // Strong IMF: Helps countries in crisis
+        stabilityBonus += 0.6;
+        details.push('Strong IMF: Better crisis response');
+        
+        // Major powers get more voting weight
+        if (['USA', 'UK', 'France'].includes(country)) {
+          gdpBonus += 0.4;
+          details.push('Strong IMF: Influential voting power');
+        }
+        
+      } else if (policy.includes('weak') || policy.includes('limited')) {
+        // Weak IMF: Countries more independent
+        stabilityBonus -= 0.3;
+        details.push('Weak IMF: Less crisis support');
+      }
+    }
+    
+    // === WORLD BANK / DEVELOPMENT AID EFFECTS ===
+    if (adoptedPolicies.worldBankFocus) {
+      const policy = adoptedPolicies.worldBankFocus.toLowerCase();
+      
+      if (policy.includes('infrastructure') || policy.includes('development')) {
+        // Development Aid: Benefits developing countries
+        const developing = ['China', 'India', 'Argentina'];
+        if (developing.includes(country)) {
+          gdpBonus += 1.0;
+          tradeBonus += 500;
+          details.push('Development Aid: Major reconstruction benefit');
+        }
+        
+      } else if (policy.includes('stabilization') || policy.includes('emergency')) {
+        // Emergency Aid: Benefits all
+        gdpBonus += 0.3;
+        stabilityBonus += 0.4;
+        details.push('Emergency Aid: Crisis prevention benefit');
+      }
+    }
+    
+    // === COOPERATION BONUS ===
+    // Countries that voted with majority on most issues
+    let cooperationScore = 0;
+    roundHistory.forEach(round => {
+      const playerVote = Object.keys(room.players).find(key => 
+        room.players[key].country === country
+      );
+      if (playerVote && room.votes[playerVote] === round.winningOptionId) {
+        cooperationScore++;
       }
     });
     
-    // Store detailed bonuses
+    const cooperationRate = cooperationScore / Math.max(roundHistory.length, 1);
+    if (cooperationRate > 0.7) {
+      gdpBonus += 0.5;
+      tradeBonus += 300;
+      details.push(`High cooperation (${Math.round(cooperationRate * 100)}%): Diplomatic benefits`);
+    } else if (cooperationRate < 0.3) {
+      gdpBonus -= 0.3;
+      tradeBonus -= 200;
+      details.push(`Low cooperation (${Math.round(cooperationRate * 100)}%): Isolated`);
+    }
+    
+    // Store bonuses
     bonus[country] = {
-      gdpBonus: gdpBonus + cooperationBonus,
-      tradeBonus: tradeBonus,
-      description: `Bretton Woods alignment: ${cooperationBonus > 0 ? 'cooperative' : 'isolated'}`
+      gdpBonus,
+      tradeBonus,
+      inflationMod,
+      stabilityBonus,
+      adoptedPolicies,
+      details
     };
+    
+    console.log(`  ${country} Bretton Woods effects:`, {
+      gdp: gdpBonus > 0 ? `+${gdpBonus.toFixed(1)}%` : `${gdpBonus.toFixed(1)}%`,
+      trade: tradeBonus > 0 ? `+$${tradeBonus}M` : `$${tradeBonus}M`,
+      inflation: inflationMod > 0 ? `+${inflationMod.toFixed(1)}%` : `${inflationMod.toFixed(1)}%`
+    });
   });
   
   return bonus;
@@ -929,37 +1128,70 @@ function triggerCrisisIfNeeded(roomId, year) {
     room.phase2.crises.history = [];
   }
   
+  // CRITICAL: Map Phase 2 years (1946-1952) to crisis indices (0-6)
+  // This ensures ALL 7 crises trigger, one per year
+  const yearIndex = year - 1946; // 1946=0, 1947=1, ..., 1952=6
+  
+  console.log(`📅 Year ${year} → Crisis Index ${yearIndex}`);
+  
   // Find ALL crisis events for this year that haven't been triggered yet
   const availableCrises = crisisEventsData.crisisEvents.filter(event => 
     event.year === year && 
     !room.phase2.crises.history.find(h => h.id === event.id)
   );
   
-  // Randomly select one if multiple available
-  const availableCrisis = availableCrises.length > 0 
-    ? availableCrises[Math.floor(Math.random() * availableCrises.length)]
-    : null;
+  console.log(`   Found ${availableCrises.length} available crises for year ${year}`);
   
-  if (availableCrisis) {
+  if (availableCrises.length === 0) {
+    console.log(`⚠️  WARNING: No crises found for year ${year}`);
+    console.log(`   Total crises in database: ${crisisEventsData.crisisEvents.length}`);
+    console.log(`   Years covered: ${crisisEventsData.crisisEvents.map(c => c.year).join(', ')}`);
+    
+    // FALLBACK: If no crisis for this specific year, select from ANY unused crisis
+    const anyUnusedCrisis = crisisEventsData.crisisEvents.find(event =>
+      !room.phase2.crises.history.find(h => h.id === event.id)
+    );
+    
+    if (anyUnusedCrisis) {
+      console.log(`   Using fallback crisis: ${anyUnusedCrisis.title} (original year: ${anyUnusedCrisis.year})`);
+      availableCrises.push(anyUnusedCrisis);
+    } else {
+      console.log(`   No unused crises available`);
+      return;
+    }
+  }
+  
+  // Select one crisis (randomly if multiple available)
+  const selectedCrisis = availableCrises.length > 1 
+    ? availableCrises[Math.floor(Math.random() * availableCrises.length)]
+    : availableCrises[0];
+  
+  if (selectedCrisis) {
     // Get the list of countries that are actually playing (as names)
     const playingCountryNames = Object.values(room.players).map(p => p.country);
     
-    console.log(`🎲 Random selection: ${availableCrises.length} crisis options for ${year}, chose: ${availableCrisis.title}`);
-    console.log(`Playing countries:`, playingCountryNames);
+    console.log(`🚨 CRISIS TRIGGERED: ${selectedCrisis.title}`);
+    console.log(`   Year: ${year}`);
+    console.log(`   ID: ${selectedCrisis.id}`);
+    console.log(`   Playing countries:`, playingCountryNames);
     
-    const transformedCrisis = transformCrisisOptions(availableCrisis, playingCountryNames);
+    const transformedCrisis = transformCrisisOptions(selectedCrisis, playingCountryNames);
     room.phase2.crises.active = {
       ...transformedCrisis,
       triggeredAt: Date.now(),
-      resolved: false
+      resolved: false,
+      year: year // Store which year this crisis is for
     };
     room.phase2.crises.responses = {};
     
     console.log(`✋ Crisis active - waiting for player responses`);
-    console.log(`Affected countries (filtered):`, transformedCrisis.affectedCountries);
-    console.log(`Transformed options keys:`, Object.keys(room.phase2.crises.active.options));
-    console.log(`Playing countries:`, playingCountryNames);
-    console.log(`Full transformed crisis options:`, JSON.stringify(Object.keys(room.phase2.crises.active.options)));
+    console.log(`   Affected countries (filtered):`, transformedCrisis.affectedCountries);
+    console.log(`   Available options: ${Object.keys(room.phase2.crises.active.options).length}`);
+    
+    // Log crisis count
+    const triggeredCount = room.phase2.crises.history.length + 1; // +1 for active
+    const totalYears = 7; // 1946-1952
+    console.log(`   Progress: ${triggeredCount}/${totalYears} crises triggered`);
   }
 }
 
@@ -1203,9 +1435,17 @@ function calculateYearEconomics(roomId) {
     }
     
     // Bretton Woods agreement bonuses
-    const bwBonus = agreementBonuses[country] || { gdpBonus: 0, tradeBonus: 0 };
+    const bwBonus = agreementBonuses[country] || { 
+      gdpBonus: 0, 
+      tradeBonus: 0, 
+      inflationMod: 0, 
+      stabilityBonus: 0 
+    };
     gdpGrowth += bwBonus.gdpBonus;
     tradeBalance += bwBonus.tradeBonus;
+    // inflation will be defined later, store mod for now
+    const inflationFromBW = bwBonus.inflationMod || 0;
+    const stabilityFromBW = bwBonus.stabilityBonus || 0;
     
     // Country-specific modifiers
     if (country === 'USSR') {
@@ -1354,6 +1594,9 @@ function calculateYearEconomics(roomId) {
     
     inflation = Math.max(0, inflation + (Math.random() - 0.5) * 3);
     
+    // Apply Bretton Woods inflation modifier
+    inflation += inflationFromBW;
+    
     // === UNEMPLOYMENT ===
     let unemployment = prevData.unemployment;
     
@@ -1389,6 +1632,122 @@ function calculateYearEconomics(roomId) {
     }
     goldReserves = Math.max(0, goldReserves);
     
+    // Calculate stability (0-100 scale)
+    // Lower inflation, unemployment, and higher GDP growth = more stable
+    let stability = 50; // Base stability
+    
+    // Inflation impact on stability
+    if (inflation < 3) {
+      stability += 20;
+    } else if (inflation < 5) {
+      stability += 10;
+    } else if (inflation > 10) {
+      stability -= 20;
+    } else if (inflation > 15) {
+      stability -= 30;
+    }
+    
+    // GDP growth impact
+    if (gdpGrowth > 4) {
+      stability += 10;
+    } else if (gdpGrowth < 0) {
+      stability -= 20;
+    }
+    
+    // Unemployment impact
+    if (unemployment < 4) {
+      stability += 10;
+    } else if (unemployment > 8) {
+      stability -= 15;
+    }
+    
+    // Apply Bretton Woods stability bonus
+    stability += (stabilityFromBW || 0) * 10; // Scale to 0-100
+    
+    // === DEPLOYMENT CONFLICT EFFECTS ===
+    // Check if this country is involved in any military conflicts
+    const conflicts = room.phase2.conflicts || [];
+    const regionalControl = room.phase2.regionalControl || {};
+    
+    const countryConflicts = conflicts.filter(c => c.countries.includes(country));
+    
+    if (countryConflicts.length > 0) {
+      console.log(`⚔️  ${country} involved in ${countryConflicts.length} conflict(s):`);
+      
+      countryConflicts.forEach(conflict => {
+        // Apply economic penalties based on conflict severity
+        let gdpPenalty = 0;
+        let stabilityPenalty = 0;
+        let tradePenalty = 0;
+        
+        if (conflict.level === 'high') {
+          gdpPenalty = 1.5;        // 1.5% GDP loss
+          stabilityPenalty = 20;   // Major instability
+          tradePenalty = 500;      // $500M trade disruption
+          console.log(`   🔴 HIGH conflict in ${conflict.region}: Major economic impact`);
+        } else if (conflict.level === 'medium') {
+          gdpPenalty = 0.8;        // 0.8% GDP loss
+          stabilityPenalty = 12;   // Moderate instability
+          tradePenalty = 300;      // $300M trade disruption
+          console.log(`   🟡 MEDIUM conflict in ${conflict.region}: Moderate impact`);
+        } else {
+          gdpPenalty = 0.3;        // 0.3% GDP loss
+          stabilityPenalty = 5;    // Minor instability
+          tradePenalty = 100;      // $100M trade disruption
+          console.log(`   🟢 LOW conflict in ${conflict.region}: Minor impact`);
+        }
+        
+        // Apply penalties
+        gdpGrowth -= gdpPenalty;
+        stability -= stabilityPenalty;
+        tradeBalance -= tradePenalty;
+        
+        console.log(`      GDP: -${gdpPenalty}% | Stability: -${stabilityPenalty} | Trade: -$${tradePenalty}M`);
+      });
+    }
+    
+    // === REGIONAL CONTROL BONUSES ===
+    // Countries that control regions get economic benefits
+    let regionalBonuses = {
+      gdp: 0,
+      trade: 0,
+      details: []
+    };
+    
+    Object.entries(regionalControl).forEach(([region, control]) => {
+      if (control.controller === country) {
+        const regionData = deploymentSystem.REGIONS[region];
+        
+        if (regionData) {
+          // Apply control bonuses from region
+          const gdpBonus = regionData.controlBonus.gdp || 0;
+          const tradeBonus = regionData.controlBonus.tradeBonus || regionData.tradeValue * 0.1;
+          
+          regionalBonuses.gdp += gdpBonus;
+          regionalBonuses.trade += tradeBonus;
+          regionalBonuses.details.push(`${region}: +${gdpBonus}% GDP, +$${Math.round(tradeBonus)}M trade`);
+          
+          // Contested regions give reduced benefits
+          if (control.contested) {
+            regionalBonuses.gdp *= 0.5;
+            regionalBonuses.trade *= 0.5;
+            regionalBonuses.details.push(`  (contested - benefits halved)`);
+          }
+        }
+      }
+    });
+    
+    if (regionalBonuses.gdp > 0 || regionalBonuses.trade > 0) {
+      console.log(`🏆 ${country} regional control bonuses:`);
+      regionalBonuses.details.forEach(d => console.log(`   ${d}`));
+      
+      gdpGrowth += regionalBonuses.gdp;
+      tradeBalance += regionalBonuses.trade;
+    }
+    
+    // Clamp to 0-100
+    stability = Math.max(0, Math.min(100, stability));
+    
     // Store results
     tempResults[country] = {
       gdpGrowth: Math.round(gdpGrowth * 10) / 10,
@@ -1398,6 +1757,7 @@ function calculateYearEconomics(roomId) {
       inflation: Math.round(inflation * 10) / 10,
       industrialOutput: Math.round(industrialOutput),
       militarySpending: milSpending,
+      stability: Math.round(stability),
       military: {
         army: armySize,
         navy: navySize,
@@ -1653,11 +2013,26 @@ function resolveCrisisEffects(roomId) {
     ...crisis,
     responses,
     resolvedAt: Date.now(),
+    resolved: true,
     autoResolved: true
   });
   
+  // Mark crisis as resolved before clearing
+  if (room.phase2.crises.active) {
+    room.phase2.crises.active.resolved = true;
+  }
+  
+  // Clear active crisis to allow policy submissions
   room.phase2.crises.active = null;
   room.phase2.crises.responses = {};
+  
+  console.log(`✅ Crisis resolved - players can now submit policies for year ${currentYear}`);
+  
+  // Broadcast that crisis is resolved and policy submission is now enabled
+  io.to(roomId).emit('crisisResolved', {
+    message: 'Crisis has been resolved. You may now submit your economic policies.',
+    year: currentYear
+  });
   
   // UPDATE SCORES IMMEDIATELY: Award diplomatic points as crisis scores
   Object.entries(responses).forEach(([country, response]) => {
@@ -2219,6 +2594,13 @@ io.on('connection', (socket) => {
     room.votes[playerId] = choice;
     console.log(`Vote received: ${playerId} voted ${choice} in room ${roomId}`);
     
+    // Send confirmation back to the voter
+    socket.emit('voteConfirmed', {
+      success: true,
+      choice: choice,
+      playerId: playerId
+    });
+    
     // Check if all players have voted
     const playerIds = Object.keys(room.players);
     const allVoted = playerIds.every(id => room.votes[id]);
@@ -2263,6 +2645,16 @@ io.on('connection', (socket) => {
           room.voteTally = voteTally;
           room.roundScores = {}; // No points awarded for unresolved tie
           
+          // BROADCAST TIE ANNOUNCEMENT
+          io.to(roomId).emit('tieVoteUnresolved', {
+            message: `🚫 UNRESOLVED TIE - No consensus reached after 3 voting attempts`,
+            details: `Options ${tiedOptions.map(o => o.toUpperCase()).join(' and ')} each received ${maxVotes} votes`,
+            tiedOptions: tiedOptions.map(o => o.toUpperCase()),
+            voteCounts: voteTally,
+            attempts: 3,
+            outcome: 'No points awarded. Moving to next round.'
+          });
+          
           broadcastToRoom(roomId);
           saveState();
           
@@ -2290,6 +2682,17 @@ io.on('connection', (socket) => {
           room.voteTally = voteTally;
           room.roundOutcome = `TIE! Revoting required (attempt ${room.voteAttempts[roundKey]}/3)`;
           room.isRevoting = true; // Flag to show revote state
+          
+          // BROADCAST TIE ANNOUNCEMENT FOR REVOTE
+          io.to(roomId).emit('tieVoteRevote', {
+            message: `⚖️ TIE VOTE! Revoting Required`,
+            details: `Options ${tiedOptions.map(o => o.toUpperCase()).join(' and ')} each received ${maxVotes} votes`,
+            tiedOptions: tiedOptions.map(o => o.toUpperCase()),
+            voteCounts: voteTally,
+            attempt: room.voteAttempts[roundKey],
+            maxAttempts: 3,
+            instruction: 'Please vote again to break the tie'
+          });
           
           broadcastToRoom(roomId);
           saveState();
@@ -2538,6 +2941,16 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Check if there's an active crisis that must be resolved first
+    if (room.phase2.crises?.active && !room.phase2.crises.active.resolved) {
+      console.log(`   ❌ POLICY BLOCKED: Active crisis must be resolved first`);
+      socket.emit('policyRejected', {
+        reason: 'You must respond to the active crisis before submitting policies',
+        crisis: room.phase2.crises.active
+      });
+      return;
+    }
+    
     // Find player by playerId (should match database player_id)
     const playersInRoom = Object.keys(room.players).map(key => ({
       key,
@@ -2586,6 +2999,14 @@ io.on('connection', (socket) => {
     
     console.log(`   ✅ Policy stored for ${player.country}`);
     console.log(`Player ${playerKey} (${player.country}) submitted policy for ${currentYear}`);
+    
+    // Send confirmation back to the submitter
+    socket.emit('policyConfirmed', {
+      success: true,
+      country: player.country,
+      year: currentYear,
+      policy: room.phase2.policies[currentYear][player.country]
+    });
     
     // Sync policy to MySQL with full details
     const submittedPolicy = room.phase2.policies[currentYear][player.country];
@@ -2665,9 +3086,29 @@ io.on('connection', (socket) => {
       dbSync(db.updateGame, room.gameCode, { currentRound: 10 + phase2Round });
       console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
-      // Check for crisis events this year
-      console.log(`   checking crises...`);
+      // ===== TRIGGER CRISIS IMMEDIATELY AT START OF NEW YEAR =====
+      console.log(`🚨 Checking for crisis at START of year ${room.phase2.currentYear}...`);
       triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+      
+      // If crisis was triggered, broadcast it and STOP (wait for responses)
+      if (room.phase2.crises?.active) {
+        console.log(`⚠️  CRISIS ACTIVE: ${room.phase2.crises.active.title}`);
+        console.log(`   Players must respond BEFORE submitting policies`);
+        
+        // Broadcast crisis to all players
+        io.to(roomId).emit('crisisTriggered', {
+          crisis: room.phase2.crises.active,
+          year: room.phase2.currentYear,
+          message: 'CRISIS! You must respond before submitting economic policies.'
+        });
+        
+        broadcastToRoom(roomId);
+        saveState();
+        
+        // DO NOT allow policy submissions yet - crisis must be resolved first
+        console.log(`[AUTO] Year advanced to ${room.phase2.currentYear}, but PAUSED for crisis resolution`);
+        return;
+      }
       
       console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
       
@@ -2713,34 +3154,60 @@ io.on('connection', (socket) => {
     
     room.phase2.deployments.push(deploymentRecord);
     
-    // Check for conflicts
-    const conflictZones = ['Eastern Europe', 'East Asia', 'Middle East', 'Southeast Asia'];
-    if (conflictZones.includes(deployment.region)) {
-      // Find if another country has troops there
-      const otherDeployments = room.phase2.deployments.filter(d => 
-        d.region === deployment.region && 
-        d.country !== deployment.country &&
-        d.year === room.phase2.currentYear
-      );
+    console.log(`${player.country} deployed ${deployment.troops} ${deployment.branch || 'troops'} to ${deployment.region}`);
+    
+    // Use sophisticated conflict detection from deployment-impacts.js
+    const conflicts = deploymentSystem.detectDeploymentConflicts(
+      room.phase2.deployments, 
+      room.phase2.currentYear
+    );
+    
+    // Store conflicts
+    room.phase2.conflicts = conflicts;
+    
+    // Calculate regional control
+    const regionalControl = deploymentSystem.calculateRegionalControl(
+      room.phase2.deployments,
+      room.phase2.currentYear
+    );
+    room.phase2.regionalControl = regionalControl;
+    
+    // Log conflicts
+    if (conflicts.length > 0) {
+      conflicts.forEach(conflict => {
+        console.log(`⚠️  CONFLICT (${conflict.level}): ${conflict.description}`);
+        console.log(`   Strategic Importance: ${conflict.strategicImportance}/10`);
+      });
       
-      if (otherDeployments.length > 0) {
-        // Create conflict alert
-        if (!room.phase2.conflicts) {
-          room.phase2.conflicts = [];
-        }
-        
-        room.phase2.conflicts.push({
+      // Broadcast conflict alerts to all players
+      io.to(roomId).emit('militaryConflict', {
+        conflicts: conflicts,
+        newDeployment: {
+          country: deployment.country,
           region: deployment.region,
-          countries: [deployment.country, ...otherDeployments.map(d => d.country)],
-          year: room.phase2.currentYear,
-          timestamp: Date.now()
-        });
-        
-        console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
-      }
+          troops: deployment.troops,
+          branch: deployment.branch
+        }
+      });
     }
     
-    console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
+    // Log regional control changes
+    Object.entries(regionalControl).forEach(([region, control]) => {
+      if (control.controller) {
+        console.log(`   ${control.controller} controls ${region} (strength: ${Math.round(control.strength)})`);
+        if (control.contested) {
+          console.log(`      ⚠️  CONTESTED by: ${control.competitors.join(', ')}`);
+        }
+      }
+    });
+    
+    // Send confirmation with conflict info
+    socket.emit('deploymentConfirmed', {
+      success: true,
+      deployment: deploymentRecord,
+      conflicts: conflicts,
+      regionalControl: regionalControl
+    });
     
     // Calculate deployment impacts using deployment system
     try {
@@ -3104,8 +3571,28 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check for crisis events this year
+    // ===== TRIGGER CRISIS IMMEDIATELY AT START OF NEW YEAR =====
+    console.log(`🚨 Checking for crisis at START of year ${room.phase2.currentYear}...`);
     triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+    
+    // If crisis was triggered, broadcast it and STOP (wait for responses)
+    if (room.phase2.crises?.active) {
+      console.log(`⚠️  CRISIS ACTIVE: ${room.phase2.crises.active.title}`);
+      console.log(`   Players must respond BEFORE submitting policies`);
+      
+      // Broadcast crisis to all players
+      io.to(roomId).emit('crisisTriggered', {
+        crisis: room.phase2.crises.active,
+        year: room.phase2.currentYear,
+        message: 'CRISIS! You must respond before submitting economic policies.'
+      });
+      
+      broadcastToRoom(roomId);
+      saveState();
+      
+      console.log(`✅ Advanced to year ${room.phase2.currentYear}, PAUSED for crisis resolution`);
+      return;
+    }
     
     console.log(`✅ Advanced to year ${room.phase2.currentYear}`);
     
@@ -3302,19 +3789,52 @@ io.on('connection', (socket) => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 8); // 6 char random string
       const newGameCode = `${roomId}-${timestamp}-${random}`;
-      console.log(`Creating NEW game with unique code: ${newGameCode}, creator userId: ${userId}`);
+      console.log(`╔════════════════════════════════════════════════════════╗`);
+      console.log(`║           CREATING NEW GAME IN DATABASE               ║`);
+      console.log(`╚════════════════════════════════════════════════════════╝`);
+      console.log(`📋 New gameCode: ${newGameCode}`);
+      console.log(`👤 Creator userId: ${userId}`);
+      console.log(`📞 Calling db.createGame()...`);
       
       const result = await db.createGame(newGameCode, userId);
-      console.log('Create game result:', JSON.stringify(result));
       
-      if (!result || !result.game_id) {
-        console.error('ERROR: Failed to create new game in database');
-        socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database' });
+      console.log(`╔════════════════════════════════════════════════════════╗`);
+      console.log(`║           DATABASE RESPONSE RECEIVED                   ║`);
+      console.log(`╚════════════════════════════════════════════════════════╝`);
+      console.log(`📦 Full result object:`, JSON.stringify(result, null, 2));
+      console.log(`🔑 result.game_id:`, result?.game_id);
+      console.log(`✓ result.existed:`, result?.existed);
+      console.log(`⚠️  result.error:`, result?.error);
+      console.log(`⚠️  result.success:`, result?.success);
+      
+      if (!result) {
+        console.error('❌ ERROR: db.createGame returned null/undefined');
+        socket.emit('startNewGameResult', { success: false, message: 'Database returned no result' });
+        return;
+      }
+      
+      if (result.error) {
+        console.error('❌ ERROR: Database returned error:', result.error);
+        socket.emit('startNewGameResult', { success: false, message: result.error });
+        return;
+      }
+      
+      if (!result.game_id) {
+        console.error('❌ ERROR: No game_id in result');
+        console.error('   This means the API did not create a new game');
+        console.error('   Full result:', JSON.stringify(result));
+        socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database - no game_id returned' });
         return;
       }
       
       const newGameId = result.game_id;
-      console.log(`✅ NEW game created with game_id: ${newGameId}, gameCode: ${newGameCode}`);
+      console.log(`╔════════════════════════════════════════════════════════╗`);
+      console.log(`║           NEW GAME CREATED SUCCESSFULLY                ║`);
+      console.log(`╚════════════════════════════════════════════════════════╝`);
+      console.log(`✅ NEW game_id: ${newGameId}`);
+      console.log(`✅ NEW gameCode: ${newGameCode}`);
+      console.log(`✅ Was this a brand new game? ${result.existed === false ? 'YES' : 'NO (REUSED EXISTING)'}`);
+      console.log(``);
       
       // Set initial status
       await dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
