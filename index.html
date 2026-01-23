@@ -3875,7 +3875,7 @@ socket.on('militaryConflict', (data) => {
     </div>
   )}
   
-  {gamePhase === 'battle-results' && battleResults && (
+  {gameState.gamePhase === 'battle-results' && battleResults && (
     <div className="battle-results">
       <h2>⚔️ Battle Results - Year {currentYear}</h2>
       {battleResults.map(result => (
