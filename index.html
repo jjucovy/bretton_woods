@@ -1561,7 +1561,7 @@
   );
 }
 
-        function YearEndBattlePhase({ 
+ function YearEndBattlePhase({ 
   gameCode, 
   gameYear, 
   currentCountry, 
@@ -1569,6 +1569,47 @@
   onPhaseProgress, 
   socket 
 }) {
+  const [pendingBattles, setPendingBattles] = React.useState([]);
+  const [battleResults, setBattleResults] = React.useState([]);
+  const [submittedDecisions, setSubmittedDecisions] = React.useState(new Set());
+  const [selectedBattle, setSelectedBattle] = React.useState(null);
+  const [proposals, setProposals] = React.useState([]);
+  
+  React.useEffect(() => {
+    // Load pending battles for this year from gameState
+    const conflicts = gameState?.phase2?.conflicts || [];
+    const battles = gameState?.pendingBattles || [];
+    
+    setPendingBattles(battles);
+    
+    // Listen for battle events
+    socket.on('battlesDetected', (data) => {
+      console.log('Battles detected:', data);
+      setPendingBattles(data.battles);
+    });
+    
+    socket.on('battleDecisionSubmitted', (data) => {
+      console.log('Battle decision submitted:', data);
+      setSubmittedDecisions(prev => new Set([...prev, data.battleId]));
+    });
+    
+    socket.on('battleResolved', (data) => {
+      console.log('Battle resolved:', data);
+      setBattleResults(prev => [...prev, data]);
+      setPendingBattles(prev => prev.filter(b => b.battle_id !== data.battleId));
+    });
+    
+    socket.on('allianceProposed', (data) => {
+      setProposals(prev => [...prev, data]);
+    });
+    
+    return () => {
+      socket.off('battlesDetected');
+      socket.off('battleDecisionSubmitted');
+      socket.off('battleResolved');
+      socket.off('allianceProposed');
+    };
+  }, [socket, gameState]); {
   const [pendingBattles, setPendingBattles] = React.useState([]);
   const [battleResults, setBattleResults] = React.useState([]);
   const [submittedDecisions, setSubmittedDecisions] = React.useState(new Set());
