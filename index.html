@@ -1574,7 +1574,196 @@
   const [submittedDecisions, setSubmittedDecisions] = React.useState(new Set());
   const [selectedBattle, setSelectedBattle] = React.useState(null);
   const [proposals, setProposals] = React.useState([]);
+
+  React.useEffect(() => {
+    console.log('🔵 YearEndBattlePhase mounted');
+    console.log('   gameCode:', gameCode);
+    console.log('   gameYear:', gameYear);
+    console.log('   currentCountry:', currentCountry);
+    
+    // Listen for battle events
+    socket.on('battlesDetected', (data) => {
+      console.log('⚔️ Battles detected event:', data);
+      setPendingBattles(data.battles || []);
+    });
+    
+    socket.on('battleDecisionSubmitted', (data) => {
+      console.log('✅ Battle decision submitted:', data);
+      setSubmittedDecisions(prev => new Set([...prev, `${data.battleId}_${data.country}`]));
+    });
+
+    socket.on('battleResolved', (data) => {
+      console.log('🏆 Battle resolved:', data);
+      setBattleResults(prev => [...prev, data]);
+      setPendingBattles(prev => prev.filter(b => b.battle_id !== data.battle_id));
+    });
+    
+    socket.on('allianceProposed', (data) => {
+      console.log('🤝 Alliance proposed:', data);
+      setProposals(prev => [...prev, data]);
+    });
+      
+    return () => {
+      socket.off('battlesDetected');
+      socket.off('battleDecisionSubmitted');
+      socket.off('battleResolved');
+      socket.off('allianceProposed');
+    };
+  }, [socket, gameCode]);
   
+  const handleBattleDecision = (battle, decision, strategy) => {
+    console.log('📤 Submitting battle decision:', { battle, decision, strategy });
+    socket.emit('submitBattleDecision', {
+      roomId: gameCode,
+      playerId: playerId, // Need to get playerId from parent
+      battleId: battle.battle_id,
+      decision,
+      strategy
+    });
+    setSelectedBattle(null);
+  };
+  
+  const handleAllianceAccept = (allianceId) => {
+    socket.emit('respondToAlliance', {
+      allianceId,
+      gameCode,
+      response: 'ACCEPTED'
+    });
+  };
+  
+  const handleAllianceReject = (allianceId) => {
+    socket.emit('respondToAlliance', {
+      allianceId,
+      gameCode,
+      response: 'REJECTED'
+    });
+  };
+  
+  return (
+    <div style={styles.battlePhaseContainer}>
+      <h2 style={{ color: '#dc2626', fontSize: '2rem', marginBottom: '20px' }}>
+        ⚔️ Year {gameYear} - Military Conflicts
+      </h2>
+      
+      {proposals.length > 0 && (
+        <div style={styles.section}>
+          <h3>🤝 Alliance Proposals</h3>
+          {proposals.map(p => (
+            <AllianceProposalModal
+              key={p.allianceId}
+              proposal={p}
+              country={currentCountry}
+              onAccept={handleAllianceAccept}
+              onReject={handleAllianceReject}
+              onCancel={() => setProposals(prev => prev.filter(x => x.allianceId !== p.allianceId))}
+            />
+          ))}
+        </div>
+      )}
+      
+      {pendingBattles.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={{ color: '#dc2626', fontSize: '1.5rem', marginBottom: '16px' }}>
+            ⚔️ Pending Battles ({pendingBattles.length})
+          </h3>
+          <p style={{ marginBottom: '20px', color: '#64748b' }}>
+            Make your battle decisions for each conflict:
+          </p>
+          {pendingBattles.map(battle => {
+            const isYourBattle = 
+              (battle.country1 === currentCountry || battle.country2 === currentCountry);
+            const hasDecided = submittedDecisions.has(`${battle.battle_id}_${currentCountry}`);
+            
+            return (
+              <div key={battle.battle_id} style={styles.pendingBattleCard}>
+                <div style={styles.pendingBattleInfo}>
+                  <strong style={{ fontSize: '1.2rem', color: '#1e293b' }}>{battle.region}</strong>
+                  <div style={{ marginTop: '8px', fontSize: '1rem', color: '#475569' }}>
+                    <span style={{ fontWeight: 'bold', color: '#3b82f6' }}>{battle.country1}</span>
+                    {' '}({battle.country1_troops.toLocaleString()} troops) 
+                    <span style={{ margin: '0 12px', color: '#ef4444', fontWeight: 'bold' }}>VS</span>
+                    <span style={{ fontWeight: 'bold', color: '#8b5cf6' }}>{battle.country2}</span>
+                    {' '}({battle.country2_troops.toLocaleString()} troops)
+                  </div>
+                  {battle.description && (
+                    <div style={{ marginTop: '8px', fontSize: '0.9rem', color: '#64748b', fontStyle: 'italic' }}>
+                      {battle.description}
+                    </div>
+                  )}
+                </div>
+                {isYourBattle && !hasDecided && (
+                  <button
+                    onClick={() => setSelectedBattle(battle)}
+                    style={styles.decideButton}
+                  >
+                    ⚔️ Make Decision
+                  </button>
+                )}
+                {isYourBattle && hasDecided && (
+                  <span style={styles.submitted}>✓ Decision Submitted</span>
+                )}
+                {!isYourBattle && (
+                  <span style={{ color: '#64748b', fontSize: '0.9rem' }}>
+                    (Awaiting other players)
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      
+      {selectedBattle && (
+        <BattleDecisionModal
+          battle={selectedBattle}
+          country={currentCountry}
+          onSubmit={(data) => handleBattleDecision(selectedBattle, data.decision, data.strategy)}
+          onCancel={() => setSelectedBattle(null)}
+        />
+      )}
+      
+      {battleResults.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={{ color: '#16a34a', fontSize: '1.5rem', marginBottom: '16px' }}>
+            ✓ Battle Results
+          </h3>
+          {battleResults.map((result, idx) => (
+            <BattleResultsCard key={idx} battle={result} />
+          ))}
+        </div>
+      )}
+      
+      <BattleHistoryPanel battles={[...pendingBattles, ...battleResults]} gameYear={gameYear} />
+      
+      {pendingBattles.length === 0 && battleResults.length > 0 && (
+        <button 
+          onClick={onPhaseProgress}
+          style={styles.continueButton}
+        >
+          Continue to Next Year →
+        </button>
+      )}
+      
+      {pendingBattles.length === 0 && battleResults.length === 0 && (
+        <div style={{
+          padding: '40px',
+          textAlign: 'center',
+          background: '#f8fafc',
+          borderRadius: '12px',
+          border: '2px solid #e2e8f0'
+        }}>
+          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⏳</div>
+          <h3 style={{ color: '#64748b', margin: 0 }}>
+            Waiting for Battle Detection...
+          </h3>
+          <p style={{ color: '#94a3b8', marginTop: '8px' }}>
+            The system will automatically detect military conflicts when the year advances.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
   React.useEffect(() => {
     // Load pending battles for this year from gameState
     const conflicts = gameState?.phase2?.conflicts || [];
@@ -4143,28 +4332,29 @@ socket.on('militaryConflict', (data) => {
                         )}
                       </div>
                     )}
-
-                    {/* UNKNOWN PHASE - Debug Fallback */}
-                    {gameState.gamePhase !== 'voting' && 
-                     gameState.gamePhase !== 'results' && 
-                     gameState.gamePhase !== 'phase2' &&
-                     gameState.gamePhase !== 'complete' && (
-                      <div style={{
-                        padding: '40px',
-                        background: '#fee2e2',
-                        borderRadius: '8px',
-                        border: '2px solid #dc2626',
-                        textAlign: 'center'
-                      }}>
-                        <h3 style={{ color: '#991b1b' }}>Unknown Game Phase</h3>
-                        <p style={{ color: '#7f1d1d' }}>
-                          Game phase: <strong>{gameState.gamePhase}</strong>
-                        </p>
-                        <p style={{ color: '#7f1d1d', fontSize: '0.875rem', marginTop: '15px' }}>
-                          This shouldn't happen. Check browser console for errors.
-                        </p>
-                      </div>
-                    )}
+{/* UNKNOWN PHASE - Debug Fallback */}
+{gameState.gamePhase !== 'voting' && 
+ gameState.gamePhase !== 'results' && 
+ gameState.gamePhase !== 'phase2' &&
+ gameState.gamePhase !== 'battle-decision' &&
+ gameState.gamePhase !== 'battle-results' &&
+ gameState.gamePhase !== 'complete' && (
+  <div style={{
+    padding: '40px',
+    background: '#fee2e2',
+    borderRadius: '8px',
+    border: '2px solid #dc2626',
+    textAlign: 'center'
+  }}>
+    <h3 style={{ color: '#991b1b' }}>Unknown Game Phase</h3>
+    <p style={{ color: '#7f1d1d' }}>
+      Game phase: <strong>{gameState.gamePhase}</strong>
+    </p>
+    <p style={{ color: '#7f1d1d', fontSize: '0.875rem', marginTop: '15px' }}>
+      This shouldn't happen. Check browser console for errors.
+    </p>
+  </div>
+)}
                   </div>
                 ) : (
                   <div>
