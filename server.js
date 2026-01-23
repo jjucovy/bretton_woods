@@ -3275,6 +3275,15 @@ io.on('connection', (socket) => {
     });
     
     // Calculate deployment impacts using deployment system
+
+const impacts = deploymentSystem.calculateDeploymentImpacts(
+  room.phase2.deployments,
+  deployment.country,
+  deployment.region,
+  deployment.troops,
+  room.phase2.yearlyData[room.phase2.currentYear]?.[deployment.country]
+);
+    
     try {
      Error calculating impacts: deployments.filter is not a function
       
