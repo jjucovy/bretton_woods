@@ -1884,7 +1884,7 @@ socket.on('militaryConflict', (data) => {
       socket.off('militaryConflict');
  
     };
-  }, [socket]);
+ 
   
   const handleBattleDecision = (battle, decision, strategy) => {
     socket.emit('submitBattleDecision', {
