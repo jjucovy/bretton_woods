@@ -1301,6 +1301,676 @@
           }
         }
 
+function BattleDecisionModal({ battle, country, onSubmit, onCancel }) {
+  const [decision, setDecision] = React.useState(null);
+  const [strategy, setStrategy] = React.useState('BALANCED');
+  
+  const decisions = [
+    { 
+      value: 'FIGHT', 
+      label: '⚔️ FIGHT', 
+      description: 'Engage in combat. Higher casualties but territorial control possible.' 
+    },
+    { 
+      value: 'NEGOTIATE', 
+      label: '🤝 NEGOTIATE', 
+      description: 'Propose peaceful settlement. 50/50 split, light casualties.' 
+    },
+    { 
+      value: 'RETREAT', 
+      label: '🏃 RETREAT', 
+      description: 'Withdraw from region. Avoid casualties but lose territory.' 
+    }
+  ];
+  
+  const strategies = [
+    { value: 'AGGRESSIVE', label: '💪 Aggressive', bonus: '+50% Damage' },
+    { value: 'DEFENSIVE', label: '🛡️ Defensive', bonus: '-40% Damage Taken' },
+    { value: 'BALANCED', label: '⚖️ Balanced', bonus: 'Moderate Stats' }
+  ];
+  
+  const handleSubmit = () => {
+    if (!decision) {
+      console.error('Please select a decision');
+      return;
+    }
+    onSubmit({ decision, strategy });
+  };
+  
+  return (
+    <div style={styles.modal}>
+      <div style={styles.modalContent}>
+        <h2>⚔️ Battle Decision - {battle.region}</h2>
+        
+        <div style={styles.battleInfo}>
+          <div style={styles.side}>
+            <h3>{battle.country1}</h3>
+            <p>Troops: {battle.country1_troops.toLocaleString()}</p>
+          </div>
+          <div style={styles.vs}>VS</div>
+          <div style={styles.side}>
+            <h3>{battle.country2}</h3>
+            <p>Troops: {battle.country2_troops.toLocaleString()}</p>
+          </div>
+        </div>
+        
+        <div style={styles.section}>
+          <h3>Your Decision</h3>
+          <div style={styles.decisionGrid}>
+            {decisions.map(d => (
+              <button
+                key={d.value}
+                onClick={() => setDecision(d.value)}
+                style={{
+                  ...styles.decisionButton,
+                  ...(decision === d.value ? styles.decisionButtonActive : {})
+                }}
+              >
+                <div>{d.label}</div>
+                <small>{d.description}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {decision === 'FIGHT' && (
+          <div style={styles.section}>
+            <h3>Battle Strategy (If Fighting)</h3>
+            <div style={styles.strategyGrid}>
+              {strategies.map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => setStrategy(s.value)}
+                  style={{
+                    ...styles.strategyButton,
+                    ...(strategy === s.value ? styles.strategyButtonActive : {})
+                  }}
+                >
+                  <div>{s.label}</div>
+                  <small>{s.bonus}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <div style={styles.actions}>
+          <button 
+            onClick={handleSubmit}
+            style={styles.submitButton}
+          >
+            Submit Decision
+          </button>
+          <button 
+            onClick={onCancel}
+            style={styles.cancelButton}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+        
+        
+function BattleResultsCard({ battle }) {
+  const getResultIcon = () => {
+    if (battle.winner === battle.country1) return '🥇';
+    if (battle.winner === battle.country2) return '🥇';
+    return '🤝';
+  };
+  
+  const getResultText = () => {
+    if (battle.outcome === 'NEGOTIATE') return 'NEGOTIATED SETTLEMENT';
+    if (battle.outcome === 'DRAW') return 'STALEMATE';
+    return `${battle.winner} VICTORY`;
+  };
+  
+  return (
+    <div style={styles.resultCard}>
+      <div style={styles.resultHeader}>
+        <h3>{battle.region} - {getResultIcon()} {getResultText()}</h3>
+      </div>
+      
+      <div style={styles.resultGrid}>
+        <div style={styles.resultColumn}>
+          <h4>{battle.country1}</h4>
+          <div style={styles.resultStat}>
+            <label>Casualties:</label>
+            <span style={styles.casualty}>{battle.country1_casualties.toLocaleString()}</span>
+          </div>
+          <div style={styles.resultStat}>
+            <label>Economic Damage:</label>
+            <span style={styles.damage}>${(battle.economic_damage_country1 / 1000000000).toFixed(1)}B</span>
+          </div>
+          {battle.winner === battle.country1 && (
+            <div style={styles.resultStat}>
+              <span style={styles.victory}>✓ Territory Secured</span>
+            </div>
+          )}
+        </div>
+        
+        <div style={styles.divider}></div>
+        
+        <div style={styles.resultColumn}>
+          <h4>{battle.country2}</h4>
+          <div style={styles.resultStat}>
+            <label>Casualties:</label>
+            <span style={styles.casualty}>{battle.country2_casualties.toLocaleString()}</span>
+          </div>
+          <div style={styles.resultStat}>
+            <label>Economic Damage:</label>
+            <span style={styles.damage}>${(battle.economic_damage_country2 / 1000000000).toFixed(1)}B</span>
+          </div>
+          {battle.winner === battle.country2 && (
+            <div style={styles.resultStat}>
+              <span style={styles.victory}>✓ Territory Secured</span>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div style={styles.resultPoints}>
+        <strong>Points Awarded: +{battle.pointsAwarded}</strong>
+      </div>
+    </div>
+  );
+}
+        
+function AllianceProposalModal({ proposal, country, onAccept, onReject, onCancel }) {
+  const otherCountry = proposal.country1 === country ? proposal.country2 : proposal.country1;
+  
+  return (
+    <div style={styles.modal}>
+      <div style={styles.modalContent}>
+        <h2>🤝 Alliance Proposal</h2>
+        
+        <div style={styles.proposalContent}>
+          <p><strong>{otherCountry}</strong> proposes an alliance with you!</p>
+          
+          <div style={styles.allianceTerms}>
+            <h4>Alliance Benefits:</h4>
+            <ul>
+              <li>✅ +15% military strength when allied</li>
+              <li>✅ +5 bonus points per year</li>
+              <li>✅ Mutual defense support</li>
+              <li>✅ Shared diplomatic influence</li>
+            </ul>
+          </div>
+          
+          <p style={styles.warning}>
+            ⚠️ If you reject, diplomatic relations may suffer.
+          </p>
+        </div>
+        
+        <div style={styles.actions}>
+          <button 
+            onClick={() => onAccept(proposal.alliance_id)}
+            style={styles.acceptButton}
+          >
+            ✅ Accept Alliance
+          </button>
+          <button 
+            onClick={() => onReject(proposal.alliance_id)}
+            style={styles.rejectButton}
+          >
+            ❌ Reject
+          </button>
+          <button 
+            onClick={onCancel}
+            style={styles.cancelButton}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+        
+function BattleHistoryPanel({ battles, gameYear }) {
+  return (
+    <div style={styles.historyPanel}>
+      <h3>⚔️ Battle History - Year {gameYear}</h3>
+      
+      {battles.length === 0 ? (
+        <p style={styles.noBattles}>No battles this year. Peaceful times...</p>
+      ) : (
+        <div style={styles.battlesList}>
+          {battles.map((battle, idx) => (
+            <div key={idx} style={styles.battleHistoryItem}>
+              <div style={styles.battleRegion}>
+                <strong>{battle.region}</strong>
+                <span style={styles.battleOutcome}>
+                  {battle.winner ? `${battle.winner} Victory` : 'Pending'}
+                </span>
+              </div>
+              <div style={styles.battleDetails}>
+                <span>{battle.country1} ({battle.country1_troops.toLocaleString()}) vs </span>
+                <span>{battle.country2} ({battle.country2_troops.toLocaleString()})</span>
+              </div>
+              {battle.winner && (
+                <div style={styles.battleOutcomeDetail}>
+                  Casualties: {battle.country1_casualties} vs {battle.country2_casualties}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+const styles = {
+  modal: {
+    position: 'fixed',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    padding: '30px',
+    borderRadius: '10px',
+    maxWidth: '700px',
+    width: '90%',
+    maxHeight: '90vh',
+    overflow: 'auto',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+  },
+  battleInfo: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    margin: '20px 0',
+    padding: '15px',
+    backgroundColor: '#f5f5f5',
+    borderRadius: '5px'
+  },
+  side: {
+    flex: 1,
+    textAlign: 'center'
+  },
+  vs: {
+    fontWeight: 'bold',
+    margin: '0 20px',
+    fontSize: '18px'
+  },
+  section: {
+    marginTop: '20px'
+  },
+  decisionGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '10px',
+    marginTop: '10px'
+  },
+  decisionButton: {
+    padding: '15px 10px',
+    border: '2px solid #ddd',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    backgroundColor: '#f9f9f9',
+    transition: 'all 0.2s'
+  },
+  decisionButtonActive: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#e8f5e9'
+  },
+  strategyGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '10px',
+    marginTop: '10px'
+  },
+  strategyButton: {
+    padding: '10px',
+    border: '2px solid #ddd',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    backgroundColor: '#f9f9f9'
+  },
+  strategyButtonActive: {
+    borderColor: '#2196F3',
+    backgroundColor: '#e3f2fd'
+  },
+  actions: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '20px',
+    justifyContent: 'flex-end'
+  },
+  submitButton: {
+    padding: '10px 20px',
+    backgroundColor: '#4CAF50',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer'
+  },
+  cancelButton: {
+    padding: '10px 20px',
+    backgroundColor: '#999',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer'
+  },
+  acceptButton: {
+    padding: '10px 20px',
+    backgroundColor: '#4CAF50',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer'
+  },
+  rejectButton: {
+    padding: '10px 20px',
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer'
+  },
+  proposalContent: {
+    margin: '15px 0'
+  },
+  allianceTerms: {
+    backgroundColor: '#e8f5e9',
+    padding: '15px',
+    borderRadius: '5px',
+    marginTop: '10px'
+  },
+  warning: {
+    color: '#d32f2f',
+    fontWeight: 'bold',
+    marginTop: '15px'
+  },
+  resultCard: {
+    backgroundColor: '#f0f8ff',
+    border: '2px solid #1976d2',
+    borderRadius: '8px',
+    padding: '15px',
+    marginTop: '15px'
+  },
+  resultHeader: {
+    borderBottom: '2px solid #1976d2',
+    paddingBottom: '10px',
+    marginBottom: '15px'
+  },
+  resultGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr auto 1fr',
+    gap: '15px'
+  },
+  resultColumn: {
+    textAlign: 'center'
+  },
+  divider: {
+    borderLeft: '2px solid #ddd',
+    width: '1px'
+  },
+  resultStat: {
+    marginTop: '10px',
+    padding: '5px'
+  },
+  casualty: {
+    color: '#d32f2f',
+    fontWeight: 'bold'
+  },
+  damage: {
+    color: '#f57c00',
+    fontWeight: 'bold'
+  },
+  victory: {
+    color: '#388e3c',
+    fontWeight: 'bold'
+  },
+  resultPoints: {
+    marginTop: '15px',
+    padding: '10px',
+    backgroundColor: '#fff9c4',
+    borderRadius: '5px',
+    textAlign: 'center'
+  },
+  historyPanel: {
+    marginTop: '20px',
+    padding: '15px',
+    backgroundColor: '#f5f5f5',
+    borderRadius: '5px'
+  },
+  noBattles: {
+    color: '#888',
+    fontStyle: 'italic'
+  },
+  battlesList: {
+    marginTop: '10px'
+  },
+  battleHistoryItem: {
+    padding: '10px',
+    marginTop: '10px',
+    backgroundColor: '#fff',
+    borderLeft: '4px solid #2196F3',
+    borderRadius: '3px'
+  },
+  battleRegion: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '5px'
+  },
+  battleOutcome: {
+    fontSize: '12px',
+    color: '#388e3c'
+  },
+  battleDetails: {
+    fontSize: '13px',
+    color: '#666'
+  },
+  battleOutcomeDetail: {
+    fontSize: '12px',
+    color: '#d32f2f',
+    marginTop: '5px'
+  },
+  battlePhaseContainer: {
+    padding: '20px'
+  },
+  pendingBattleCard: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '15px',
+    backgroundColor: '#fff3e0',
+    border: '2px solid #f57c00',
+    borderRadius: '5px',
+    marginTop: '10px'
+  },
+  pendingBattleInfo: {
+    flex: 1
+  },
+  decideButton: {
+    padding: '8px 16px',
+    backgroundColor: '#ff6f00',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer'
+  },
+  submitted: {
+    color: '#388e3c',
+    fontWeight: 'bold'
+  },
+  continueButton: {
+    marginTop: '20px',
+    padding: '12px 30px',
+    backgroundColor: '#4CAF50',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '16px'
+  }
+};
+        
+function YearEndBattlePhase({ 
+  gameCode, 
+  gameYear, 
+  currentCountry, 
+  allPlayers, 
+  onPhaseProgress, 
+  socket 
+}) {
+  const [pendingBattles, setPendingBattles] = React.useState([]);
+  const [battleResults, setBattleResults] = React.useState([]);
+  const [submittedDecisions, setSubmittedDecisions] = React.useState(new Set());
+  const [selectedBattle, setSelectedBattle] = React.useState(null);
+  const [proposals, setProposals] = React.useState([]);
+  
+  React.useEffect(() => {
+    // Load pending battles for this year
+    socket.emit('getPendingBattles', { gameCode, year: gameYear });
+  }, [gameYear]);
+  
+  React.useEffect(() => {
+    // Listen for battle events
+    socket.on('battlesDetected', (data) => {
+      setPendingBattles(data.battles);
+    });
+    
+    socket.on('battleDecisionSubmitted', (data) => {
+      setSubmittedDecisions(prev => new Set([...prev, data.battleId]));
+    });
+    
+    socket.on('battleResolved', (data) => {
+      setBattleResults(prev => [...prev, data]);
+      setPendingBattles(prev => prev.filter(b => b.battle_id !== data.battleId));
+    });
+    
+    socket.on('allianceProposed', (data) => {
+      setProposals(prev => [...prev, data]);
+    });
+    
+    return () => {
+      socket.off('battlesDetected');
+      socket.off('battleDecisionSubmitted');
+      socket.off('battleResolved');
+      socket.off('allianceProposed');
+    };
+  }, [socket]);
+  
+  const handleBattleDecision = (battle, decision, strategy) => {
+    socket.emit('submitBattleDecision', {
+      battleId: battle.battle_id,
+      gameCode,
+      country: currentCountry,
+      decision,
+      strategy
+    });
+    setSelectedBattle(null);
+  };
+  
+  const handleAllianceAccept = (allianceId) => {
+    socket.emit('respondToAlliance', {
+      allianceId,
+      gameCode,
+      response: 'ACCEPTED'
+    });
+  };
+  
+  const handleAllianceReject = (allianceId) => {
+    socket.emit('respondToAlliance', {
+      allianceId,
+      gameCode,
+      response: 'REJECTED'
+    });
+  };
+  
+  return (
+    <div style={styles.battlePhaseContainer}>
+      <h2>⚔️ Year {gameYear} - Military Phase</h2>
+      
+      {proposals.length > 0 && (
+        <div style={styles.section}>
+          <h3>Alliance Proposals</h3>
+          {proposals.map(p => (
+            <AllianceProposalModal
+              key={p.allianceId}
+              proposal={p}
+              country={currentCountry}
+              onAccept={handleAllianceAccept}
+              onReject={handleAllianceReject}
+              onCancel={() => setProposals(prev => prev.filter(x => x.allianceId !== p.allianceId))}
+            />
+          ))}
+        </div>
+      )}
+      
+      {pendingBattles.length > 0 && (
+        <div style={styles.section}>
+          <h3>⚔️ Pending Battles ({pendingBattles.length})</h3>
+          <p>Make your battle decisions:</p>
+          {pendingBattles.map(battle => {
+            const isYourBattle = 
+              (battle.country1 === currentCountry || battle.country2 === currentCountry);
+            
+            return (
+              <div key={battle.battle_id} style={styles.pendingBattleCard}>
+                <div style={styles.pendingBattleInfo}>
+                  <strong>{battle.region}</strong>
+                  <p>{battle.country1} vs {battle.country2}</p>
+                </div>
+                {isYourBattle && !submittedDecisions.has(battle.battle_id) && (
+                  <button
+                    onClick={() => setSelectedBattle(battle)}
+                    style={styles.decideButton}
+                  >
+                    Make Decision
+                  </button>
+                )}
+                {submittedDecisions.has(battle.battle_id) && (
+                  <span style={styles.submitted}>✓ Decision Submitted</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      
+      {selectedBattle && (
+        <BattleDecisionModal
+          battle={selectedBattle}
+          country={currentCountry}
+          onSubmit={(data) => handleBattleDecision(selectedBattle, data.decision, data.strategy)}
+          onCancel={() => setSelectedBattle(null)}
+        />
+      )}
+      
+      {battleResults.length > 0 && (
+        <div style={styles.section}>
+          <h3>✓ Battle Results</h3>
+          {battleResults.map((result, idx) => (
+            <BattleResultsCard key={idx} battle={result} />
+          ))}
+        </div>
+      )}
+      
+      <BattleHistoryPanel battles={[...pendingBattles, ...battleResults]} gameYear={gameYear} />
+      
+      {pendingBattles.every(b => submittedDecisions.has(b.battle_id)) && pendingBattles.length > 0 && (
+        <button 
+          onClick={onPhaseProgress}
+          style={styles.continueButton}
+        >
+          Continue to Next Phase
+        </button>
+      )}
+    </div>
+  );
+}
+        
         const BrettonWoodsSingleRoom = () => {
           // Authentication state
           const [isAuthenticated, setIsAuthenticated] = useState(false);
