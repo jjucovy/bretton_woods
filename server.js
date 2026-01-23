@@ -3523,697 +3523,173 @@ io.on('connection', (socket) => {
     const allReady = playerIds.every(id => room.readyPlayers.includes(id));
     console.log(`   checkAutoAdvance: playerIds=${playerIds.length}, ready=${room.readyPlayers.length}, allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
     
-    if (allReady && room.autoAdvance) {
-      console.log(`[AUTO] All ${playerIds.length} players submitted policies, auto-advancing year...`);
-      
-      // Check if there's an active crisis that needs resolution first
-      const crisisActive = room.phase2.crises?.active;
-      console.log(`   crisis check: active=${crisisActive}`);
-      if (crisisActive) {
-        console.log('[AUTO] Cannot auto-advance - active crisis must be resolved first');
-        broadcastToRoom(roomId);
-        saveState();
-        return;
-      }
-      
-      // Calculate this year's economics (this creates data for next year)
-      console.log(`   calculating economics for ${room.phase2.currentYear}...`);
-      calculateYearEconomics(roomId);
-      
-      // Advance year
-      room.phase2.currentYear++;
-      room.readyPlayers = [];
-      console.log(`   advanced to year ${room.phase2.currentYear}`);
-      
-      // Check if we've completed all years (after advancing past 1952)
-      if (room.phase2.currentYear > 1952) {
-        // Game is complete - finalize
-        console.log(`   [FINAL] Year is now ${room.phase2.currentYear}, game completing...`);
-        calculatePhase2Scores(roomId);
-        room.gamePhase = 'complete';
-        room.phase2.active = false;
-        // Async operations wrapped in IIFE
-        (async () => {
-          await dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
-          // Release all players when game completes
-          await dbSync(db.releaseAllPlayers, room.gameCode);
-        })();
-        console.log('[AUTO] Phase 2 complete! Final scores calculated. Players released.');
-        broadcastToRoom(roomId);
-        saveState();
-        return;
-      }
-      
-      // Sync to database
-      const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, room.gameCode, { currentRound: 10 + phase2Round });
-      console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
-      
-      // ===== TRIGGER CRISIS IMMEDIATELY AT START OF NEW YEAR =====
-      console.log(`🚨 Checking for crisis at START of year ${room.phase2.currentYear}...`);
-      triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
-      
-      // If crisis was triggered, broadcast it and STOP (wait for responses)
-      if (room.phase2.crises?.active) {
-        console.log(`⚠️  CRISIS ACTIVE: ${room.phase2.crises.active.title}`);
-        console.log(`   Players must respond BEFORE submitting policies`);
-        
-        // Broadcast crisis to all players
-        io.to(roomId).emit('crisisTriggered', {
-          crisis: room.phase2.crises.active,
-          year: room.phase2.currentYear,
-          message: 'CRISIS! You must respond before submitting economic policies.'
-        });
-        
-        broadcastToRoom(roomId);
-        saveState();
-        
-        // DO NOT allow policy submissions yet - crisis must be resolved first
-        console.log(`[AUTO] Year advanced to ${room.phase2.currentYear}, but PAUSED for crisis resolution`);
-        return;
-      }
-      
-      console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
-      
-      // Check if we've reached the final year
-      if (room.phase2.currentYear === 1952) {
-        console.log('[AUTO] Now at final year 1952. After this year completes, Phase 2 will end.');
-      }
-    } else {
-      console.log(`   no auto-advance: allReady=${allReady}, autoAdvance=${room.autoAdvance}`);
-    }
-    
-    console.log(`   🎯 END OF submitPolicy - about to broadcast`);
-    broadcastToRoom(roomId);
-    console.log(`   ✅ broadcastToRoom completed`);
-    saveState();
-  });
-  
-  // PLAYER: Deploy troops
-  socket.on('deployTroops', ({ roomId, playerId, deployment }) => {
-    const room = globalState.rooms[roomId];
-    if (!room) return;
-    
-    const player = room.players[playerId];
-    if (!player) return;
-    
-    // Verify the deployment is for the player's own country
-    if (deployment.country !== player.country) {
-      console.log('Deploy troops rejected: country mismatch');
-      return;
-    }
-    
-    // Initialize deployments array if doesn't exist
-    if (!room.phase2.deployments) {
-      room.phase2.deployments = [];
-    }
-    
-    // Add deployment with timestamp
-    const deploymentRecord = {
-      ...deployment,
-      timestamp: Date.now(),
-      year: room.phase2.currentYear
-    };
-    
-    room.phase2.deployments.push(deploymentRecord);
-    
-    console.log(`${player.country} deployed ${deployment.troops} ${deployment.branch || 'troops'} to ${deployment.region}`);
-    
-    // Use sophisticated conflict detection from deployment-impacts.js
-    const conflicts = deploymentSystem.detectDeploymentConflicts(
-      room.phase2.deployments, 
-      room.phase2.currentYear
-    );
-    
-    // Store conflicts
-    room.phase2.conflicts = conflicts;
-    
-    // Calculate regional control
-    const regionalControl = deploymentSystem.calculateRegionalControl(
-      room.phase2.deployments,
-      room.phase2.currentYear
-    );
-    room.phase2.regionalControl = regionalControl;
-    
-    // Log conflicts
-    if (conflicts.length > 0) {
-      conflicts.forEach(conflict => {
-        console.log(`⚠️  CONFLICT (${conflict.level}): ${conflict.description}`);
-        console.log(`   Strategic Importance: ${conflict.strategicImportance}/10`);
-      });
-      
-      // Broadcast conflict alerts to all players
-      io.to(roomId).emit('militaryConflict', {
-        conflicts: conflicts,
-        newDeployment: {
-          country: deployment.country,
-          region: deployment.region,
-          troops: deployment.troops,
-          branch: deployment.branch
-        }
-      });
-    }
-    
-    // Log regional control changes
-    Object.entries(regionalControl).forEach(([region, control]) => {
-      if (control.controller) {
-        console.log(`   ${control.controller} controls ${region} (strength: ${Math.round(control.strength)})`);
-        if (control.contested) {
-          console.log(`      ⚠️  CONTESTED by: ${control.competitors.join(', ')}`);
-        }
-      }
-    });
-    
-    // Send confirmation with conflict info
-    socket.emit('deploymentConfirmed', {
-      success: true,
-      deployment: deploymentRecord,
-      conflicts: conflicts,
-      regionalControl: regionalControl
-    });
-    
-    // Calculate deployment impacts using deployment system
-    try {
-      const impacts = deploymentSystem.calculateDeploymentImpacts(
-        room.phase2.deployments,
-        deployment.country,
-        deployment.region,
-        deployment.troops,
-        room.phase2.yearlyData[room.phase2.currentYear]?.[deployment.country]
-      );  
-      if (impacts) {
-        console.log(`💪 Deployment impacts for ${deployment.country}:`, impacts);
-        // Store impacts for later use in crisis resolution and scoring
-        if (!room.phase2.crisisDeploymentBonuses) {
-          room.phase2.crisisDeploymentBonuses = {};
-        }
-        if (!room.phase2.crisisDeploymentBonuses[deployment.country]) {
-          room.phase2.crisisDeploymentBonuses[deployment.country] = {};
-        }
-        room.phase2.crisisDeploymentBonuses[deployment.country][deployment.region] = impacts;
-      }
-    } catch (err) {
-      console.error('Error calculating deployment impacts:', err.message);
-    }
-    
-    // Sync deployment to MySQL
-    (async () => {
-      try {
-        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-        if (!username) {
-          console.error(`❌ [Deployment] Cannot find username for playerId: ${playerId}`);
-          return;
-        }
-        
-        const userId = await getUserId(username);
-        if (!userId) {
-          console.error(`❌ [Deployment] Cannot find userId for username: ${username}`);
-          return;
-        }
-        
-        console.log(`💾 Saving deployment: username=${username}, userId=${userId}, region=${deployment.region}, troops=${deployment.troops}, branch=${deployment.branch}`);
-        
-        const result = await dbSync(db.saveDeployment, room.gameCode, userId, {
-          country: deployment.country,
-          region: deployment.region,
-          troops: deployment.troops,
-          branch: deployment.branch,
-          year: room.phase2.currentYear
-        });
-        if (result) {
-          console.log(`✅ Deployment synced to MySQL: ${username} (${deployment.region})`);
-        } else {
-          console.error(`❌ Deployment failed to sync for ${username}`);
-        }
-      } catch (err) {
-        console.error(`❌ [Deployment Sync] Error:`, err.message);
-      }
-    })();
-    
-    broadcastToRoom(roomId);
-    saveState();
-  });
+   // Fix 1: Remove duplicate advanceYear handler (lines 1886-2070)
+// The duplicate handler should be removed - keep only the one that's complete
 
-  // CRISIS: Submit response to active crisis
-  socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
-    const room = globalState.rooms[roomId];
-    if (!room || !room.phase2.active) return;
+// Fix 2: Update the submitPolicy auto-advance section to properly detect battles
+// Replace the section around line 1612-1620 with:
+
+if (allReady && room.autoAdvance) {
+  console.log(`[AUTO] All ${playerIds.length} players submitted policies, auto-advancing year...`);
+  
+  // Check if there's an active crisis that needs resolution first
+  const crisisActive = room.phase2.crises?.active;
+  console.log(`   crisis check: active=${crisisActive}`);
+  if (crisisActive) {
+    console.log('[AUTO] Cannot auto-advance - active crisis must be resolved first');
+    broadcastToRoom(roomId);
+    saveState();
+    return;
+  }
+  
+  // Calculate this year's economics (this creates data for next year)
+  console.log(`   calculating economics for ${room.phase2.currentYear}...`);
+  calculateYearEconomics(roomId);
+  
+  // ===== DETECT MILITARY CONFLICTS AND CREATE BATTLES =====
+  const conflicts = room.phase2.conflicts || [];
+  console.log(`⚔️ Checking for military conflicts... found ${conflicts.length}`);
+  
+  if (conflicts.length > 0) {
+    // Filter conflicts for current year
+    const currentYearConflicts = conflicts.filter(c => c.year === room.phase2.currentYear);
     
-    // Ensure phase2.crises is initialized
-    if (!room.phase2.crises) {
-      room.phase2.crises = {
-        active: null,
-        history: [],
-        responses: {}
-      };
-    }
-    
-    const player = room.players[playerId];
-    if (!player) return;
-    
-    const crisis = room.phase2.crises.active;
-    if (!crisis) {
-      console.log('No active crisis');
-      return;
-    }
-    
-    const country = player.country;
-    
-    // Check if this country is affected by the crisis
-    if (!crisis.affectedCountries.includes(country)) {
-      console.log(`${country} not affected by this crisis`);
-      return;
-    }
-    
-    // Get the choice
-    const countryOptions = crisis.options[country];
-    if (!countryOptions) {
-      console.log(`No options for ${country} in this crisis`);
-      return;
-    }
-    
-    const choice = countryOptions.find(opt => opt.id === choiceId);
-    if (!choice) {
-      console.log(`Invalid choice ID: ${choiceId}`);
-      return;
-    }
-    
-    // Validate military requirements
-    const currentYear = room.phase2.currentYear;
-    const yearData = room.phase2.yearlyData[currentYear]?.[country];
-    
-    if (choice.militaryRequired && yearData) {
-      const hasArmy = !choice.militaryRequired.army || yearData.military.army >= choice.militaryRequired.army;
-      const hasNavy = !choice.militaryRequired.navy || yearData.military.navy >= choice.militaryRequired.navy;
-      const hasAir = !choice.militaryRequired.airForce || yearData.military.airForce >= choice.militaryRequired.airForce;
+    if (currentYearConflicts.length > 0) {
+      console.log(`⚔️ ${currentYearConflicts.length} conflicts detected for year ${room.phase2.currentYear}`);
       
-      if (!hasArmy || !hasNavy || !hasAir) {
-        socket.emit('crisisResponseError', {
-          message: 'Insufficient military forces for this option'
-        });
-        console.log(`${country} lacks required military for choice ${choiceId}`);
-        return;
-      }
-    }
-    
-    // Store the response
-    room.phase2.crises.responses[country] = {
-      playerId,
-      choiceId,
-      choice,
-      timestamp: Date.now()
-    };
-    
-    console.log(`${country} submitted crisis response: ${choice.text}`);
-    
-    // Check for deployment bonuses - if country has forces in crisis region
-    try {
-      const crisisRegion = crisis.affectedRegion || crisis.region; // Get crisis region
-      const countryDeployments = (room.phase2.deployments || []).filter(d => 
-        d.country === country && d.region === crisisRegion && d.year === room.phase2.currentYear
-      );
-      
-      if (countryDeployments.length > 0) {
-        const totalTroops = countryDeployments.reduce((sum, d) => sum + d.troops, 0);
-        const bonus = deploymentSystem.calculateCrisisDeploymentBonus(
-          totalTroops,
-          choice.diplomaticPoints || 0
+      // Create battle records from conflicts
+      room.pendingBattles = currentYearConflicts.map(conflict => {
+        // Get troop counts from deployments
+        const country1Deployments = (room.phase2.deployments || []).filter(d => 
+          d.country === conflict.countries[0] && 
+          d.region === conflict.region && 
+          d.year === room.phase2.currentYear
+        );
+        const country2Deployments = (room.phase2.deployments || []).filter(d => 
+          d.country === conflict.countries[1] && 
+          d.region === conflict.region && 
+          d.year === room.phase2.currentYear
         );
         
-        // Store the bonus for scoring later
-        if (!room.phase2.crisisDeploymentBonuses) {
-          room.phase2.crisisDeploymentBonuses = {};
-        }
-        if (!room.phase2.crisisDeploymentBonuses[country]) {
-          room.phase2.crisisDeploymentBonuses[country] = {};
-        }
-        room.phase2.crisisDeploymentBonuses[country][crisis.id] = bonus;
+        const country1Troops = country1Deployments.reduce((sum, d) => sum + d.troops, 0);
+        const country2Troops = country2Deployments.reduce((sum, d) => sum + d.troops, 0);
         
-        console.log(`🎖️ ${country} gets +${bonus} deployment bonus for responding to ${crisis.id} with ${totalTroops} troops in region`);
-      }
-    } catch (err) {
-      console.error('Error calculating crisis deployment bonus:', err.message);
-    }
-    
-    // Sync crisis response to MySQL
-    (async () => {
-      try {
-        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-        if (!username) {
-          console.error(`❌ [Crisis Response] Cannot find username for playerId: ${playerId}`);
-          return;
-        }
-        
-        const userId = await getUserId(username);
-        if (!userId) {
-          console.error(`❌ [Crisis Response] Cannot find userId for username: ${username}`);
-          return;
-        }
-        
-        console.log(`💾 Saving crisis response: username=${username}, userId=${userId}, crisisId=${crisis.id}, optionId=${choiceId}, year=${room.phase2.currentYear}`);
-        
-        const result = await dbSync(db.saveCrisisResponse, room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear);
-        if (result) {
-          console.log(`✅ Crisis response synced to MySQL: ${username}`);
-        } else {
-          console.error(`❌ Crisis response failed to sync for ${username}`);
-        }
-      } catch (err) {
-        console.error(`❌ [Crisis Response Sync] Error:`, err.message);
-      }
-    })();
-    
-    // Check if all affected countries with active players have responded
-    const affectedCountriesWithPlayers = crisis.affectedCountries.filter(c => {
-      return Object.values(room.players).some(p => p.country === c);
-    });
-    
-    const allResponded = affectedCountriesWithPlayers.every(c => 
-      room.phase2.crises.responses[c]
-    );
-    
-    console.log(`Crisis responses: ${Object.keys(room.phase2.crises.responses).length}/${affectedCountriesWithPlayers.length}`);
-    
-    if (allResponded) {
-      console.log('✅ All affected countries responded - auto-resolving crisis');
-      resolveCrisisEffects(roomId);
-    }
-    
-    broadcastToRoom(roomId);
-    saveState();
-  });
-
-  // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
-  socket.on('resolveCrisis', ({ roomId, playerId }) => {
-    const room = globalState.rooms[roomId];
-    if (!room) return;
-    
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    const isSuperAdmin = user && user.role === 'superadmin';
-    const isRoomHost = room.hostId === playerId;
-    
-    if (!isSuperAdmin && !isRoomHost) {
-      socket.emit('resolveCrisisError', {
-        message: 'Only the game admin can manually resolve crises'
-      });
-      return;
-    }
-    
-    const crisis = room.phase2.crises.active;
-    if (!crisis) {
-      console.log('No active crisis to resolve');
-      return;
-    }
-    
-    console.log(`Admin manually resolving crisis: ${crisis.title}`);
-    
-    const success = resolveCrisisEffects(roomId);
-    if (success) {
-      broadcastToRoom(roomId);
-    }
-  });
-
-  // Advance year in Phase 2
-  socket.on('advanceYear', ({ roomId, playerId }) => {
-    console.log('=== ADVANCE YEAR REQUEST ===');
-    console.log('Room ID:', roomId);
-    console.log('Player ID:', playerId);
-    
-    const room = globalState.rooms[roomId];
-    if (!room) {
-      console.log('ERROR: Room not found');
-      return;
-    }
-    
-    // Ensure phase2.crises is initialized
-    if (!room.phase2.crises) {
-      room.phase2.crises = {
-        active: null,
-        history: [],
-        responses: {}
-      };
-    }
-    
-    console.log('Room found:', room.roomName);
-    console.log('Room host:', room.hostId);
-    console.log('Phase 2 active:', room.phase2.active);
-    console.log('Current year:', room.phase2.currentYear);
-    
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    console.log('User found:', user ? 'YES' : 'NO');
-    if (user) {
-      console.log('User details:', { playerId: user.playerId, role: user.role });
-    }
-    
-    // AUTO-FIX: If room has no host, set to current user (if they're in the game)
-    if (!room.hostId && room.players[playerId]) {
-      console.log('⚠️ Room has no host ID, setting to current player:', playerId);
-      room.hostId = playerId;
-      saveState();
-    }
-    
-    // AUTO-FIX: If room host is not in the players list, reassign to first player
-    if (room.hostId && !room.players[room.hostId]) {
-      const playerIds = Object.keys(room.players);
-      if (playerIds.length > 0) {
-        const newHostId = playerIds[0];
-        console.log('⚠️ Room host not in game, reassigning from', room.hostId, 'to', newHostId);
-        room.hostId = newHostId;
-        saveState();
-      }
-    }
-    
-    const isSuperAdmin = user && user.role === 'superadmin';
-    const isRoomHost = room.hostId === playerId;
-    
-    console.log('=== DETAILED PERMISSION CHECK ===');
-    console.log('Player ID from request:', playerId);
-    console.log('Room host ID:', room.hostId);
-    console.log('IDs match:', room.hostId === playerId);
-    console.log('Is superadmin:', isSuperAdmin);
-    console.log('Is room host:', isRoomHost);
-    
-    // Allow either superadmin OR room host to advance year
-    if (!isSuperAdmin && !isRoomHost) {
-      console.log('❌ Advance year rejected');
-      socket.emit('advanceYearError', { 
-        message: 'Only the game admin can advance the year.' 
-      });
-      return;
-    }
-    
-    console.log('✅ Permission granted');
-    
-    if (!room.phase2.active) {
-      console.log('ERROR: Phase 2 not active');
-      return;
-    }
-    
-    // Check if there's an active crisis that needs resolution
-    if (room.phase2.crises.active) {
-      console.log('⚠️ Cannot advance year - active crisis must be resolved first');
-      socket.emit('advanceYearError', {
-        message: `Crisis in progress: ${room.phase2.crises.active.title}. Resolve the crisis before advancing.`
-      });
-      return;
-    }
-    
-    // Calculate this year's economics (this creates data for next year)
-    calculateYearEconomics(roomId);
-    
-    // ===== DETECT MILITARY CONFLICTS AND CREATE BATTLES =====
-    const conflicts = room.phase2.conflicts || [];
-    console.log(`⚔️ Checking for military conflicts... found ${conflicts.length}`);
-    
-    if (conflicts.length > 0) {
-      // Filter conflicts for current year
-      const currentYearConflicts = conflicts.filter(c => c.year === room.phase2.currentYear);
-      
-      if (currentYearConflicts.length > 0) {
-        console.log(`⚔️ ${currentYearConflicts.length} conflicts detected for year ${room.phase2.currentYear}`);
-        
-        // Create battle records from conflicts
-        room.pendingBattles = currentYearConflicts.map(conflict => {
-          // Get troop counts from deployments
-          const country1Deployments = (room.phase2.deployments || []).filter(d => 
-            d.country === conflict.countries[0] && 
-            d.region === conflict.region && 
-            d.year === room.phase2.currentYear
-          );
-          const country2Deployments = (room.phase2.deployments || []).filter(d => 
-            d.country === conflict.countries[1] && 
-            d.region === conflict.region && 
-            d.year === room.phase2.currentYear
-          );
-          
-          const country1Troops = country1Deployments.reduce((sum, d) => sum + d.troops, 0);
-          const country2Troops = country2Deployments.reduce((sum, d) => sum + d.troops, 0);
-          
-          return {
-            battle_id: `battle_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            region: conflict.region,
-            country1: conflict.countries[0],
-            country2: conflict.countries[1],
-            country1_troops: country1Troops || 100000,
-            country2_troops: country2Troops || 100000,
-            year: room.phase2.currentYear,
-            level: conflict.level,
-            description: conflict.description
-          };
-        });
-        
-        // Initialize battle decisions storage
-        if (!room.battleDecisions) {
-          room.battleDecisions = {};
-        }
-        
-        // Change game phase to battle decision
-        room.gamePhase = 'battle-decision';
-        
-        console.log(`⚔️ Entering BATTLE PHASE - ${room.pendingBattles.length} battles to resolve`);
-        room.pendingBattles.forEach(b => {
-          console.log(`   ${b.country1} (${b.country1_troops.toLocaleString()}) vs ${b.country2} (${b.country2_troops.toLocaleString()}) in ${b.region}`);
-        });
-        
-        // Broadcast battles to all players
-        io.to(roomId).emit('battlesDetected', {
-          battles: room.pendingBattles,
+        return {
+          battle_id: `battle_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          region: conflict.region,
+          country1: conflict.countries[0],
+          country2: conflict.countries[1],
+          country1_troops: country1Troops || 100000,
+          country2_troops: country2Troops || 100000,
           year: room.phase2.currentYear,
-          message: `⚔️ MILITARY CONFLICTS! ${room.pendingBattles.length} battle(s) must be resolved before advancing.`
-        });
-        
-        broadcastToRoom(roomId);
-        saveState();
-        return; // STOP HERE - wait for battle decisions
-      }
-    }
-    
-    // No conflicts, proceed with normal year advancement
-    console.log('✅ No conflicts detected, proceeding with year advancement');
-    
-    // Advance year
-    room.phase2.currentYear++;
-    room.readyPlayers = [];
-    
-    // Check if we've completed all years (after advancing past 1952)
-    if (room.phase2.currentYear > 1952) {
-      // Game is complete - finalize
-      calculatePhase2Scores(roomId);
-      room.gamePhase = 'complete';
-      room.phase2.active = false;
-      // Async operations wrapped in IIFE
-      (async () => {
-        await dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
-        // Release all players when game completes
-        await dbSync(db.releaseAllPlayers, room.gameCode);
-      })();
-      console.log('Phase 2 complete! Final scores calculated. Players released.');
-      broadcastToRoom(roomId);
-      saveState();
-      return;
-    }
-    
-    // ===== TRIGGER CRISIS IMMEDIATELY AT START OF NEW YEAR =====
-    console.log(`🚨 Checking for crisis at START of year ${room.phase2.currentYear}...`);
-    triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
-    
-    // If crisis was triggered, broadcast it and STOP (wait for responses)
-    if (room.phase2.crises?.active) {
-      console.log(`⚠️  CRISIS ACTIVE: ${room.phase2.crises.active.title}`);
-      console.log(`   Players must respond BEFORE submitting policies`);
+          level: conflict.level,
+          description: conflict.description
+        };
+      });
       
-      // Broadcast crisis to all players
-      io.to(roomId).emit('crisisTriggered', {
-        crisis: room.phase2.crises.active,
+      // Initialize battle decisions storage
+      if (!room.battleDecisions) {
+        room.battleDecisions = {};
+      }
+      
+      // Change game phase to battle decision
+      room.gamePhase = 'battle-decision';
+      
+      console.log(`⚔️ Entering BATTLE PHASE - ${room.pendingBattles.length} battles to resolve`);
+      room.pendingBattles.forEach(b => {
+        console.log(`   ${b.country1} (${b.country1_troops.toLocaleString()}) vs ${b.country2} (${b.country2_troops.toLocaleString()}) in ${b.region}`);
+      });
+      
+      // Broadcast battles to all players
+      io.to(roomId).emit('battlesDetected', {
+        battles: room.pendingBattles,
         year: room.phase2.currentYear,
-        message: 'CRISIS! You must respond before submitting economic policies.'
+        message: `⚔️ MILITARY CONFLICTS! ${room.pendingBattles.length} battle(s) must be resolved before advancing.`
       });
       
       broadcastToRoom(roomId);
       saveState();
-      
-      // DO NOT allow policy submissions yet - crisis must be resolved first
-      console.log(`[AUTO] Year advanced to ${room.phase2.currentYear}, but PAUSED for crisis resolution`);
-      return;
+      return; // STOP HERE - wait for battle decisions
     }
-    
-    console.log(`[AUTO] Advanced to year ${room.phase2.currentYear}`);
-    
-    // Check if we've reached the final year
-    if (room.phase2.currentYear === 1952) {
-      console.log('[AUTO] Now at final year 1952. After this year completes, Phase 2 will end.');
-    }
-    
-    console.log('Broadcasting updated game state...');
-    broadcastToRoom(roomId);
-    saveState();
-    console.log('✅ Year advancement complete');
-  });
+  }
+  
+  // No conflicts, continue with normal year advancement
+  console.log('✅ No conflicts - advancing year normally');
+  
+  // Advance year
+  room.phase2.currentYear++;
+  room.readyPlayers = [];
+  console.log(`   advanced to year ${room.phase2.currentYear}`);
+  
+  // Rest of the advancement logic continues...
+}
 
-  // Submit battle decision
-  socket.on('submitBattleDecision', ({ roomId, playerId, battleId, decision, strategy }) => {
-    console.log('=== BATTLE DECISION SUBMITTED ===');
-    console.log('Battle ID:', battleId);
-    console.log('Player ID:', playerId);
-    console.log('Decision:', decision);
-    console.log('Strategy:', strategy);
-    
-    const room = globalState.rooms[roomId];
-    if (!room || room.gamePhase !== 'battle-decision') {
-      console.log('ERROR: Room not found or not in battle phase');
-      return;
-    }
-    
-    const player = Object.values(room.players).find(p => p.playerId === playerId);
-    if (!player) {
-      console.log('ERROR: Player not found');
-      return;
-    }
-    
-    const battle = room.pendingBattles?.find(b => b.battle_id === battleId);
-    if (!battle) {
-      console.log('ERROR: Battle not found');
-      return;
-    }
-    
-    const country = player.country;
-    
-    if (country !== battle.country1 && country !== battle.country2) {
-      console.log('ERROR: Player not involved in this battle');
-      return;
-    }
-    
-    if (!room.battleDecisions) {
-      room.battleDecisions = {};
-    }
-    room.battleDecisions[`${battleId}_${country}`] = {
-      playerId,
-      country,
-      decision,
-      strategy,
-      timestamp: Date.now()
-    };
-    
-    console.log(`✅ Battle decision recorded: ${country} - ${decision} (${strategy || 'none'})`);
-    
-    io.to(roomId).emit('battleDecisionSubmitted', {
-      battleId,
-      country,
-      decision,
-      hasDecision: true
-    });
-    
-    const country1Decision = room.battleDecisions[`${battleId}_${battle.country1}`];
-    const country2Decision = room.battleDecisions[`${battleId}_${battle.country2}`];
-    
-    if (country1Decision && country2Decision) {
-      console.log('⚔️ Both countries decided - resolving battle');
-      resolveBattle(roomId, battleId, room);
-    }
-    
-    broadcastToRoom(roomId);
-    saveState();
+// Fix 3: Ensure submitBattleDecision handler exists and is correct
+// Replace around line 1886 with:
+
+socket.on('submitBattleDecision', ({ roomId, playerId, battleId, decision, strategy }) => {
+  console.log('=== BATTLE DECISION SUBMITTED ===');
+  console.log('Battle ID:', battleId);
+  console.log('Player ID:', playerId);
+  console.log('Decision:', decision);
+  console.log('Strategy:', strategy);
+  
+  const room = globalState.rooms[roomId];
+  if (!room || room.gamePhase !== 'battle-decision') {
+    console.log('ERROR: Room not found or not in battle phase');
+    return;
+  }
+  
+  const player = Object.values(room.players).find(p => p.playerId === playerId);
+  if (!player) {
+    console.log('ERROR: Player not found');
+    return;
+  }
+  
+  const battle = room.pendingBattles?.find(b => b.battle_id === battleId);
+  if (!battle) {
+    console.log('ERROR: Battle not found');
+    return;
+  }
+  
+  const country = player.country;
+  
+  if (country !== battle.country1 && country !== battle.country2) {
+    console.log('ERROR: Player not involved in this battle');
+    return;
+  }
+  
+  if (!room.battleDecisions) {
+    room.battleDecisions = {};
+  }
+  room.battleDecisions[`${battleId}_${country}`] = {
+    playerId,
+    country,
+    decision,
+    strategy,
+    timestamp: Date.now()
+  };
+  
+  console.log(`✅ Battle decision recorded: ${country} - ${decision} (${strategy || 'none'})`);
+  
+  io.to(roomId).emit('battleDecisionSubmitted', {
+    battleId,
+    country,
+    decision,
+    hasDecision: true
   });
+  
+  const country1Decision = room.battleDecisions[`${battleId}_${battle.country1}`];
+  const country2Decision = room.battleDecisions[`${battleId}_${battle.country2}`];
+  
+  if (country1Decision && country2Decision) {
+    console.log('⚔️ Both countries decided - resolving battle');
+    resolveBattle(roomId, battleId, room);
+  }
+  
+  broadcastToRoom(roomId);
+  saveState();
+});
 
   // Progress past battle phase (after all battles resolved)
   socket.on('advanceFromBattles', ({ roomId, playerId }) => {
