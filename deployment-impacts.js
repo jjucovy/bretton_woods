@@ -555,9 +555,9 @@ function applyDeploymentEffects(room, country, deployments, yearData, currentYea
 }
 
 
-function calculateDeploymentImpacts(country, region, troops, yearlyData) {
-  if (!country || !region || !troops) return null;
-  
+function calculateDeploymentImpacts(deployments, country, region, troops, yearlyData) {
+  if (!Array.isArray(deployments) || !country || !region || !troops) return null;
+    
   try {
     return {
       region,
