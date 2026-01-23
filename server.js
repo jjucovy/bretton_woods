@@ -2122,6 +2122,19 @@ function resolveCrisisEffects(roomId) {
 // END PHASE 2 FUNCTIONS
 // ============================================
 
+gameState.gamePhase === 'battle-decision' && (
+  <YearEndBattlePhase
+    gameCode={SINGLE_ROOM_ID}
+    gameYear={gameState.phase2?.currentYear || 1946}
+    currentCountry={playerCountry}
+    allPlayers={Object.values(gameState.players)}
+    onPhaseProgress={() => {
+      socket.emit('advanceFromBattles', { roomId: SINGLE_ROOM_ID, playerId });
+    }}
+    socket={socket}
+  />
+)}
+
 // Socket connection
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
@@ -3121,6 +3134,24 @@ io.on('connection', (socket) => {
       // Calculate this year's economics (this creates data for next year)
       console.log(`   calculating economics for ${room.phase2.currentYear}...`);
       calculateYearEconomics(roomId);
+const conflicts = room.phase2.conflicts || [];
+if (conflicts.length > 0) {
+  room.gamePhase = 'battle-decision';
+  room.pendingBattles = conflicts.map(conflict => ({
+    battle_id: `battle_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    region: conflict.region,
+    country1: conflict.countries[0],
+    country2: conflict.countries[1],
+    country1_troops: conflict.troops1 || 100000,
+    country2_troops: conflict.troops2 || 100000,
+    year: room.phase2.currentYear
+  }));
+  
+  console.log(`⚔️ ${conflicts.length} battles detected - entering battle phase`);
+  broadcastToRoom(roomId);
+  saveState();
+  return; // Stop here, wait for battle decisions
+
       
       // Advance year
       room.phase2.currentYear++;
