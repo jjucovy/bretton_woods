@@ -1574,7 +1574,14 @@
   const [submittedDecisions, setSubmittedDecisions] = React.useState(new Set());
   const [selectedBattle, setSelectedBattle] = React.useState(null);
   const [proposals, setProposals] = React.useState([]);
+
+
+  const [battleConflicts, setBattleConflicts] = useState([]);
+  const [battleDecisions, setBattleDecisions] = useState({});
+  const [battleResults, setBattleResults] = useState(null);
   
+ 
+            
   React.useEffect(() => {
     // Load pending battles for this year
     socket.emit('getPendingBattles', { gameCode, year: gameYear });
@@ -1589,7 +1596,23 @@
     socket.on('battleDecisionSubmitted', (data) => {
       setSubmittedDecisions(prev => new Set([...prev, data.battleId]));
     });
-    
+
+ // Socket listeners (add to useEffect):
+  socket.on('battleConflicts', (data) => {
+    setBattleConflicts(data.conflicts);
+    setGamePhase('battle-decision');
+  });
+  
+  socket.on('allBattlesDecided', () => {
+    socket.emit('resolveYearBattles', { gameCode, year: currentYear });
+  });
+  
+  socket.on('battleResults', (data) => {
+    setBattleResults(data.results);
+    setGamePhase('battle-results');
+  });
+
+      
     socket.on('battleResolved', (data) => {
       setBattleResults(prev => [...prev, data]);
       setPendingBattles(prev => prev.filter(b => b.battle_id !== data.battleId));
@@ -2087,25 +2110,6 @@ socket.on('militaryConflict', (data) => {
             });
 
               
-  const [battleConflicts, setBattleConflicts] = useState([]);
-  const [battleDecisions, setBattleDecisions] = useState({});
-  const [battleResults, setBattleResults] = useState(null);
-  
-  // Socket listeners (add to useEffect):
-  socket.on('battleConflicts', (data) => {
-    setBattleConflicts(data.conflicts);
-    setGamePhase('battle-decision');
-  });
-  
-  socket.on('allBattlesDecided', () => {
-    socket.emit('resolveYearBattles', { gameCode, year: currentYear });
-  });
-  
-  socket.on('battleResults', (data) => {
-    setBattleResults(data.results);
-    setGamePhase('battle-results');
-  });
-
             socket.on('joinRoomResult', ({ success, roomId, message }) => {
               if (success) {
                 console.log('Joined room:', roomId);
