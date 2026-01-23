@@ -2055,6 +2055,7 @@ function resolveCrisisEffects(roomId) {
 }
 
   // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
+const room = globalState.rooms[roomId];
     if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
       const latestConflict = room.phase2.conflicts[room.phase2.conflicts.length - 1];
       console.log(`🎖️ Battle System Triggered: Conflict in ${latestConflict.region}`);
