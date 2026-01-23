@@ -3845,6 +3845,57 @@ socket.on('militaryConflict', (data) => {
                       );
                     })()}
 
+  {gamePhase === 'battle-decision' && (
+    <div className="battle-modal">
+      <h2>⚔️ Military Conflicts - Year {currentYear}</h2>
+      {battleConflicts.map(conflict => (
+        <div key={conflict.id} className="battle-card">
+          <h3>{conflict.region}</h3>
+          <div className="battle-sides">
+            <div className="side">{conflict.country1} ({conflict.strength1}K troops)</div>
+            <div className="vs">VS</div>
+            <div className="side">{conflict.country2} ({conflict.strength2}K troops)</div>
+          </div>
+          <div className="battle-options">
+            <button onClick={() => submitBattleDecision(conflict.id, 'FIGHT', 'AGGRESSIVE')}>
+              ⚔️ FIGHT (AGGRESSIVE)
+            </button>
+            <button onClick={() => submitBattleDecision(conflict.id, 'FIGHT', 'DEFENSIVE')}>
+              🛡️ FIGHT (DEFENSIVE)
+            </button>
+            <button onClick={() => submitBattleDecision(conflict.id, 'NEGOTIATE', null)}>
+              🤝 NEGOTIATE
+            </button>
+            <button onClick={() => submitBattleDecision(conflict.id, 'RETREAT', null)}>
+              🏃 RETREAT
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+  
+  {gamePhase === 'battle-results' && battleResults && (
+    <div className="battle-results">
+      <h2>⚔️ Battle Results - Year {currentYear}</h2>
+      {battleResults.map(result => (
+        <div key={result.conflictId} className="result-card">
+          <h3>{result.outcome}</h3>
+          {result.outcome === 'FIGHT' && (
+            <>
+              <p>🏆 Winner: {result.winner}</p>
+              <p>Casualties: {result.country1Casualties} vs {result.country2Casualties}</p>
+              <p>Score: +15 {result.winner}, -10 loser</p>
+            </>
+          )}
+          {result.outcome === 'NEGOTIATE' && (
+            <p>Territory Split: {result.share1}% - {result.share2}%</p>
+          )}
+        </div>
+      ))}
+      <button onClick={() => continueToNextPhase()}>Continue →</button>
+    </div>
+  )}
                     {/* GAME COMPLETE */}
                     {gameState.gamePhase === 'complete' && (
                       <div>
