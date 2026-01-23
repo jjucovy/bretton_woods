@@ -2123,7 +2123,6 @@ function resolveCrisisEffects(roomId) {
 // ============================================
 
 gameState.gamePhase === 'battle-decision' && (
-  <YearEndBattlePhase
     gameCode={SINGLE_ROOM_ID}
     gameYear={gameState.phase2?.currentYear || 1946}
     currentCountry={playerCountry}
