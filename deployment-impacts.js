@@ -554,60 +554,6 @@ function applyDeploymentEffects(room, country, deployments, yearData, currentYea
   return effects;
 }
 
-/**
- * Calculate impacts for a single deployment
- * Called by server.js when confirming troop deployment
- */
-function calculateDeploymentImpacts(deployments, country, region, troops, yearlyData) {
-  try {
-    // Validate inputs
-    if (!deployments || !Array.isArray(deployments)) {
-      console.error('Invalid deployments array');
-      return null;
-    }
-    
-    if (!country || !region || !troops) {
-      console.error('Missing required deployment parameters');
-      return null;
-    }
-    
-    // Get region configuration
-    const regionConfig = REGIONS[region];
-    if (!regionConfig) {
-      console.error(`Unknown region: ${region}`);
-      return null;
-    }
-    
-    // Calculate economic impact
-    const economicImpact = (regionConfig.tradeValue + regionConfig.resourceValue) * 0.0001;
-    
-    // Calculate influence gain
-    const influenceGain = (troops / 100000) * regionConfig.controlBonus.influence;
-    
-    // Calculate GDP bonus
-    const gdpBonus = (troops / 1000000) * regionConfig.controlBonus.gdp;
-    
-    // Calculate deployment costs
-    const deploymentCost = (troops / 1000) * 0.05; // Cost increases with troop count
-    
-    return {
-      region: region,
-      country: country,
-      troops: troops,
-      economicImpact: economicImpact,
-      influenceGain: influenceGain,
-      gdpBonus: gdpBonus,
-      deploymentCost: deploymentCost,
-      netBenefit: economicImpact + gdpBonus - deploymentCost,
-      strategicValue: regionConfig.strategicImportance,
-      timestamp: new Date().toISOString()
-    };
-  } catch (err) {
-    console.error('Error calculating deployment impacts:', err.message);
-    return null;
-  }
-}
-
 module.exports = {
   REGIONS,
   calculateRegionalControl,
@@ -616,6 +562,5 @@ module.exports = {
   getCrisisDeploymentBonus,
   calculateDiplomaticInfluence,
   detectDeploymentConflicts,
-  applyDeploymentEffects,
-  calculateDeploymentImpacts
+  applyDeploymentEffects
 };
