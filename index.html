@@ -4126,6 +4126,70 @@ socket.on('militaryConflict', (data) => {
       <button onClick={() => continueToNextPhase()}>Continue →</button>
     </div>
   )}
+
+{/* BATTLE PHASE */}
+                    {gameState.gamePhase === 'battle-decision' && (
+                      <YearEndBattlePhase
+                        gameCode={SINGLE_ROOM_ID}
+                        gameYear={gameState.phase2?.currentYear || 1946}
+                        currentCountry={playerCountry}
+                        allPlayers={Object.values(gameState.players)}
+                        onPhaseProgress={() => {
+                          socket.emit('advanceFromBattles', { roomId: SINGLE_ROOM_ID, playerId });
+                        }}
+                        socket={socket}
+                      />
+                    )}
+
+                    {/* BATTLE RESULTS PHASE */}
+                    {gameState.gamePhase === 'battle-results' && (
+                      <div style={{
+                        background: 'white',
+                        borderRadius: '12px',
+                        padding: '40px',
+                        marginBottom: '20px',
+                        textAlign: 'center'
+                      }}>
+                        <h1 style={{ color: '#16a34a', marginTop: 0 }}>
+                          ⚔️ Battles Resolved!
+                        </h1>
+                        <p style={{ fontSize: '1.2rem', color: '#64748b', marginBottom: '30px' }}>
+                          All military conflicts for year {gameState.phase2?.currentYear || 1946} have been resolved.
+                        </p>
+                        
+                        {gameState.battleResults && gameState.battleResults.map((result, idx) => (
+                          <BattleResultsCard key={idx} battle={result} />
+                        ))}
+                        
+                        {userRole === 'superadmin' && (
+                          <button
+                            onClick={() => {
+                              socket.emit('advanceFromBattles', { roomId: SINGLE_ROOM_ID, playerId });
+                            }}
+                            style={{
+                              marginTop: '30px',
+                              padding: '16px 40px',
+                              background: '#16a34a',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontSize: '1.1rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Continue to Year {(gameState.phase2?.currentYear || 1946) + 1} →
+                          </button>
+                        )}
+                        
+                        {userRole !== 'superadmin' && (
+                          <p style={{ marginTop: '20px', color: '#64748b', fontStyle: 'italic' }}>
+                            Waiting for administrator to advance to next year...
+                          </p>
+                        )}
+                      </div>
+                    )}
+                      
                     {/* GAME COMPLETE */}
                     {gameState.gamePhase === 'complete' && (
                       <div>
