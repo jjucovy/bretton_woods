@@ -5287,7 +5287,8 @@ if (conflicts.length > 0) {
     broadcastToRoom(roomId);
     console.log(`   ✅ broadcastToRoom completed`);
     saveState();
-
+    }
+    });
   
   // PLAYER: Deploy troops
   socket.on('deployTroops', ({ roomId, playerId, deployment }) => {
