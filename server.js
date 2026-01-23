@@ -2631,6 +2631,7 @@ io.on('connection', (socket) => {
         await dbSync(db.saveDeployment, room.gameCode, userId, {
           country: deployment.country,
           region: deployment.region,
+          branch: deployment.branch,
           troops: deployment.troops,
           year: room.phase2.currentYear
         });
