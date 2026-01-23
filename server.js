@@ -2226,7 +2226,7 @@ io.on('connection', (socket) => {
   // Create new room
   socket.on('createRoom', ({ playerId, roomName }) => {
     const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    
+
     globalState.rooms[roomId] = createGameState(roomId, roomName, playerId);
     
     socket.join(roomId);
@@ -2579,6 +2579,8 @@ io.on('connection', (socket) => {
 
 
   // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
+   const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+   
 const room = globalState.rooms[roomId];
     if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
       const latestConflict = room.phase2.conflicts[room.phase2.conflicts.length - 1];
