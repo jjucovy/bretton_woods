@@ -554,12 +554,33 @@ function applyDeploymentEffects(room, country, deployments, yearData, currentYea
   return effects;
 }
 
+
+function calculateDeploymentImpacts(country, region, troops, yearlyData) {
+  if (!country || !region || !troops) return null;
+  
+  try {
+    return {
+      region,
+      troops,
+      regionalControl: calculateRegionalControl(country, region, troops),
+      economics: calculateDeploymentEconomics(country, region, troops, yearlyData),
+      costs: calculateDeploymentCosts(troops),
+      crisisBonus: getCrisisDeploymentBonus(region, troops),
+      influence: calculateDiplomaticInfluence(country, region, troops, yearlyData)
+    };
+  } catch (err) {
+    console.error('Error calculating impacts:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   REGIONS,
   calculateRegionalControl,
   calculateDeploymentEconomics,
   calculateDeploymentCosts,
   getCrisisDeploymentBonus,
+    calculateDeploymentImpacts,
   calculateDiplomaticInfluence,
   detectDeploymentConflicts,
   applyDeploymentEffects
