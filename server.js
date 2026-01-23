@@ -2348,18 +2348,6 @@ function resolveCrisisEffects(roomId) {
 // END PHASE 2 FUNCTIONS
 // ============================================
 
-gameState.gamePhase === 'battle-decision' && (
-    gameCode={SINGLE_ROOM_ID}
-    gameYear={gameState.phase2?.currentYear || 1946}
-    currentCountry={playerCountry}
-    allPlayers={Object.values(gameState.players)}
-    onPhaseProgress={() => {
-      socket.emit('advanceFromBattles', { roomId: SINGLE_ROOM_ID, playerId });
-    }}
-    socket={socket}
-  />
-)}
-
 // Socket connection
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
