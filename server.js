@@ -2054,6 +2054,36 @@ function resolveCrisisEffects(roomId) {
   return true;
 }
 
+  // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
+    if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
+      const latestConflict = room.phase2.conflicts[room.phase2.conflicts.length - 1];
+      console.log(`🎖️ Battle System Triggered: Conflict in ${latestConflict.region}`);
+      
+      // Emit battle alert to all players in room
+      io.to(roomId).emit('militaryConflict', {
+        region: latestConflict.region,
+        countries: latestConflict.countries,
+        year: room.phase2.currentYear,
+        message: `Military conflict detected in ${latestConflict.region}!`
+      });
+      
+      // Also trigger database battle detection asynchronously
+      (async () => {
+        try {
+          const result = await db.callAPI('detectBattles', {
+            gameCode: room.gameCode || roomId,
+            region: latestConflict.region,
+            countries: latestConflict.countries,
+            year: room.phase2.currentYear
+          });
+          console.log(`✅ Database battle detection completed:`, result);
+        } catch (err) {
+          console.error(`❌ Database battle detection error: ${err.message}`);
+        }
+      })();
+    }
+
+
 // ============================================
 // END PHASE 2 FUNCTIONS
 // ============================================
