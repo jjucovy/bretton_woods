@@ -1909,7 +1909,63 @@ function calculatePhase2Scores(roomId) {
       } catch (err) {
         console.error('Error calculating deployment influence:', err.message);
       }
+      // Battle system points
+      const battleVictories = (room.battles || []).filter(b => 
+        b.winner === country && b.status === 'resolved'
+      ).length;
+      const battleDefeats = (room.battles || []).filter(b => 
+        (b.country1 === country || b.country2 === country) && 
+        b.winner !== country && 
+        b.status === 'resolved'
+      ).length;
+      const negotiatedBattles = (room.battles || []).filter(b => 
+        (b.country1 === country || b.country2 === country) && 
+        b.status === 'negotiated'
+      ).length;
       
+      if (battleVictories > 0 || battleDefeats > 0 || negotiatedBattles > 0) {
+        const victoryPoints = battleVictories * 15;
+        const defeatPenalty = battleDefeats * 10;
+        const negotiationBonus = negotiatedBattles * 8;
+        
+        breakdown.battlePoints = victoryPoints - defeatPenalty + negotiationBonus;
+        score += breakdown.battlePoints;
+        
+        console.log(`⚔️ ${country} Battle: ${victoryPoints} - ${defeatPenalty} + ${negotiationBonus} = ${breakdown.battlePoints}`);
+      }
+      // Territory control
+      const territoriesControlled = (room.battles || []).filter(b => 
+        b.winner === country && b.status === 'resolved'
+      ).length;
+      
+      if (territoriesControlled > 0) {
+        breakdown.territoryBonus = territoriesControlled * 10;
+        score += breakdown.territoryBonus;
+        console.log(`🏰 ${country} Territories: ${territoriesControlled} × 10 = ${breakdown.territoryBonus}`);
+      }
+      // Alliance bonuses
+      const activeAlliances = (room.alliances || []).filter(a => 
+        (a.country1 === country || a.country2 === country) && 
+        a.status === 'ACTIVE'
+      ).length;
+      
+      if (activeAlliances > 0) {
+        breakdown.allianceBonus = activeAlliances * 5;
+        score += breakdown.allianceBonus;
+        console.log(`🤝 ${country} Alliances: ${activeAlliances} × 5 = ${breakdown.allianceBonus}`);
+      }
+      // Economic damage penalty from battles
+      const economicDamage = (room.battles || []).reduce((total, b) => {
+        if (b.country1 === country) total += b.economic_damage_country1 || 0;
+        if (b.country2 === country) total += b.economic_damage_country2 || 0;
+        return total;
+      }, 0);
+      
+      if (economicDamage > 0) {
+        breakdown.economicDamage = Math.max(-50, -Math.floor(economicDamage / 100000000));
+        score += breakdown.economicDamage;
+        console.log(`💥 ${country} Economic Damage: -$${(economicDamage/1000000000).toFixed(1)}B = ${breakdown.economicDamage} pts`);
+      }
       // Crisis diplomatic points
       if (room.phase2.diplomaticPoints && room.phase2.diplomaticPoints[country]) {
         breakdown.crisisDiplomacy = room.phase2.diplomaticPoints[country] * 2; // 2 pts per diplomatic point
