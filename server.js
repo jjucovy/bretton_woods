@@ -3276,12 +3276,7 @@ io.on('connection', (socket) => {
     
     // Calculate deployment impacts using deployment system
     try {
-      const impacts = deploymentSystem.calculateDeploymentImpacts(
-        deployment.country,
-        deployment.region,
-        deployment.troops,
-        room.phase2.yearlyData[room.phase2.currentYear]?.[deployment.country]
-      );
+     Error calculating impacts: deployments.filter is not a function
       
       if (impacts) {
         console.log(`💪 Deployment impacts for ${deployment.country}:`, impacts);
