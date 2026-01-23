@@ -2086,6 +2086,26 @@ socket.on('militaryConflict', (data) => {
               console.log('State updated in React');
             });
 
+              
+  const [battleConflicts, setBattleConflicts] = useState([]);
+  const [battleDecisions, setBattleDecisions] = useState({});
+  const [battleResults, setBattleResults] = useState(null);
+  
+  // Socket listeners (add to useEffect):
+  socket.on('battleConflicts', (data) => {
+    setBattleConflicts(data.conflicts);
+    setGamePhase('battle-decision');
+  });
+  
+  socket.on('allBattlesDecided', () => {
+    socket.emit('resolveYearBattles', { gameCode, year: currentYear });
+  });
+  
+  socket.on('battleResults', (data) => {
+    setBattleResults(data.results);
+    setGamePhase('battle-results');
+  });
+
             socket.on('joinRoomResult', ({ success, roomId, message }) => {
               if (success) {
                 console.log('Joined room:', roomId);
