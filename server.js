@@ -3287,8 +3287,7 @@ io.on('connection', (socket) => {
   deployment.troops,
   room.phase2.yearlyData[room.phase2.currentYear]?.[deployment.country]
 );
-     Error calculating impacts: deployments.filter is not a function
-      
+    //
       if (impacts) {
         console.log(`💪 Deployment impacts for ${deployment.country}:`, impacts);
         // Store impacts for later use in crisis resolution and scoring
