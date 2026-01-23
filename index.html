@@ -4126,6 +4126,7 @@ function YearEndBattlePhase({
                         </button>
                       </div>
                     )}
+                  </div>
                 )}
               </div>
 
@@ -4169,95 +4170,9 @@ function YearEndBattlePhase({
                   </div>
                 </div>
               )}
-  
-                {/* BATTLE MODAL */}
-                {showBattleModal && militaryConflict && (
-                  <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 1000
-                  }}>
-                    <div style={{
-                      background: 'white',
-                      borderRadius: '16px',
-                      padding: '32px',
-                      maxWidth: '600px',
-                      width: '90%',
-                      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
-                    }}>
-                      <h2 style={{ marginTop: 0, marginBottom: '20px', color: '#dc2626', fontSize: '1.8rem' }}>
-                        🎖️ Military Conflict Detected!
-                      </h2>
-                      
-                      <div style={{
-                        background: '#fef2f2',
-                        borderLeft: '4px solid #dc2626',
-                        padding: '16px',
-                        borderRadius: '8px',
-                        marginBottom: '24px'
-                      }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '1.1rem', fontWeight: 'bold' }}>
-                          {militaryConflict.message}
-                        </p>
-                        <p style={{ margin: '8px 0', fontSize: '0.95rem' }}>
-                          <strong>Region:</strong> {militaryConflict.region}
-                        </p>
-                        <p style={{ margin: '8px 0', fontSize: '0.95rem' }}>
-                          <strong>Countries Involved:</strong> {militaryConflict.countries?.join(', ') || 'Unknown'}
-                        </p>
-                        <p style={{ margin: '8px 0', fontSize: '0.95rem' }}>
-                          <strong>Year:</strong> {militaryConflict.year}
-                        </p>
-                      </div>
-  
-                      <div style={{
-                        background: '#f0fdf4',
-                        padding: '16px',
-                        borderRadius: '8px',
-                        marginBottom: '24px',
-                        borderLeft: '4px solid #16a34a'
-                      }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '0.95rem' }}>
-                          A military conflict has been detected! Players involved in this conflict need to respond with their battle decisions.
-                        </p>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#4b5563' }}>
-                          Both sides will have the option to FIGHT with strategy, NEGOTIATE, or RETREAT. The outcome depends on military strength and diplomatic skills.
-                        </p>
-                      </div>
-  
-                      <button
-                        onClick={() => setShowBattleModal(false)}
-                        style={{
-                          width: '100%',
-                          padding: '14px 24px',
-                          background: '#3b82f6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          fontSize: '1rem',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          transition: 'background 0.2s'
-                        }}
-                        onMouseOver={(e) => e.target.style.background = '#2563eb'}
-                        onMouseOut={(e) => e.target.style.background = '#3b82f6'}
-                      >
-                        OK, I understand
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              )}  
             </div>
-          )};
+          );
+        };
 
         // Initialize app when game data is loaded
         function initializeApp() {
