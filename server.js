@@ -3685,7 +3685,9 @@ console.log(`   🎯 END OF submitPolicy - about to broadcast`);
 broadcastToRoom(roomId);
 console.log(`   ✅ broadcastToRoom completed`);
 saveState();
-  }); // <-- ADD THIS LINE to close the 'submitPolicy' socket.on handler
+  }); 
+  
+  // <-- ADD THIS LINE to close the 'submitPolicy' socket.on handler
   
   // PLAYER: Deploy troops
   socket.on('deployTroops', ({ roomId, playerId, deployment }) => {
