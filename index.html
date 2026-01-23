@@ -1598,12 +1598,39 @@
     socket.on('allianceProposed', (data) => {
       setProposals(prev => [...prev, data]);
     });
-    
+
+socket.on('deploymentConfirmed', (data) => {
+  console.log('✅ Deployment confirmed:', data);
+  setGameState(prev => ({
+    ...prev,
+    phase2: {
+      ...prev.phase2,
+      deployments: [...(prev.phase2?.deployments || []), data.deployment],
+      regionalControl: data.regionalControl || prev.phase2?.regionalControl,
+      conflicts: data.conflicts || []
+    }
+  }));
+});
+
+socket.on('militaryConflict', (data) => {
+  console.log('⚠️ Military conflict detected:', data);
+  setGameState(prev => ({
+    ...prev,
+    phase2: {
+      ...prev.phase2,
+      conflicts: data.conflicts || []
+    }
+  }));
+});
+      
     return () => {
       socket.off('battlesDetected');
       socket.off('battleDecisionSubmitted');
       socket.off('battleResolved');
-      socket.off('allianceProposed');
+      socket.off('allianceProposed'); 
+      socket.off('deploymentConfirmed');
+      socket.off('militaryConflict');
+ 
     };
   }, [socket]);
   
