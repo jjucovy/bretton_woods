@@ -28,7 +28,15 @@ const COUNTRY_CODE_TO_NAME = {
 function getCountryName(countryCode) {
   return COUNTRY_CODE_TO_NAME[countryCode] || countryCode;
 }
-
+// ===== BATTLE SYSTEM HELPER =====
+function getStrategyMultiplier(strategy) {
+  const multipliers = {
+    'AGGRESSIVE': 1.5,
+    'DEFENSIVE': 1.2,
+    'BALANCED': 1.0
+  };
+  return multipliers[strategy] || 1.0;
+}
 // Helper to safely call DB functions (fails silently, logs errors)
 async function dbSync(operation, ...args) {
   try {
@@ -4002,6 +4010,205 @@ io.on('connection', (socket) => {
     
     console.log(`Room ${roomId} deleted by superadmin`);
   });
+
+    // ===== BATTLE SYSTEM SOCKET HANDLERS =====
+    
+    socket.on('detectBattles', async (gameCode, year) => {
+      try {
+        const response = await axios.post(PHP_API_ENDPOINT, 
+          qs.stringify({
+            action: 'detectBattles',
+            gameCode: gameCode
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (response.data.success && response.data.conflicts.length > 0) {
+          const conflicts = response.data.conflicts.filter(c => c.year === year);
+          
+          for (let conflict of conflicts) {
+            const battleResponse = await axios.post(PHP_API_ENDPOINT,
+              qs.stringify({
+                action: 'createBattle',
+                gameCode: gameCode,
+                region: conflict.region,
+                country1: conflict.country,
+                country2: conflict.country2,
+                troops1: conflict.troops1,
+                troops2: conflict.troops2,
+                year: year
+              }),
+              { headers: { 'X-API-Key': API_KEY } }
+            );
+            
+            if (battleResponse.data.success) {
+              io.to(gameCode).emit('battleProposed', {
+                battleId: battleResponse.data.battleId,
+                region: conflict.region,
+                country1: conflict.country,
+                country2: conflict.country2,
+                troops1: conflict.troops1,
+                troops2: conflict.troops2
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error detecting battles:', error);
+      }
+    });
+
+    socket.on('submitBattleDecision', async (data) => {
+      try {
+        const { battleId, gameCode, country, decision, strategy } = data;
+        
+        const response = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'submitBattleDecision',
+            battleId: battleId,
+            country: country,
+            decision: decision,
+            strategy: strategy
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (response.data.success) {
+          io.to(gameCode).emit('battleDecisionSubmitted', {
+            battleId: battleId,
+            country: country,
+            decision: decision,
+            strategy: strategy
+          });
+        }
+      } catch (error) {
+        console.error('Error submitting battle decision:', error);
+      }
+    });
+
+    socket.on('resolveBattle', async (data) => {
+      try {
+        const { battleId, gameCode } = data;
+        
+        const response = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'resolveBattle',
+            battleId: battleId,
+            gameCode: gameCode
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (response.data.success) {
+          const battleResult = response.data.battle;
+          
+          io.to(gameCode).emit('battleResolved', {
+            battleId: battleId,
+            winner: battleResult.winner,
+            outcome: battleResult.outcome,
+            country1_casualties: battleResult.country1_casualties,
+            country2_casualties: battleResult.country2_casualties,
+            economic_damage_country1: battleResult.economic_damage_country1,
+            economic_damage_country2: battleResult.economic_damage_country2,
+            pointsAwarded: battleResult.pointsAwarded
+          });
+        }
+      } catch (error) {
+        console.error('Error resolving battle:', error);
+      }
+    });
+
+    socket.on('proposeAlliance', async (data) => {
+      try {
+        const { gameCode, country1, country2, year } = data;
+        
+        const response = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'proposeAlliance',
+            gameCode: gameCode,
+            country1: country1,
+            country2: country2,
+            year: year
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (response.data.success) {
+          io.to(gameCode).emit('allianceProposed', {
+            allianceId: response.data.allianceId,
+            country1: country1,
+            country2: country2,
+            year: year
+          });
+        }
+      } catch (error) {
+        console.error('Error proposing alliance:', error);
+      }
+    });
+
+    socket.on('respondToAlliance', async (data) => {
+      try {
+        const { allianceId, gameCode, response: allianceResponse } = data;
+        
+        const apiResponse = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'respondToAlliance',
+            allianceId: allianceId,
+            response: allianceResponse
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (apiResponse.data.success) {
+          io.to(gameCode).emit('allianceResponse', {
+            allianceId: allianceId,
+            response: allianceResponse
+          });
+        }
+      } catch (error) {
+        console.error('Error responding to alliance:', error);
+      }
+    });
+
+    socket.on('getBattleHistory', async (gameCode) => {
+      try {
+        const response = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'getBattleResults',
+            gameCode: gameCode
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (response.data.success) {
+          socket.emit('battleHistoryUpdate', {
+            battles: response.data.results
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching battle history:', error);
+      }
+    });
+
+    socket.on('getAlliances', async (gameCode) => {
+      try {
+        const response = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'getBattleProposals',
+            gameCode: gameCode
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (response.data.success) {
+          socket.emit('alliancesList', {
+            alliances: response.data.battles
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching alliances:', error);
+      }
+    });
   
   // Remove promote function - no one can be promoted
   
