@@ -3845,7 +3845,7 @@ socket.on('militaryConflict', (data) => {
                       );
                     })()}
 
-  {gamePhase === 'battle-decision' && (
+  {gameState.gamePhase === 'battle-decision' && (
     <div className="battle-modal">
       <h2>⚔️ Military Conflicts - Year {currentYear}</h2>
       {battleConflicts.map(conflict => (
