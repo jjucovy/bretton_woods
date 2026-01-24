@@ -420,6 +420,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
             yearlyData: {},
             deployments: [],
             conflicts: [],
+            battleDecisions: [],
             crises: {
               active: null,
               history: [],
@@ -595,6 +596,9 @@ function initializePhase2(roomId) {
   room.phase2.active = true;
   room.phase2.currentYear = 1946;
   room.phase2.policies = {};
+  room.phase2.deployments = room.phase2.deployments || [];
+  room.phase2.conflicts = room.phase2.conflicts || [];
+  room.phase2.battleDecisions = room.phase2.battleDecisions || [];
   room.gamePhase = 'phase2';
   room.readyPlayers = [];
   
@@ -2539,6 +2543,55 @@ io.on('connection', (socket) => {
     saveState();
   });
 
+  // BATTLE SYSTEM: Submit battle decision
+  socket.on('submitBattleDecision', async (data) => {
+    const { battleId, region, decision, country, year } = data;
+    const roomId = SINGLE_ROOM_ID; // Single room mode
+    const room = globalState.rooms[roomId];
+    
+    if (!room) {
+      console.error('❌ [Battle Decision] Room not found:', roomId);
+      return;
+    }
+    
+    console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
+    
+    // Store battle decision in room state (for future battle resolution)
+    if (!room.phase2.battleDecisions) {
+      room.phase2.battleDecisions = [];
+    }
+    
+    room.phase2.battleDecisions.push({
+      battleId: battleId || `${region}-${year}`,
+      region,
+      country,
+      decision,
+      year,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Sync to database
+    (async () => {
+      try {
+        const result = await db.callAPI('recordBattleDecision', {
+          gameCode: room.gameCode || roomId,
+          battleId: battleId || `${region}-${year}`,
+          country,
+          decision,
+          region,
+          year
+        });
+        console.log(`📊 Battle decision synced to MySQL: ${country} - ${decision}`);
+      } catch (err) {
+        console.error(`❌ Failed to sync battle decision: ${err.message}`);
+      }
+    })();
+    
+    // Broadcast updated state to room
+    broadcastToRoom(roomId);
+    saveState();
+  });
+
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
     const room = globalState.rooms[roomId];
@@ -2820,6 +2873,7 @@ io.on('connection', (socket) => {
       achievements: {},
       deployments: [],
       conflicts: [],
+      battleDecisions: [],
       crises: {
         active: null,
         history: [],
@@ -2940,6 +2994,7 @@ io.on('connection', (socket) => {
         achievements: {},
         deployments: [],
         conflicts: [],
+        battleDecisions: [],
         crises: {
           active: null,
           history: [],
