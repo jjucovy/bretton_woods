@@ -3115,7 +3115,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       console.log(`👤 Creator userId: ${userId}`);
       console.log(`📞 Calling db.createGame()...`);
       
-      const result = await db.createGame(newGameCode, userId);
+      const result =  db.createGame(newGameCode, userId);
       
       console.log(`╔════════════════════════════════════════════════════════╗`);
       console.log(`║           DATABASE RESPONSE RECEIVED                   ║`);
