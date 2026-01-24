@@ -2536,7 +2536,7 @@ io.on('connection', (socket) => {
       }
     }
     
-    console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
+    console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region} in ${room.gameCode}`);
     
     // Sync deployment to MySQL
     (async () => {
