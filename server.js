@@ -2500,11 +2500,13 @@ io.on('connection', (socket) => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       if (userId) {
-        await dbSync(db.saveDeployment, roomId, userId, {
+        await dbSync(db.saveDeployment, room.gameCode, userId, {
           country: deployment.country,
           region: deployment.region,
           troops: deployment.troops,
-          year: room.phase2.currentYear
+          branch: deployment.branch || 'army',
+          year: room.phase2.currentYear,
+          deploymentInfluence: 0
         });
         console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`)
       }
@@ -2660,11 +2662,7 @@ io.on('connection', (socket) => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       if (userId) {
-        await dbSync(db.saveCrisisResponse, roomId, userId, {
-          crisisId: crisis.id,
-          optionId: choiceId,
-          year: room.phase2.currentYear
-        });
+        await dbSync(db.saveCrisisResponse, room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear);
         console.log(`📊 Crisis response synced to MySQL: ${username}`);
       }
     })();
