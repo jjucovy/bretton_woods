@@ -2499,7 +2499,7 @@ io.on('connection', (socket) => {
     (async () => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
-      console.log(`🔍 Deployment sync debug: username=${username}, userId=${userId}, gameCode=${room.gameCode}`);
+      console.log(`🔍 Deployment sync debug: username=${username}, playerId=${playerId}, gameCode=${room.gameCode}`);
       if (userId) {
         const deploymentData = {
           country: deployment.country,
@@ -2510,7 +2510,7 @@ io.on('connection', (socket) => {
           deploymentInfluence: 0
         };
         console.log(`🔍 Deployment data:`, JSON.stringify(deploymentData));
-        await dbSync(db.saveDeployment, room.gameCode, userId, deploymentData);
+        await dbSync(db.saveDeployment, room.gameCode, playerId, deploymentData);
         console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`)
       } else {
         console.error(`❌ Cannot sync deployment: userId is null for playerId ${playerId}`);
