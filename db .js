@@ -6,21 +6,10 @@
 const API_URL = 'https://jucovy.com/api.php';
 const API_KEY = 'bretton-woods-secret-key-2024';
 
-
-// Add to db.js or update your API to support these calls:
-
-async function getHighestGameId() {
-  return await callAPI('getHighestGameId', {});
-}
-
-async function getHighestPlayerId() {
-  return await callAPI('getHighestPlayerId', {});
-}
-
-
-
 async function callAPI(action, data = {}) {
   try {
+    console.log(`[DB API Call] Action: ${action}`);
+    
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
@@ -30,15 +19,27 @@ async function callAPI(action, data = {}) {
       body: JSON.stringify({ action, ...data })
     });
     
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.error || 'API call failed');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return result.data;
+    
+    const result = await response.json();
+    console.log(`[DB API Response] Action: ${action} - Success:`, result.success !== false);
+    
+    return result;
   } catch (err) {
-    console.error(`API call failed (${action}):`, err.message);
+    console.error(`[DB API Error] Action: ${action}:`, err.message);
     throw err;
   }
+}
+
+// ============ ID COUNTERS ============
+async function getHighestGameId() {
+  return await callAPI('getHighestGameId', {});
+}
+
+async function getHighestPlayerId() {
+  return await callAPI('getHighestPlayerId', {});
 }
 
 // ============ SCHEMA ============
@@ -46,9 +47,19 @@ async function setupSchema() {
   return callAPI('setupSchema');
 }
 
+async function ensureScoreColumns() {
+  return callAPI('ensureScoreColumns');
+}
+
 // ============ USERS ============
 async function getAllUsers() {
-  return callAPI('getAllUsers');
+  try {
+    const result = await callAPI('getAllUsers');
+    return result && result.users ? result.users : [];
+  } catch (err) {
+    console.error('getAllUsers failed:', err.message);
+    return [];
+  }
 }
 
 // Get user by username
@@ -57,7 +68,6 @@ async function getUser(username) {
     const result = await callAPI('getUser', { username });
     
     if (result && result.success) {
-      // Return the user object with correct field names
       return {
         user_id: result.user_id,
         username: result.username,
@@ -80,8 +90,7 @@ async function createUser(username, password, role = 'student', email = '', disp
 
 // ============ GAMES ============
 async function createGame(gameCode, createdBy = null) {
-
-  alert('call')
+  console.log('[DB] createGame called:', { gameCode, createdBy });
   return callAPI('createGame', { gameCode, createdBy });
 }
 
@@ -93,17 +102,61 @@ async function updateGame(gameCode, updates) {
   return callAPI('updateGame', { gameCode, ...updates });
 }
 
+// Find active lobby game with available slots
+async function findActiveLobbyGame() {
+  try {
+    const result = await callAPI('findActiveLobbyGame', {});
+    if (result && result.success) {
+      return {
+        gameId: result.game_id,
+        gameCode: result.game_code,
+        playerCount: result.player_count || 0
+      };
+    }
+    return null;
+  } catch (err) {
+    console.error('findActiveLobbyGame failed:', err.message);
+    return null;
+  }
+}
+
+// Release all players from a game
+async function releaseAllPlayers(gameCode) {
+  try {
+    return await callAPI('releasePlayersFromGame', { gameCode });
+  } catch (err) {
+    console.error('releaseAllPlayers failed:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 // ============ PLAYERS ============
 async function addPlayer(gameCode, userId, countryCode, countryName) {
   return callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
 }
 
 async function getPlayers(gameCode) {
-  return callAPI('getPlayers', { gameCode });
+  try {
+    const result = await callAPI('getPlayers', { gameCode });
+    return result && result.players ? result.players : [];
+  } catch (err) {
+    console.error('getPlayers failed:', err.message);
+    return [];
+  }
 }
 
 async function updatePlayerPoints(gameCode, userId, points, addPoints = 0) {
   return callAPI('updatePlayerPoints', { gameCode, userId, points, addPoints });
+}
+
+// Get player's active game
+async function getPlayerActiveGame(userId) {
+  try {
+    return await callAPI('getPlayerActiveGame', { userId });
+  } catch (err) {
+    console.error('getPlayerActiveGame failed:', err.message);
+    return null;
+  }
 }
 
 // ============ VOTES (Phase 1) ============
@@ -126,130 +179,4 @@ async function getPolicies(gameCode, round = null) {
 
 // ============ ROUND RESULTS ============
 async function saveRoundResult(gameCode, round, phase, resultData) {
-  return callAPI('saveRoundResult', { gameCode, round, phase, ...resultData });
-}
-
-async function getRoundResults(gameCode) {
-  return callAPI('getRoundResults', { gameCode });
-}
-
-// ============ FULL GAME STATE ============
-async function getFullGameState(gameCode) {
-  return callAPI('getFullGameState', { gameCode });
-}
-
-// ============ LEADERBOARD ============
-async function getLeaderboard(gameCode = null) {
-  return callAPI('getLeaderboard', { gameCode });
-}
-
-// ============ CRISES ============
-async function getCrises(year = null) {
-  return callAPI('getCrises', { year });
-}
-
-async function getCrisisOptions(crisisId, countryCode = null) {
-  return callAPI('getCrisisOptions', { crisisId, countryCode });
-}
-
-async function saveCrisisResponse(gameCode, playerId, crisisId, optionId, responseDetails = null) {
-  return callAPI('saveCrisisResponse', { 
-    gameCode, 
-    playerId, 
-    crisisId, 
-    optionId,
-    responseDetails 
-  });
-}
-
-// ============ ECONOMIC STATE ============
-async function saveEconomicState(gameCode, countryCode, year, stateData) {
-  return callAPI('saveEconomicState', {
-    gameCode,
-    countryCode,
-    year,
-    gdpGrowth: stateData.gdpGrowth,
-    inflation: stateData.inflation,
-    unemployment: stateData.unemployment,
-    tradeBalance: stateData.tradeBalance,
-    reserves: stateData.reserves,
-    stability: stateData.stability
-  });
-}
-
-async function getEconomicState(gameCode, countryCode = null, year = null) {
-  return callAPI('getEconomicState', { gameCode, countryCode, year });
-}
-
-// ============ GAME RESULTS ============
-async function saveGameResult(gameCode, countryCode, finalScore, breakdown = null) {
-  return callAPI('saveGameResult', {
-    gameCode,
-    countryCode,
-    finalScore,
-    breakdown: breakdown ? JSON.stringify(breakdown) : null
-  });
-}
-
-async function getGameResults(gameCode) {
-  return callAPI('getGameResults', { gameCode });
-}
-
-// ============ TEST ============
-async function testConnection() {
-  return callAPI('test');
-}
-
-module.exports = {
-  // Schema
-  setupSchema,
-  
-  // Users
-  getAllUsers,
-  getUser,
-  createUser,
-  
-  // Games
-  createGame,
-  getGame,
-  updateGame,
-  
-  // Players
-  addPlayer,
-  getPlayers,
-  updatePlayerPoints,
-  
-  // Votes
-  saveVote,
-  getVotes,
-  
-  // Policies
-  savePolicy,
-  getPolicies,
-  
-  // Results
-  saveRoundResult,
-  getRoundResults,
-  
-  // Economic State
-  saveEconomicState,
-  getEconomicState,
-  
-  // Game Results
-  saveGameResult,
-  getGameResults,
-  
-  // Full state
-  getFullGameState,
-  
-  // Leaderboard
-  getLeaderboard,
-  
-  // Crises
-  getCrises,
-  getCrisisOptions,
-  saveCrisisResponse,
-  
-  // Test
-  testConnection
-};
+  return callAPI('saveRoundResult', { gameCode, round, phase, ...resultDa
