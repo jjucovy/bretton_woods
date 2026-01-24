@@ -547,7 +547,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
     }
   })();
 }
-} else {
+  else {
   console.log('✅ Main game room already exists in memory:', SINGLE_ROOM_ID);
   console.log('   Room details:', {
     roomId: globalState.rooms[SINGLE_ROOM_ID].roomId,
