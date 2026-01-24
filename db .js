@@ -51,8 +51,27 @@ async function getAllUsers() {
   return callAPI('getAllUsers');
 }
 
+// Get user by username
 async function getUser(username) {
-  return callAPI('getUser', { username });
+  try {
+    const result = await callAPI('getUser', { username });
+    
+    if (result && result.success) {
+      // Return the user object with correct field names
+      return {
+        user_id: result.user_id,
+        username: result.username,
+        password_hash: result.password_hash,
+        is_teacher: result.is_teacher,
+        created_at: result.created_at
+      };
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('getUser failed:', err.message);
+    return null;
+  }
 }
 
 async function createUser(username, password, role = 'student', email = '', displayName = '') {
