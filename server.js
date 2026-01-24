@@ -50,14 +50,6 @@ async function initializeIdCounters() {
     console.log('   Will start from 0 and increment as needed');
   }
 }
-
-## Testing Steps
-
-1. **Restart the server completely** (kill and restart Node.js)
-2. **Check the startup logs** - you should see:
-```
-   ✅ Initialized highestGameId: X
-   ✅ Initialized highestPlayerId: Y
 // Function to find the active lobby game with available slots
 async function findActiveLobbyGame() {
   try {
