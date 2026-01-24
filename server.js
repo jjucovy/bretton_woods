@@ -54,7 +54,6 @@ async function initializeIdCounters() {
     console.log('   Will start from 0 and increment as needed');
   }
 }
-
 // Function to find the active lobby game with available slots
 async function findActiveLobbyGame() {
   try {
@@ -3373,7 +3372,10 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
 async function startServer() {
   // Test database connection
   const dbConnected = await db.testConnection();
-  
+   // Initialize ID counters from database FIRST
+  if (dbConnected) {
+    await initializeIdCounters(); // ← ADD THIS LINE
+  }  
   // Ensure database schema exists
   if (dbConnected) {
     try {
