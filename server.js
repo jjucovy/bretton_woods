@@ -1587,101 +1587,150 @@ const playerId = getNextPlayerId();
   
   // Login existing user
   socket.on('login', async ({ username, password }) => {
-    console.log('=== LOGIN REQUEST ===');
-    console.log('Username:', username);
-    
-    if (!username || !password) {
-      socket.emit('loginResult', { success: false, message: 'Username and password required' });
-      return;
-    }
-    
-    let user = globalState.users[username];
-    
-    // If not in memory, check database
-    if (!user) {
-      console.log('User not in memory, checking database...');
-      try {
-        const dbUser = await db.getUser(username);
-        if (dbUser) {
-          // Use user_id with player_db_ prefix (consistent format)
-          const playerId = `player_db_${dbUser.user_id}`;
-          
-          // Load user from database into memory
-          globalState.users[username] = {
-            password: dbUser.password_hash,
-            playerId: playerId,
-            userId: dbUser.user_id,
-            createdAt: Date.now(),
-            role: dbUser.is_teacher === '1' || dbUser.is_teacher === 1 ? 'teacher' : 'player'
-          };
-          user = globalState.users[username];
-          console.log('User loaded from database:', username, 'playerId:', playerId);
-          saveState();
-        }
-      } catch (err) {
-        console.warn('⚠️ Could not check DB for user:', err.message);
-      }
-    }
-    
-    if (!user) {
-      console.log('ERROR: User not found');
-      socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
-      return;
-    }
-    
-    console.log('User found, role:', user.role || 'undefined');
-    
-    if (!verifyPassword(password, user.password)) {
-      console.log('ERROR: Password incorrect');
-      socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
-      return;
-    }
-    
-    const role = user.role || 'player';
-    console.log('Login successful, sending role:', role);
-    
-    // Update last login time
-    user.lastLogin = Date.now();
-    saveState();
-    
-    // Check if user is already in an active game
-    let activeGame = null;
+  console.log('=== LOGIN REQUEST ===');
+  console.log('Username:', username);
+  console.log('Raw password:', password);
+  
+  if (!username || !password) {
+    socket.emit('loginResult', { success: false, message: 'Username and password required' });
+    return;
+  }
+  
+  let user = globalState.users[username];
+  
+  // If not in memory, check database
+  if (!user) {
+    console.log('User not in memory, checking database...');
     try {
-      const userId = await getUserId(username);
-      if (userId) {
-        activeGame = await db.getPlayerActiveGame(userId);
-        // Only return the game if it's actually active (phase1_active or phase2_active)
-        if (activeGame && activeGame.game_status) {
-          if (activeGame.game_status === 'phase1_active' || activeGame.game_status === 'phase2_active') {
-            console.log(`📊 User ${username} has active game: ${activeGame.game_code} as ${activeGame.country_name}`);
-          } else {
-            console.log(`⚠️ User ${username} was in game ${activeGame.game_code} but it's no longer active (status: ${activeGame.game_status})`);
-            activeGame = null; // Don't restore - game is no longer active
-          }
+      const dbUser = await db.getUser(username);
+      console.log('Database response:', dbUser);
+      
+      if (dbUser) {
+        console.log('Found user in database:', {
+          username: dbUser.username,
+          user_id: dbUser.user_id,
+          hasPasswordHash: !!dbUser.password_hash,
+          passwordHashLength: dbUser.password_hash ? dbUser.password_hash.length : 0,
+          is_teacher: dbUser.is_teacher
+        });
+        
+        // Check if user_id exists
+        if (!dbUser.user_id) {
+          console.error('❌ ERROR: user_id is missing from database response!');
+          socket.emit('loginResult', { 
+            success: false, 
+            message: 'Database error: user_id missing. Please contact administrator.' 
+          });
+          return;
         }
+        
+        // Use user_id with player_db_ prefix (consistent format)
+        const playerId = `player_db_${dbUser.user_id}`;
+        
+        // Determine role - check for superadmin first
+        let role = 'player';
+        if (username.toLowerCase() === 'jjucovy@gmail.com' || username.toLowerCase() === 'jjucovy') {
+          role = 'superadmin';
+        } else if (dbUser.is_teacher === '1' || dbUser.is_teacher === 1 || dbUser.is_teacher === true) {
+          role = 'teacher';
+        }
+        
+        console.log(`Assigned role: ${role} (is_teacher: ${dbUser.is_teacher})`);
+        
+        // Load user from database into memory
+        globalState.users[username] = {
+          password: dbUser.password_hash,
+          playerId: playerId,
+          userId: dbUser.user_id,
+          createdAt: dbUser.created_at ? new Date(dbUser.created_at).getTime() : Date.now(),
+          role: role
+        };
+        user = globalState.users[username];
+        console.log('User loaded from database:', username, 'playerId:', playerId, 'role:', role);
+        saveState();
+      } else {
+        console.log('Database returned null or no user found');
       }
     } catch (err) {
-      console.warn('⚠️ Could not check for active game:', err.message);
+      console.error('⚠️ Database error:', err.message);
+      console.error('Stack trace:', err.stack);
     }
-    
-    socket.emit('loginResult', { 
-      success: true, 
-      playerId: user.playerId, 
+  } else {
+    console.log('User found in memory:', {
       username: username,
-      role: role,
-      activeGame: activeGame ? {
-        gameCode: activeGame.game_code,
-        country: activeGame.country_code,
-        countryName: activeGame.country_name,
-        status: activeGame.game_status,
-        currentRound: activeGame.current_round,
-        score: parseInt(activeGame.phase1_score || 0) + parseInt(activeGame.phase2_score || 0)
-      } : null
+      playerId: user.playerId,
+      hasPassword: !!user.password,
+      passwordLength: user.password ? user.password.length : 0,
+      role: user.role
     });
-    
-    console.log(`User logged in: ${username} (${role})${activeGame ? ` - rejoining ${activeGame.game_code}` : ''}`);
-    console.log('====================');
+  }
+  
+  if (!user) {
+    console.log('ERROR: User not found in database or memory');
+    socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
+    return;
+  }
+  
+  console.log('User found, role:', user.role || 'undefined');
+  
+  // Hash the provided password and compare
+  const hashedInputPassword = hashPassword(password);
+  console.log('Password verification:');
+  console.log('  Input password:', password);
+  console.log('  Input hashed:', hashedInputPassword);
+  console.log('  Stored hash:', user.password);
+  console.log('  Match:', hashedInputPassword === user.password);
+  
+  if (!verifyPassword(password, user.password)) {
+    console.log('ERROR: Password incorrect');
+    socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
+    return;
+  }
+  
+  const role = user.role || 'player';
+  console.log('✅ Login successful, role:', role);
+  
+  // Update last login time
+  user.lastLogin = Date.now();
+  saveState();
+  
+  // Check if user is already in an active game
+  let activeGame = null;
+  try {
+    const userId = user.userId;
+    if (userId) {
+      activeGame = await db.getPlayerActiveGame(userId);
+      if (activeGame && activeGame.game_status) {
+        if (activeGame.game_status === 'phase1_active' || activeGame.game_status === 'phase2_active') {
+          console.log(`📊 User ${username} has active game: ${activeGame.game_code} as ${activeGame.country_name}`);
+        } else {
+          console.log(`⚠️ User ${username} was in game ${activeGame.game_code} but it's no longer active (status: ${activeGame.game_status})`);
+          activeGame = null;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not check for active game:', err.message);
+  }
+  
+  socket.emit('loginResult', { 
+    success: true, 
+    playerId: user.playerId, 
+    username: username,
+    role: role,
+    activeGame: activeGame ? {
+      gameCode: activeGame.game_code,
+      country: activeGame.country_code,
+      countryName: activeGame.country_name,
+      status: activeGame.game_status,
+      currentRound: activeGame.current_round,
+      score: parseInt(activeGame.phase1_score || 0) + parseInt(activeGame.phase2_score || 0)
+    } : null
   });
+  
+  console.log(`User logged in: ${username} (${role})${activeGame ? ` - rejoining ${activeGame.game_code}` : ''}`);
+  console.log('====================');
+});
   
   // Create new room
   socket.on('createRoom', ({ playerId, roomName }) => {
