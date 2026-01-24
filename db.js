@@ -247,11 +247,11 @@ async function getGame(gameCode) {
   }
 }
 
-async function createGame(gameCode, createdBy) {
+async function createNewGame(gameCode, createdBy) {
   try {
-    return await callAPI('createGame', { gameCode, createdBy });
+    return await callAPI('createNewGame', { gameCode, createdBy });
   } catch (err) {
-    console.error('createGame failed:', err.message);
+    console.error('createNewGame failed:', err.message);
     return { error: err.message };
   }
 }
@@ -399,7 +399,7 @@ module.exports = {
   createUser,
   
   // Games
-  createGame,
+  createNewGame,
   getGame,
   updateGame,
   
