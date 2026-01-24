@@ -6,6 +6,19 @@
 const API_URL = 'https://jucovy.com/api.php';
 const API_KEY = 'bretton-woods-secret-key-2024';
 
+
+// Add to db.js or update your API to support these calls:
+
+async function getHighestGameId() {
+  return await callAPI('getHighestGameId', {});
+}
+
+async function getHighestPlayerId() {
+  return await callAPI('getHighestPlayerId', {});
+}
+
+
+
 async function callAPI(action, data = {}) {
   try {
     const response = await fetch(API_URL, {
