@@ -63,9 +63,7 @@ async function createUser(username, password, role = 'student', email = '', disp
 }
 
 // ============ GAMES ============
-async function createGame(gameCode, createdBy = null) {
-  return callAPI('createGame', { gameCode, createdBy });
-}
+
 
 async function getGame(gameCode) {
   return callAPI('getGame', { gameCode });
