@@ -1982,6 +1982,10 @@ function YearEndBattlePhase({
           const [isReady, setIsReady] = useState(false);
           const [connected, setConnected] = useState(false);
           const [skipPhase1, setSkipPhase1] = useState(false);
+          
+          // Battle modal state
+          const [showBattleModal, setShowBattleModal] = useState(false);
+          const [militaryConflict, setMilitaryConflict] = useState(null);
 
           // Check for existing session
           useEffect(() => {
@@ -2098,6 +2102,12 @@ function YearEndBattlePhase({
               console.error('Advance year error:', message);
             });
 
+            socket.on('militaryConflict', (conflictData) => {
+              console.log('🎖️ Battle Modal Trigger: Military conflict detected', conflictData);
+              setMilitaryConflict(conflictData);
+              setShowBattleModal(true);
+            });
+
             return () => {
               socket.off('connect');
               socket.off('disconnect');
@@ -2108,6 +2118,7 @@ function YearEndBattlePhase({
               socket.off('joinResult');
               socket.off('rejoinResult');
               socket.off('advanceYearError');
+              socket.off('militaryConflict');
             };
           }, [playerId, isAuthenticated]);
 
@@ -4323,4 +4334,4 @@ ${err.stack}
         }
     </script>
 </body>
-</html>
+</html>.  

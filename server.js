@@ -108,7 +108,6 @@ const crisisEventsData = require('./crisis-events.json');
 function createGameState(roomId, roomName, hostId) {
   return {
     roomId: roomId,
-    gameCode: roomId, // CRITICAL: gameCode must be set to roomId for API to work
     roomName: roomName,
     hostId: hostId,
     gameId: Date.now(),
@@ -153,58 +152,6 @@ function loadState() {
         rooms: loadedState.rooms || {},
         roomList: loadedState.roomList || []
       };
-      
-      // CRITICAL: Ensure all loaded rooms have gameCode set and phase2.crises initialized
-      Object.keys(globalState.rooms).forEach(roomId => {
-        const room = globalState.rooms[roomId];
-        
-        if (!room.gameCode) {
-          room.gameCode = roomId;
-          console.log(`⚠️ Added missing gameCode to room ${roomId}`);
-        }
-        
-        // Ensure phase2.crises structure exists for old saved states
-        if (!room.phase2) {
-          room.phase2 = {
-            active: false,
-            currentYear: 1946,
-            maxYears: 7,
-            policies: {},
-            yearlyData: {},
-            achievements: {},
-            crises: {
-              active: null,
-              history: [],
-              responses: {}
-            }
-          };
-        }
-        if (!room.phase2.crises) {
-          room.phase2.crises = {
-            active: null,
-            history: [],
-            responses: {}
-          };
-        }
-        if (!room.phase2.crises.history) {
-          room.phase2.crises.history = [];
-        }
-        
-        // CRITICAL: Ensure scores are initialized
-        if (!room.scores) {
-          room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
-          console.log(`⚠️ Initialized missing scores for room ${roomId}`);
-        }
-        
-        // CRITICAL: Ensure players object exists (recover if empty from completed game)
-        if (!room.players) {
-          room.players = {};
-          console.log(`⚠️ Initialized missing players object for room ${roomId}`);
-        }
-        if (Object.keys(room.players).length === 0 && room.gamePhase === 'complete') {
-          console.log(`⚠️ Room ${roomId} is marked complete but has no players - likely recovered from crash. Will rebuild from database on next request.`);
-        }
-      });
       
       console.log('✅ Multi-room state loaded from file');
       console.log(`   - Users: ${Object.keys(globalState.users).length}`);
@@ -326,38 +273,6 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res
   try {
     // Restore room state
     globalState.rooms[roomId] = roomData;
-    
-    // CRITICAL: Ensure imported room has gameCode set
-    if (!globalState.rooms[roomId].gameCode) {
-      globalState.rooms[roomId].gameCode = roomId;
-    }
-    
-    // Ensure phase2.crises structure exists for imported states
-    if (!globalState.rooms[roomId].phase2) {
-      globalState.rooms[roomId].phase2 = {
-        active: false,
-        currentYear: 1946,
-        maxYears: 7,
-        policies: {},
-        yearlyData: {},
-        achievements: {},
-        crises: {
-          active: null,
-          history: [],
-          responses: {}
-        }
-      };
-    }
-    if (!globalState.rooms[roomId].phase2.crises) {
-      globalState.rooms[roomId].phase2.crises = {
-        active: null,
-        history: [],
-        responses: {}
-      };
-    }
-    if (!globalState.rooms[roomId].phase2.crises.history) {
-      globalState.rooms[roomId].phase2.crises.history = [];
-    }
     
     // Save to disk
     saveState();
@@ -836,25 +751,10 @@ function triggerCrisisIfNeeded(roomId, year) {
   const room = globalState.rooms[roomId];
   if (!room) return;
   
-  // Only check for crises if phase 2 is active
-  if (!room.phase2 || !room.phase2.active) return;
-  
   // Check if there's already an active crisis
-  if (room.phase2.crises && room.phase2.crises.active) {
+  if (room.phase2.crises.active) {
     console.log(`Crisis already active, skipping trigger for year ${year}`);
     return;
-  }
-  
-  // Ensure crises object is properly initialized with history array
-  if (!room.phase2.crises) {
-    room.phase2.crises = {
-      active: null,
-      history: [],
-      responses: {}
-    };
-  }
-  if (!room.phase2.crises.history) {
-    room.phase2.crises.history = [];
   }
   
   // Find crisis events for this year that haven't been triggered yet
@@ -1481,15 +1381,6 @@ function resolveCrisisEffects(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return false;
   
-  // Ensure phase2.crises is initialized
-  if (!room.phase2.crises) {
-    room.phase2.crises = {
-      active: null,
-      history: [],
-      responses: {}
-    };
-  }
-  
   const crisis = room.phase2.crises.active;
   if (!crisis) return false;
   
@@ -1546,21 +1437,7 @@ function resolveCrisisEffects(roomId) {
   room.phase2.crises.active = null;
   room.phase2.crises.responses = {};
   
-  // UPDATE SCORES IMMEDIATELY: Award diplomatic points as crisis scores
-  Object.entries(responses).forEach(([country, response]) => {
-    const choice = response.choice;
-    const effects = choice.effects || {};
-    
-    // Award diplomatic points immediately as crisis points
-    if (effects.diplomaticPoints) {
-      const crisisPointsAwarded = effects.diplomaticPoints * 2; // 2 pts per diplomatic point
-      room.scores[country] = (room.scores[country] || 0) + crisisPointsAwarded;
-      console.log(`📊 ${country}: +${crisisPointsAwarded} crisis points (diplomatic: ${effects.diplomaticPoints})`);
-    }
-  });
-  
   console.log(`✅ Crisis auto-resolved - ${Object.keys(responses).length} countries responded`);
-  console.log(`Updated scores after crisis:`, room.scores);
   
   saveState();
   return true;
@@ -1747,23 +1624,12 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    // Sync to MySQL - capture the actual game_id returned
+    // Sync to MySQL
     (async () => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
-      
-      try {
-        // Create game and get back the database game_id
-        const result = await db.callAPI('createGame', { gameCode: roomId, createdBy: userId });
-        if (result && result.game_id) {
-          globalState.rooms[roomId].gameId = result.game_id;
-          console.log(`📊 Game created in MySQL: ${roomId} -> database game_id ${result.game_id}`);
-        } else {
-          console.log(`⚠️ Game created in MySQL but no game_id returned for: ${roomId}`);
-        }
-      } catch (error) {
-        console.error(`❌ Failed to create game in MySQL for ${roomId}:`, error);
-      }
+      await dbSync(db.createGame, roomId, userId);
+      console.log(`📊 Game created in MySQL: ${roomId}`);
     })();
     
     console.log(`Room created: ${roomName} (${roomId}) by ${playerId}`);
@@ -1912,7 +1778,7 @@ io.on('connection', (socket) => {
           
           // Get country name from countries list
           const countryNames = { USA: 'United States', UK: 'United Kingdom', USSR: 'Soviet Union', France: 'France', China: 'China', India: 'India', Argentina: 'Argentina' };
-          await dbSync(db.addPlayer, room.gameCode, userId, country, countryNames[country] || country);
+          await dbSync(db.addPlayer, roomId, userId, country, countryNames[country] || country);
           console.log(`📊 Player ${username} (${country}) synced to MySQL`);
         } catch (err) {
           console.error(`❌ Error syncing player to MySQL:`, err.message);
@@ -2055,7 +1921,6 @@ io.on('connection', (socket) => {
     }
     
     room.gameStarted = true;
-    room.isRevoting = false;
     
     // Check if skipping Phase 1
     if (skipPhase1) {
@@ -2075,10 +1940,10 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    // Sync game start to MySQL using the game code
+    // Sync game start to MySQL
     const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
-    dbSync(db.updateGame, room.gameCode, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
-    console.log(`📊 Game ${room.gameCode} started in room ${roomId} synced to MySQL (status: ${gameStatus})`);
+    dbSync(db.updateGame, roomId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
+    console.log(`📊 Game started synced to MySQL (status: ${gameStatus})`);
     
     console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
@@ -2139,7 +2004,6 @@ io.on('connection', (socket) => {
         if (room.voteAttempts[roundKey] >= 3) {
           // After 3 attempts, declare no resolution and skip to next round
           console.log(`❌ No resolution after 3 vote attempts - skipping policy and moving to next round (NO POINTS AWARDED)`);
-          room.isRevoting = false; // Clear revote flag
           room.gamePhase = 'voting';
           room.roundOutcome = `UNRESOLVED TIE - No consensus after 3 votes (${tiedOptions.map(o => voteTally[o]).join('-')}). Moving to next round.`;
           room.winningOption = null;
@@ -2156,7 +2020,7 @@ io.on('connection', (socket) => {
               room.currentRound++;
               if (room.currentRound > 10) {
                 initializePhase2(roomId);
-                await dbSync(db.updateGame, room.gameCode, { status: 'phase2_active', currentRound: 11 });
+                await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
               } else {
                 room.gamePhase = 'voting';
                 room.votes = {};
@@ -2167,12 +2031,12 @@ io.on('connection', (socket) => {
           }
           return;
         } else {
-          // Trigger revote (stay in same phase, just clear votes)
+          // Trigger revote
           console.log(`🔄 Triggering revote - clearing votes and waiting for new submissions`);
+          room.gamePhase = 'revoting';
           room.votes = {}; // Clear votes for revote
           room.voteTally = voteTally;
           room.roundOutcome = `TIE! Revoting required (attempt ${room.voteAttempts[roundKey]}/3)`;
-          room.isRevoting = true; // Flag to show revote state
           
           broadcastToRoom(roomId);
           saveState();
@@ -2183,7 +2047,6 @@ io.on('connection', (socket) => {
       // No tie - determine winning option (most votes)
       let winningOption = tiedOptions[0]; // Since no tie, tiedOptions has exactly 1 element
       
-      room.isRevoting = false; // Clear revote flag on successful vote
       room.voteTally = voteTally;
       room.roundOutcome = `Option ${winningOption.toUpperCase()} wins (${maxVotes} votes)`;
       room.winningOption = winningOption;
@@ -2276,7 +2139,7 @@ io.on('connection', (socket) => {
           }
         } catch (err) { /* ignore */ }
         
-        await dbSync(db.saveRoundResult, room.gameCode, room.currentRound, 1, {
+        await dbSync(db.saveRoundResult, roomId, room.currentRound, 1, {
           winningOptionId: winningOption,
           winningOptionText: winningOptionText,
           totalVotes: playerIds.length,
@@ -2284,7 +2147,7 @@ io.on('connection', (socket) => {
         });
         
         // Update game state in DB
-        await dbSync(db.updateGame, room.gameCode, { currentRound: room.currentRound });
+        await dbSync(db.updateGame, roomId, { currentRound: room.currentRound });
         console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
       })();
       
@@ -2308,7 +2171,7 @@ io.on('connection', (socket) => {
           // Check if Phase 1 is complete - start Phase 2
           if (currentRoom.currentRound > 10) {
             initializePhase2(roomId);
-            await dbSync(db.updateGame, currentRoom.gameId, { status: 'phase2_active', currentRound: 11 });
+            await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
             console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
           } else {
             currentRoom.gamePhase = 'voting';
@@ -2346,14 +2209,14 @@ io.on('connection', (socket) => {
         } catch (err) { /* ignore */ }
         
         const pointsEarned = room.roundScores?.[voterCountry] || 0;
-        await dbSync(db.saveVote, room.gameCode, userId, room.currentRound, 
+        await dbSync(db.saveVote, roomId, userId, room.currentRound, 
           `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned);
         console.log(`📊 Vote synced: ${username} (${voterCountry}) -> ${choice}`);
         
         // Also update player total points to phase1_score column
         if (room.scores?.[voterCountry]) {
           console.log(`💾 Saving Phase 1 points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
-          const pointsResult = await dbSync(db.updatePlayerPoints, room.gameCode, userId, room.scores[voterCountry], 'phase1');
+          const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry], 'phase1');
           if (pointsResult?.error) {
             console.error(`❌ Failed to save points to DB:`, pointsResult.error);
           } else {
@@ -2402,7 +2265,6 @@ io.on('connection', (socket) => {
     } else {
       room.gamePhase = 'voting';
       room.votes = {}; // Clear votes for new round
-      room.isRevoting = false; // Clear revote flag
     }
     
     broadcastToRoom(roomId);
@@ -2478,7 +2340,7 @@ io.on('connection', (socket) => {
       const userId = username ? await getUserId(username) : null;
       if (userId) {
         const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-        await dbSync(db.savePolicy, room.gameCode, userId, phase2Round, {
+        await dbSync(db.savePolicy, roomId, userId, phase2Round, {
           year: currentYear,
           interestRate: submittedPolicy.centralBankRate || 0,
           govtSpending: submittedPolicy.militarySpending || 0,
@@ -2523,10 +2385,8 @@ io.on('connection', (socket) => {
         calculatePhase2Scores(roomId);
         room.gamePhase = 'complete';
         room.phase2.active = false;
-        dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
-        // Release all players when game completes
-        dbSync(db.releaseAllPlayers, room.gameCode);
-        console.log('[AUTO] Phase 2 complete! Final scores calculated. Players released.');
+        dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+        console.log('[AUTO] Phase 2 complete! Final scores calculated.');
         broadcastToRoom(roomId);
         saveState();
         return;
@@ -2543,7 +2403,7 @@ io.on('connection', (socket) => {
       
       // Sync to database
       const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, room.gameCode, { currentRound: 10 + phase2Round });
+      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round });
       console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
       // Check for crisis events this year
@@ -2628,16 +2488,44 @@ io.on('connection', (socket) => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       if (userId) {
-        await dbSync(db.saveDeployment, room.gameCode, userId, {
+        await dbSync(db.saveDeployment, roomId, userId, {
           country: deployment.country,
           region: deployment.region,
-          branch: deployment.branch,
           troops: deployment.troops,
           year: room.phase2.currentYear
         });
         console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`)
       }
     })();
+    
+    // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
+    if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
+      const latestConflict = room.phase2.conflicts[room.phase2.conflicts.length - 1];
+      console.log(`🎖️ Battle System Triggered: Conflict in ${latestConflict.region}`);
+      
+      // Emit battle alert to all players in room
+      io.to(roomId).emit('militaryConflict', {
+        region: latestConflict.region,
+        countries: latestConflict.countries,
+        year: room.phase2.currentYear,
+        message: `Military conflict detected in ${latestConflict.region}!`
+      });
+      
+      // Also trigger database battle detection asynchronously
+      (async () => {
+        try {
+          const result = await db.callAPI('detectBattles', {
+            gameCode: room.gameCode || roomId,
+            region: latestConflict.region,
+            countries: latestConflict.countries,
+            year: room.phase2.currentYear
+          });
+          console.log(`✅ Database battle detection completed:`, result);
+        } catch (err) {
+          console.error(`❌ Database battle detection error: ${err.message}`);
+        }
+      })();
+    }
     
     broadcastToRoom(roomId);
     saveState();
@@ -2647,15 +2535,6 @@ io.on('connection', (socket) => {
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.phase2.active) return;
-    
-    // Ensure phase2.crises is initialized
-    if (!room.phase2.crises) {
-      room.phase2.crises = {
-        active: null,
-        history: [],
-        responses: {}
-      };
-    }
     
     const player = room.players[playerId];
     if (!player) return;
@@ -2720,7 +2599,11 @@ io.on('connection', (socket) => {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
       if (userId) {
-        await dbSync(db.saveCrisisResponse, room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear);
+        await dbSync(db.saveCrisisResponse, roomId, userId, {
+          crisisId: crisis.id,
+          optionId: choiceId,
+          year: room.phase2.currentYear
+        });
         console.log(`📊 Crisis response synced to MySQL: ${username}`);
       }
     })();
@@ -2784,15 +2667,6 @@ io.on('connection', (socket) => {
     if (!room) {
       console.log('ERROR: Room not found');
       return;
-    }
-    
-    // Ensure phase2.crises is initialized
-    if (!room.phase2.crises) {
-      room.phase2.crises = {
-        active: null,
-        history: [],
-        responses: {}
-      };
     }
     
     console.log('Room found:', room.roomName);
@@ -2877,10 +2751,8 @@ io.on('connection', (socket) => {
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
-      dbSync(db.updateGame, room.gameCode, { status: 'completed', currentRound: 12 });
-      // Release all players when game completes
-      dbSync(db.releaseAllPlayers, room.gameCode);
-      console.log('Phase 2 complete! Final scores calculated. Players released.');
+      dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+      console.log('Phase 2 complete! Final scores calculated.');
       broadcastToRoom(roomId);
       saveState();
       return;
@@ -2928,7 +2800,6 @@ io.on('connection', (socket) => {
     room.currentRound = 0;
     room.gamePhase = 'lobby';
     room.votes = {};
-    room.isRevoting = false;
     room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
     room.roundHistory = [];
     room.readyPlayers = [];
@@ -2942,7 +2813,7 @@ io.on('connection', (socket) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, room.gameCode, { status: 'lobby', currentRound: 0 });
+    dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
@@ -2950,15 +2821,10 @@ io.on('connection', (socket) => {
     console.log(`Room ${roomId} reset by superadmin`);
   });
   
-  // ADMIN: Start new game (resets current game and releases all players)
-  socket.on('startNewGame', ({ roomId, playerId }) => {
-    console.log('=== START NEW GAME REQUEST ===');
-    console.log('Room ID:', roomId);
-    console.log('Player ID:', playerId);
-    
+  // ADMIN: Start New Game - Creates new game record, releases players, resets room
+  socket.on('startNewGame', async ({ roomId, playerId }) => {
     const room = globalState.rooms[roomId];
     if (!room) {
-      console.log('ERROR: Room not found');
       socket.emit('startNewGameResult', { success: false, message: 'Room not found' });
       return;
     }
@@ -2972,66 +2838,98 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Release all players from the OLD game in database
-    if (room.gameCode) {
-      dbSync(db.releaseAllPlayers, room.gameCode);
-      console.log(`Released all players from old game ${room.gameCode}`);
-    }
-    
-    // Create a NEW game in the database
-    const newGameCode = `${roomId}-${Date.now()}`;
-    console.log(`Creating new game with code: ${newGameCode}`);
-    
-    // Use the proper db function to create a new game
-    db.createGame(newGameCode, playerId)
-      .then(result => {
-        console.log('Create game result:', result);
-        
-        if (!result || !result.game_id) {
-          console.error('ERROR: Failed to create new game in database');
-          socket.emit('startNewGameResult', { success: false, message: 'Failed to create new game in database' });
-          return;
+    try {
+      // Step 1: Release all players from old game (set country_id = NULL in database)
+      console.log(`📋 Starting new game process for room ${roomId}...`);
+      
+      const oldGameCode = room.gameCode || roomId;
+      const releaseResponse = await axios.post(PHP_API_ENDPOINT,
+        qs.stringify({
+          action: 'releasePlayersFromGame',
+          gameCode: oldGameCode
+        }),
+        { headers: { 'X-API-Key': API_KEY } }
+      );
+      
+      if (!releaseResponse.data.success) {
+        throw new Error('Failed to release players from old game');
+      }
+      console.log(`✅ Released ${releaseResponse.data.playersReleased} players from old game`);
+      
+      // Step 2: Create new game record in database
+      const newGameResponse = await axios.post(PHP_API_ENDPOINT,
+        qs.stringify({
+          action: 'createGame',
+          gameCode: roomId,
+          playerCount: Object.keys(room.players).length,
+          status: 'lobby'
+        }),
+        { headers: { 'X-API-Key': API_KEY } }
+      );
+      
+      if (!newGameResponse.data.success) {
+        throw new Error('Failed to create new game in database');
+      }
+      console.log(`✅ Created new game in database: ${newGameResponse.data.gameId}`);
+      
+      // Step 3: Reset room state
+      room.gameStarted = false;
+      room.currentRound = 0;
+      room.gamePhase = 'lobby';
+      room.votes = {};
+      room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
+      room.roundHistory = [];
+      room.readyPlayers = [];
+      room.battleHistory = [];
+      room.alliances = [];
+      
+      // Clear player country assignments
+      for (let playerId in room.players) {
+        room.players[playerId].country = null;
+        room.players[playerId].countryCode = null;
+      }
+      
+      // Reset Phase 2
+      room.phase2 = {
+        active: false,
+        currentYear: 1946,
+        maxYears: 7,
+        policies: {},
+        yearlyData: {},
+        achievements: {},
+        conflicts: [],
+        deployments: {},
+        battles: {},
+        crisisResponses: {}
+      };
+      
+      // Step 4: Sync to database
+      await dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
+      
+      socket.emit('startNewGameResult', { success: true, message: 'New game started!' });
+      
+      // Step 5: Broadcast to all players in room
+      io.to(roomId).emit('gameRestarted', {
+        message: 'A new game has been started. Going back to lobby...',
+        room: {
+          gameCode: room.gameCode,
+          players: room.players,
+          gamePhase: 'lobby'
         }
-        
-        // Update room to point to NEW game
-        const oldGameId = room.gameId;
-        room.gameId = result.game_id;
-        room.gameCode = newGameCode; // CRITICAL: Update gameCode to new game code
-        
-        // Reset game state
-        room.gameStarted = false;
-        room.currentRound = 0;
-        room.gamePhase = 'lobby';
-        room.votes = {};
-        room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
-        room.roundHistory = [];
-        room.readyPlayers = [];
-        room.players = {}; // Clear player assignments in memory
-        room.phase2 = {
-          active: false,
-          currentYear: 1946,
-          maxYears: 7,
-          policies: {},
-          yearlyData: {},
-          achievements: {}
-        };
-        
-        // Update the NEW game in database
-        dbSync(db.updateGame, newGameCode, { status: 'lobby', currentRound: 0 });
-        
-        socket.emit('startNewGameResult', { success: true, gameId: result.game_id });
-        broadcastToRoom(roomId);
-        broadcastRoomList();
-        saveState();
-        
-        console.log(`✅ New game ${result.game_id} created in room ${roomId} (old game was ${oldGameId})`);
-        console.log(`   Created by: ${isSuperAdmin ? 'superadmin' : 'room host'}`);
-        console.log('========================');
-      })
-      .catch(error => {
-        console.error('ERROR creating new game:', error);
-        socket.emit('startNewGameResult', { success: false, message: 'Error creating new game: ' + error.message });
       });
+      
+      broadcastToRoom(roomId);
+      broadcastRoomList();
+      saveState();
+      
+      console.log(`✅ New game started successfully for room ${roomId}`);
+    } catch (error) {
+      console.error(`❌ Error starting new game:`, error.message);
+      socket.emit('startNewGameResult', { 
+        success: false, 
+        message: `Failed to start new game: ${error.message}` 
+      });
+    }
   });
   
   // ADMIN: Toggle auto-advance setting
@@ -3172,7 +3070,13 @@ async function startServer() {
       await db.setupSchema();
       console.log('✅ Database schema verified');
       
-      // Score columns already exist in database (phase1_score, phase2_score)
+      // Ensure score columns exist on players table
+      try {
+        await db.ensureScoreColumns();
+        console.log('✅ Score columns verified on players table');
+      } catch (err) {
+        console.warn('⚠️ Score columns warning:', err.message);
+      }
     } catch (err) {
       console.warn('⚠️ Schema setup warning:', err.message);
     }
