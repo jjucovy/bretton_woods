@@ -2,9 +2,7 @@
  * Database module - calls PHP API on Hostinger
  * Complete game state persistence
  */
-
-const fetch = require('node-fetch');
-const { URLSearchParams } = require('url');
+ 
 
 const API_URL = 'https://jucovy.com/api.php';
 const API_KEY = 'bretton-woods-secret-key-2024';
