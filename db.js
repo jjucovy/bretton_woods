@@ -254,4 +254,99 @@ async function getGameResults(gameCode) {
 
 // ============ DEPLOYMENTS ============
 async function saveDeployment(gameCode, playerId, deployment) {
-  return callAPI('saveDeployment', {
+  return callAPI('saveDeployment', { 
+    gameCode, 
+    playerId, 
+    deployment: JSON.stringify(deployment) 
+  });
+}
+
+// ============ SCORE COLUMNS ============
+async function ensureScoreColumns() {
+  return callAPI('ensureScoreColumns');
+}
+
+// ============ TEST ============
+async function testConnection() {
+  try {
+    console.log('🔍 Testing database connection...');
+    console.log('   Endpoint:', API_URL);
+    
+    const result = await callAPI('testConnection');
+    
+    if (result && result.success) {
+      console.log('✅ Database connection successful');
+      return true;
+    } else {
+      console.error('❌ Database connection failed:', result);
+      return false;
+    }
+  } catch (err) {
+    console.error('❌ Database connection test failed:', err.message);
+    return false;
+  }
+}
+
+module.exports = {
+  // Core
+  callAPI,
+  testConnection,
+  
+  // Schema
+  setupSchema,
+  ensureScoreColumns,
+  
+  // Users
+  getAllUsers,
+  getUser,
+  createUser,
+  
+  // Games
+  createGame,
+  getGame,
+  updateGame,
+  getHighestGameId,
+  getHighestPlayerId,
+  findActiveLobbyGame,
+  releaseAllPlayers,
+  
+  // Players
+  addPlayer,
+  getPlayers,
+  updatePlayerPoints,
+  getPlayerActiveGame,
+  
+  // Votes
+  saveVote,
+  getVotes,
+  
+  // Policies
+  savePolicy,
+  getPolicies,
+  
+  // Results
+  saveRoundResult,
+  getRoundResults,
+  
+  // Economic State
+  saveEconomicState,
+  getEconomicState,
+  
+  // Game Results
+  saveGameResult,
+  getGameResults,
+  
+  // Full state
+  getFullGameState,
+  
+  // Leaderboard
+  getLeaderboard,
+  
+  // Crises
+  getCrises,
+  getCrisisOptions,
+  saveCrisisResponse,
+  
+  // Deployments
+  saveDeployment
+};
