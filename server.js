@@ -3121,10 +3121,11 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   }
   
   try {
-    // Step 1: Release all players from old game (set country_id = NULL in database)
     console.log(`📋 Starting new game process for room ${roomId}...`);
     
     const oldGameCode = room.gameCode || roomId;
+    
+    // Step 1: Release all players from old game
     try {
       const releaseResponse = await fetch(PHP_API_ENDPOINT, {
         method: 'POST',
@@ -3145,7 +3146,6 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       }
     } catch (err) {
       console.log(`⚠️ Could not release players from database: ${err.message}`);
-      // Continue anyway - reset room locally
     }
     
     // Step 2: Generate NEW gameCode with incremental ID
@@ -3153,6 +3153,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     const newGameCode = `game_${newGameId}`;
     console.log(`🆕 Generated new gameCode: ${newGameCode} (game_id: ${newGameId})`);
     
+    // Step 3: Create game in database with 'lobby' status
     try {
       const createGameResponse = await fetch(PHP_API_ENDPOINT, {
         method: 'POST',
@@ -3163,7 +3164,8 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         body: JSON.stringify({
           action: 'createGame',
           gameCode: newGameCode,
-          gameId: newGameId,  // Pass explicit game_id
+          gameId: newGameId,
+          gameStatus: 'lobby',  // IMPORTANT: Set to lobby
           createdBy: playerId
         })
       });
@@ -3171,23 +3173,24 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       const createGameData = await createGameResponse.json();
       
       if (createGameData.success || createGameData.game_id) {
-        console.log(`✅ NEW game created in database with ID: ${newGameId}, gameCode: ${newGameCode}`);
+        console.log(`✅ NEW game created in database with ID: ${newGameId}, status: lobby`);
         room.gameCode = newGameCode;
         room.gameId = newGameId;
       } else {
         console.log(`⚠️ createGame response: ${JSON.stringify(createGameData)}`);
+        room.gameCode = newGameCode;
+        room.gameId = newGameId;
       }
     } catch (err) {
       console.log(`⚠️ Could not create new game in database: ${err.message}`);
-      // Continue anyway - use new gameCode locally
       room.gameCode = newGameCode;
       room.gameId = newGameId;
     }
     
-    // Step 3: Reset room state locally
+    // Step 4: Reset room state locally
     room.gameStarted = false;
     room.currentRound = 0;
-    room.gamePhase = 'lobby';
+    room.gamePhase = 'lobby';  // IMPORTANT: Set to lobby
     room.votes = {};
     room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
     room.roundHistory = [];
@@ -3195,10 +3198,11 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     room.battleHistory = [];
     room.alliances = [];
     
-    // Clear player country assignments
-    for (let playerId in room.players) {
-      room.players[playerId].country = null;
-      room.players[playerId].countryCode = null;
+    // Clear player country assignments but keep them in the room
+    for (let pid in room.players) {
+      room.players[pid].country = null;
+      room.players[pid].countryCode = null;
+      room.players[pid].gamePlayerId = null;
     }
     
     // Reset Phase 2
@@ -3219,10 +3223,13 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       }
     };
     
-    // Step 4: Send confirmation
-    socket.emit('startNewGameResult', { success: true, message: 'New game started!' });
+    socket.emit('startNewGameResult', { 
+      success: true, 
+      message: 'New game started!',
+      gameId: newGameId,
+      gameCode: newGameCode
+    });
     
-    // Step 5: Broadcast to all players in room
     io.to(roomId).emit('gameRestarted', {
       message: 'A new game has been started. Going back to lobby...',
       room: {
@@ -3237,7 +3244,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     broadcastRoomList();
     saveState();
     
-    console.log(`✅ New game started successfully for room ${roomId} with game_id ${newGameId}`);
+    console.log(`✅ New game ${newGameId} started in lobby phase - ready for players`);
   } catch (error) {
     console.error(`❌ Error starting new game:`, error.message);
     socket.emit('startNewGameResult', { 
