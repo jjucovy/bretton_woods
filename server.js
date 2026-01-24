@@ -519,7 +519,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         saveState();
         
         // Create in database with lobby status
-        await db.callAPI('createGameInLobby', {
+        await db.callAPI('createGame', {
           gameCode: newGameCode,
           gameId: newGameId,
           createdBy: null
@@ -3127,7 +3127,7 @@ socket.on('startNewGame', async ({ roomId, playerId }) => {
     // Step 1: Mark old game as completed in database
     // Replace the updateGameStatus call in startNewGame:
 try {
-  await db.callAPI('updateGameStatus', {
+  await db.callAPI('updateGame', {
     gameCode: oldGameCode,
     status: 'completed'
   });
@@ -3173,7 +3173,7 @@ try {
           'X-API-Key': API_KEY
         },
         body: JSON.stringify({
-          action: 'createGameInLobby',  // Use specific action for lobby creation
+          action: 'createGame',  // Use specific action for lobby creation
           gameCode: newGameCode,
           gameId: newGameId,
           createdBy: playerId
