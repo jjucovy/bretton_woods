@@ -418,6 +418,8 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
             currentYear: currentYear, 
             policies: {}, 
             yearlyData: {},
+            deployments: [],
+            conflicts: [],
             crises: {
               active: null,
               history: [],
@@ -2815,7 +2817,14 @@ io.on('connection', (socket) => {
       maxYears: 7,
       policies: {},
       yearlyData: {},
-      achievements: {}
+      achievements: {},
+      deployments: [],
+      conflicts: [],
+      crises: {
+        active: null,
+        history: [],
+        responses: {}
+      }
     };
     
     socket.emit('resetRoomResult', { success: true });
@@ -2929,10 +2938,13 @@ io.on('connection', (socket) => {
         policies: {},
         yearlyData: {},
         achievements: {},
+        deployments: [],
         conflicts: [],
-        deployments: {},
-        battles: {},
-        crisisResponses: {}
+        crises: {
+          active: null,
+          history: [],
+          responses: {}
+        }
       };
       
       // Step 4: Send confirmation
