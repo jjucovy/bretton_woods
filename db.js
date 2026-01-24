@@ -1,9 +1,6 @@
 /**
  * Database module - calls PHP API on Hostinger
  * Complete game state persistence
- * 
- * CORRECTED VERSION - Consistent userId usage
- * Note: API converts userId to playerId internally where needed
  */
 
 const API_URL = 'https://jucovy.com/api.php';
@@ -13,7 +10,7 @@ async function callAPI(action, data = {}) {
   try {
     const payload = { action, ...data };
     // Log for critical data operations
-    if (['saveVote', 'saveRoundResult', 'saveGameResult', 'saveCrisisResponse', 'saveDeployment'].includes(action)) {
+    if (['saveVote', 'saveRoundResult', 'saveGameResult', 'saveCrisisResponse', 'saveDeployment', 'submitBattleDecision'].includes(action)) {
       console.log(`📡 API Call: ${action}`, JSON.stringify(payload).substring(0, 200));
     }
     
@@ -32,7 +29,7 @@ async function callAPI(action, data = {}) {
       throw new Error(result.error || 'API call failed');
     }
     
-    if (['saveVote', 'saveRoundResult', 'saveGameResult', 'saveCrisisResponse', 'saveDeployment'].includes(action)) {
+    if (['saveVote', 'saveRoundResult', 'saveGameResult', 'saveCrisisResponse', 'saveDeployment', 'submitBattleDecision'].includes(action)) {
       console.log(`✅ API Success: ${action}`, result.data);
     }
     
@@ -74,40 +71,15 @@ async function getGame(gameCode) {
   return callAPI('getGame', { gameCode });
 }
 
-/**
- * Get the most recent game for a room (by roomId prefix)
- * @param {string} roomId - The room ID (e.g., 'main-game')
- * @returns {Promise<Object>} The latest game record for this room
- */
-async function getLatestGameForRoom(roomId) {
-  return callAPI('getLatestGameForRoom', { roomId });
-}
-
 async function updateGame(gameCode, updates) {
   return callAPI('updateGame', { gameCode, ...updates });
 }
 
-// ============ COUNTRIES ============
-async function getCountries() {
-  return callAPI('getCountries');
-}
-
 // ============ PLAYERS ============
-/**
- * Add a player to a game with their assigned country
- * @param {string} gameCode - The game code
- * @param {number} userId - The user's ID (will be converted to player_id internally)
- * @param {string} countryCode - Country code (e.g., 'USA', 'UK')
- * @param {string} countryName - Full country name
- */
 async function addPlayer(gameCode, userId, countryCode, countryName) {
   return callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
 }
 
-/**
- * Get all players in a game
- * Returns players with country_code and country_name fields
- */
 async function getPlayers(gameCode) {
   const result = await callAPI('getPlayers', { gameCode });
   console.log('🔍 [getPlayers API Result]', JSON.stringify(result, null, 2).substring(0, 1000));
@@ -118,31 +90,11 @@ async function getPlayerActiveGame(userId) {
   return callAPI('getPlayerActiveGame', { userId });
 }
 
-/**
- * Update player points
- * @param {string} gameCode - The game code
- * @param {number} userId - The user's ID (will be converted to player_id internally)
- * @param {number} points - New point value (if addPoints is 0)
- * @param {number} phase - Game phase (1 or 2) - determines which score column to update
- * @param {number} addPoints - Points to add (if > 0, adds to existing score)
- */
-async function updatePlayerPoints(gameCode, userId, points, phase = 1, addPoints = 0) {
+async function updatePlayerPoints(gameCode, userId, points, phase = 'phase1', addPoints = 0) {
   return callAPI('updatePlayerPoints', { gameCode, userId, points, phase, addPoints });
 }
 
-async function clearPlayerCountry(gameCode, userId) {
-  return callAPI('clearPlayerCountry', { gameCode, userId });
-}
-
-async function releaseAllPlayers(gameCode) {
-  return callAPI('releaseAllPlayers', { gameCode });
-}
-
 // ============ VOTES (Phase 1) ============
-/**
- * Save a player's vote
- * @param {number} userId - The user's ID (API converts to player_id internally)
- */
 async function saveVote(gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned = 0) {
   return callAPI('saveVote', { gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned });
 }
@@ -152,10 +104,6 @@ async function getVotes(gameCode, round = null) {
 }
 
 // ============ POLICY DECISIONS (Phase 2) ============
-/**
- * Save a policy decision
- * @param {number} userId - The user's ID (API converts to player_id internally)
- */
 async function savePolicy(gameCode, userId, round, policyData) {
   return callAPI('savePolicy', { gameCode, userId, round, ...policyData });
 }
@@ -192,44 +140,26 @@ async function getCrisisOptions(crisisId, countryCode = null) {
   return callAPI('getCrisisOptions', { crisisId, countryCode });
 }
 
-async function seedCrises(crises) {
-  return callAPI('seedCrises', { crises });
-}
-
-/**
- * Save a crisis response
- * @param {string} gameCode - The game code
- * @param {number} userId - The user's ID (API converts to player_id internally)
- * @param {string} crisisId - The crisis ID
- * @param {string} optionId - The chosen option ID
- * @param {number} year - The year of the crisis
- */
-async function saveCrisisResponse(gameCode, userId, crisisId, optionId, year = null) {
-  return callAPI('saveCrisisResponse', { 
-    gameCode, 
-    userId,  // ✅ API expects userId and converts to player_id internally
-    crisisId, 
-    optionId,
-    year
-  });
-}
-
-/**
- * Save a military deployment
- * @param {string} gameCode - The game code
- * @param {number} userId - The user's ID (API converts to player_id internally)
- * @param {object} deploymentData - Deployment details (country, region, troops, branch, year, etc.)
- */
 async function saveDeployment(gameCode, userId, deploymentData) {
   return callAPI('saveDeployment', { 
     gameCode, 
-    userId,  // ✅ API expects userId and converts to player_id internally
+    userId, 
     country: deploymentData.country,
     region: deploymentData.region,
     troops: deploymentData.troops,
-    branch: deploymentData.branch,
+    branch: deploymentData.branch,  // ✅ CRITICAL: API requires this
     year: deploymentData.year,
     deploymentInfluence: deploymentData.deploymentInfluence || 0
+  });
+}
+
+async function saveCrisisResponse(gameCode, userId, crisisId, optionId, year = null) {
+  return callAPI('saveCrisisResponse', { 
+    gameCode, 
+    userId,  // ✅ API expects userId, not playerId
+    crisisId, 
+    optionId,
+    year
   });
 }
 
@@ -266,6 +196,11 @@ async function getGameResults(gameCode) {
   return callAPI('getGameResults', { gameCode });
 }
 
+// ============ GAME STATE MANAGEMENT ============
+async function releaseAllPlayers(gameCode) {
+  return callAPI('releaseAllPlayers', { gameCode });
+}
+
 // ============ TEST ============
 async function testConnection() {
   return callAPI('test');
@@ -284,19 +219,13 @@ module.exports = {
   // Games
   createGame,
   getGame,
-  getLatestGameForRoom,
   updateGame,
-  
-  // Countries
-  getCountries,
   
   // Players
   addPlayer,
   getPlayers,
   getPlayerActiveGame,
   updatePlayerPoints,
-  clearPlayerCountry,
-  releaseAllPlayers,
   
   // Votes
   saveVote,
@@ -325,13 +254,14 @@ module.exports = {
   getLeaderboard,
   
   // Crises
+  saveDeployment,
+  
   getCrises,
   getCrisisOptions,
-  seedCrises,
   saveCrisisResponse,
   
-  // Deployments
-  saveDeployment,
+  // Game state management
+  releaseAllPlayers,
   
   // Test
   testConnection
