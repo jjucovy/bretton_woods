@@ -2849,36 +2849,50 @@ io.on('connection', (socket) => {
       console.log(`📋 Starting new game process for room ${roomId}...`);
       
       const oldGameCode = room.gameCode || roomId;
-      const releaseResponse = await axios.post(PHP_API_ENDPOINT,
-        qs.stringify({
-          action: 'releasePlayersFromGame',
-          gameCode: oldGameCode
-        }),
-        { headers: { 'X-API-Key': API_KEY } }
-      );
-      
-      if (!releaseResponse.data.success) {
-        throw new Error('Failed to release players from old game');
+      try {
+        const releaseResponse = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'releasePlayersFromGame',
+            gameCode: oldGameCode
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (releaseResponse.data.success) {
+          console.log(`✅ Released ${releaseResponse.data.playersReleased} players from old game`);
+        }
+      } catch (err) {
+        console.log(`⚠️ Could not release players from database: ${err.message}`);
+        // Continue anyway - reset room locally
       }
-      console.log(`✅ Released ${releaseResponse.data.playersReleased} players from old game`);
       
-      // Step 2: Create new game record in database
-      const newGameResponse = await axios.post(PHP_API_ENDPOINT,
-        qs.stringify({
-          action: 'createGame',
-          gameCode: roomId,
-          playerCount: Object.keys(room.players).length,
-          status: 'lobby'
-        }),
-        { headers: { 'X-API-Key': API_KEY } }
-      );
+      // Step 2: Generate NEW gameCode with timestamp (ensures unique game records)
+      const newGameCode = `game_${Date.now()}`;
+      console.log(`🆕 Generated new gameCode: ${newGameCode}`);
       
-      if (!newGameResponse.data.success) {
-        throw new Error('Failed to create new game in database');
+      try {
+        const createGameResponse = await axios.post(PHP_API_ENDPOINT,
+          qs.stringify({
+            action: 'createGame',
+            gameCode: newGameCode,
+            createdBy: playerId
+          }),
+          { headers: { 'X-API-Key': API_KEY } }
+        );
+        
+        if (createGameResponse.data.success || createGameResponse.data.game_id) {
+          console.log(`✅ NEW game created in database with ID: ${createGameResponse.data.game_id}, gameCode: ${newGameCode}`);
+          room.gameCode = newGameCode;
+        } else {
+          console.log(`⚠️ createGame response: ${JSON.stringify(createGameResponse.data)}`);
+        }
+      } catch (err) {
+        console.log(`⚠️ Could not create new game in database: ${err.message}`);
+        // Continue anyway - use new gameCode locally
+        room.gameCode = newGameCode;
       }
-      console.log(`✅ Created new game in database: ${newGameResponse.data.gameId}`);
       
-      // Step 3: Reset room state
+      // Step 3: Reset room state locally
       room.gameStarted = false;
       room.currentRound = 0;
       room.gamePhase = 'lobby';
@@ -2909,9 +2923,7 @@ io.on('connection', (socket) => {
         crisisResponses: {}
       };
       
-      // Step 4: Sync to database
-      await dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
-      
+      // Step 4: Send confirmation
       socket.emit('startNewGameResult', { success: true, message: 'New game started!' });
       
       // Step 5: Broadcast to all players in room
