@@ -37,23 +37,27 @@ let highestPlayerId = 0;
 async function initializeIdCounters() {
   try {
     // Get highest game_id from database
-    const gameResult = await db.callAPI('getHighestGameId', {});
-    if (gameResult && gameResult.highest_game_id) {
-      highestGameId = parseInt(gameResult.highest_game_id);
-      console.log(`✅ Initialized highestGameId: ${highestGameId}`);
-    }
+    const highestGameFromDb = await db.getHighestGameId();
+    highestGameId = highestGameFromDb || 0;
+    console.log(`✅ Initialized highestGameId: ${highestGameId}`);
     
     // Get highest player_id from database
-    const playerResult = await db.callAPI('getHighestPlayerId', {});
-    if (playerResult && playerResult.highest_player_id) {
-      highestPlayerId = parseInt(playerResult.highest_player_id);
-      console.log(`✅ Initialized highestPlayerId: ${highestPlayerId}`);
-    }
+    const highestPlayerFromDb = await db.getHighestPlayerId();
+    highestPlayerId = highestPlayerFromDb || 0;
+    console.log(`✅ Initialized highestPlayerId: ${highestPlayerId}`);
   } catch (err) {
     console.warn('⚠️ Could not initialize ID counters from database:', err.message);
     console.log('   Will start from 0 and increment as needed');
   }
 }
+
+## Testing Steps
+
+1. **Restart the server completely** (kill and restart Node.js)
+2. **Check the startup logs** - you should see:
+```
+   ✅ Initialized highestGameId: X
+   ✅ Initialized highestPlayerId: Y
 // Function to find the active lobby game with available slots
 async function findActiveLobbyGame() {
   try {
