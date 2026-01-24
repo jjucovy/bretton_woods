@@ -3112,7 +3112,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   const room = globalState.rooms[roomId];
   if (!room) {
     console.log('ERROR: Room not found');
-    socket.emit('createNewGame', { success: false, message: 'Room not found' });
+    socket.emit('startNewGameResult', { success: false, message: 'Room not found' });
     return;
   }
   
@@ -3121,7 +3121,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   const isRoomHost = room.hostId === playerId;
   
   if (!isSuperAdmin && !isRoomHost) {
-    socket.emit('createNewGame', { success: false, message: 'Only the game admin can start a new game' });
+    socket.emit('startNewGameResult', { success: false, message: 'Only the game admin can start a new game' });
     return;
   }
   
@@ -3159,7 +3159,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   
   // Step 4: Create new game in database with LOBBY status
   try {
-    const createResult = await db.callAPI('createNewGame', {
+    const createResult = await db.callAPI('createGameInLobby', {
       gameCode: newGameCode,
       gameId: newGameId,
       createdBy: playerId
@@ -3167,7 +3167,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     
     if (!createResult || !createResult.success) {
       console.error('❌ Failed to create new game in database:', createResult);
-      socket.emit('createNewGame', { 
+      socket.emit('startNewGameResult', { 
         success: false, 
         message: 'Failed to create new game in database' 
       });
@@ -3177,7 +3177,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     console.log(`✅ New game created in database: ${newGameCode}`);
   } catch (err) {
     console.error('❌ Error creating new game:', err.message);
-    socket.emit('createNewGame', { 
+    socket.emit('startNewGameResult', { 
       success: false, 
       message: 'Error creating new game: ' + err.message 
     });
@@ -3218,7 +3218,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   console.log(`   Status: lobby, Players cleared`);
   
   // Step 6: Broadcast updates
-  socket.emit('createNewGame', { 
+  socket.emit('startNewGameResult', { 
     success: true, 
     gameId: newGameId,
     gameCode: newGameCode
