@@ -41,7 +41,7 @@ async function callAPI(action, data = {}) {
   }
 }
 
-// Add to db.js or update your API to support these calls:
+// ============ ID COUNTERS ============
 async function getHighestGameId() {
   return await callAPI('getHighestGameId', {});
 }
@@ -104,6 +104,34 @@ async function getGame(gameCode) {
 
 async function updateGame(gameCode, updates) {
   return callAPI('updateGame', { gameCode, ...updates });
+}
+
+// Find active lobby game with available slots
+async function findActiveLobbyGame() {
+  try {
+    const result = await callAPI('findActiveLobbyGame', {});
+    if (result && result.success) {
+      return {
+        gameId: result.game_id,
+        gameCode: result.game_code,
+        playerCount: result.player_count || 0
+      };
+    }
+    return null;
+  } catch (err) {
+    console.error('findActiveLobbyGame failed:', err.message);
+    return null;
+  }
+}
+
+// Release all players from a game
+async function releaseAllPlayers(gameCode) {
+  try {
+    return await callAPI('releasePlayersFromGame', { gameCode });
+  } catch (err) {
+    console.error('releaseAllPlayers failed:', err.message);
+    return { success: false, error: err.message };
+  }
 }
 
 // ============ PLAYERS ============
@@ -226,97 +254,4 @@ async function getGameResults(gameCode) {
 
 // ============ DEPLOYMENTS ============
 async function saveDeployment(gameCode, playerId, deployment) {
-  return callAPI('saveDeployment', { 
-    gameCode, 
-    playerId, 
-    deployment: JSON.stringify(deployment) 
-  });
-}
-
-// ============ SCORE COLUMNS ============
-async function ensureScoreColumns() {
-  return callAPI('ensureScoreColumns');
-}
-
-// ============ TEST ============
-async function testConnection() {
-  try {
-    console.log('🔍 Testing database connection...');
-    console.log('   Endpoint:', API_URL);
-    
-    const result = await callAPI('testConnection');
-    
-    if (result && result.success) {
-      console.log('✅ Database connection successful');
-      return true;
-    } else {
-      console.error('❌ Database connection failed:', result);
-      return false;
-    }
-  } catch (err) {
-    console.error('❌ Database connection test failed:', err.message);
-    return false;
-  }
-}
-
-module.exports = {
-  // Core
-  callAPI,
-  testConnection,
-  
-  // Schema
-  setupSchema,
-  ensureScoreColumns,
-  
-  // Users
-  getAllUsers,
-  getUser,
-  createUser,
-  
-  // Games
-  createGame,
-  getGame,
-  updateGame,
-  getHighestGameId,
-  getHighestPlayerId,
-  
-  // Players
-  addPlayer,
-  getPlayers,
-  updatePlayerPoints,
-  getPlayerActiveGame,
-  
-  // Votes
-  saveVote,
-  getVotes,
-  
-  // Policies
-  savePolicy,
-  getPolicies,
-  
-  // Results
-  saveRoundResult,
-  getRoundResults,
-  
-  // Economic State
-  saveEconomicState,
-  getEconomicState,
-  
-  // Game Results
-  saveGameResult,
-  getGameResults,
-  
-  // Full state
-  getFullGameState,
-  
-  // Leaderboard
-  getLeaderboard,
-  
-  // Crises
-  getCrises,
-  getCrisisOptions,
-  saveCrisisResponse,
-  
-  // Deployments
-  saveDeployment
-};
+  return callAPI('saveDeployment', {
