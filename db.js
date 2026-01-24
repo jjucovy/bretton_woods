@@ -211,7 +211,6 @@ const axios = require('axios');
 const qs = require('qs');
 
 const PHP_API_ENDPOINT = 'https://jucovy.com/api.php';
-const API_KEY = 'bretton-woods-secret-key-2024';
 
 // Generic API call function
 async function callAPI(action, data = {}) {
