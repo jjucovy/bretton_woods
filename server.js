@@ -1438,7 +1438,7 @@ function calculatePhase2Scores(roomId) {
   
   // Sync final results to MySQL (hybrid persistence)
   Object.entries(phase2Scores).forEach(([country, score]) => {
-    db.saveGameResult(roomId, country, score, scoreBreakdowns[country])
+    db.createGame(roomId, country, score, scoreBreakdowns[country])
       .then(() => console.log(`📊 Final result synced to MySQL: ${country} -> ${score}`))
       .catch(err => console.error(`MySQL sync error (result ${country}):`, err.message));
   });
@@ -3112,7 +3112,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   const room = globalState.rooms[roomId];
   if (!room) {
     console.log('ERROR: Room not found');
-    socket.emit('startNewGameResult', { success: false, message: 'Room not found' });
+    socket.emit('createGame', { success: false, message: 'Room not found' });
     return;
   }
   
@@ -3121,7 +3121,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   const isRoomHost = room.hostId === playerId;
   
   if (!isSuperAdmin && !isRoomHost) {
-    socket.emit('startNewGameResult', { success: false, message: 'Only the game admin can start a new game' });
+    socket.emit('createGame', { success: false, message: 'Only the game admin can start a new game' });
     return;
   }
   
@@ -3167,7 +3167,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     
     if (!createResult || !createResult.success) {
       console.error('❌ Failed to create new game in database:', createResult);
-      socket.emit('startNewGameResult', { 
+      socket.emit('createGame', { 
         success: false, 
         message: 'Failed to create new game in database' 
       });
@@ -3177,7 +3177,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     console.log(`✅ New game created in database: ${newGameCode}`);
   } catch (err) {
     console.error('❌ Error creating new game:', err.message);
-    socket.emit('startNewGameResult', { 
+    socket.emit('createGame', { 
       success: false, 
       message: 'Error creating new game: ' + err.message 
     });
@@ -3218,7 +3218,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   console.log(`   Status: lobby, Players cleared`);
   
   // Step 6: Broadcast updates
-  socket.emit('startNewGameResult', { 
+  socket.emit('createGame', { 
     success: true, 
     gameId: newGameId,
     gameCode: newGameCode
