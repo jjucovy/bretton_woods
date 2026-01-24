@@ -73,6 +73,28 @@ async function updateGame(gameCode, updates) {
   return callAPI('updateGame', { gameCode, ...updates });
 }
 
+async function getHighestGameId() {
+  try {
+    const result = await callAPI('getHighestGameId', {});
+    console.log('[getHighestGameId] Result:', result);
+    return result.highest_game_id || 0;
+  } catch (err) {
+    console.error('getHighestGameId failed:', err.message);
+    return 0;
+  }
+}
+
+async function getHighestPlayerId() {
+  try {
+    const result = await callAPI('getHighestPlayerId', {});
+    console.log('[getHighestPlayerId] Result:', result);
+    return result.highest_player_id || 0;
+  } catch (err) {
+    console.error('getHighestPlayerId failed:', err.message);
+    return 0;
+  }
+}
+
 // ============ PLAYERS ============
 async function addPlayer(gameCode, userId, countryCode, countryName) {
   return callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
