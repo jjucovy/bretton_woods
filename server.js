@@ -5,9 +5,15 @@ const socketIo = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const axios = require('axios');
+const qs = require('qs');
 
 // Database module for MySQL persistence
 const db = require('./db');
+
+// PHP API Configuration for MySQL
+const PHP_API_ENDPOINT = 'https://jucovy.com/api.php';
+const API_KEY = 'bretton-woods-secret-key-2024';
 
 // Country code to short name mapping (matching game-data.json naming)
 // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
