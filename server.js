@@ -171,7 +171,7 @@ const militaryDeploymentsData = require('./military-deployments.json');
 const crisisEventsData = require('./crisis-events.json');
 
 // Create default game state template
-function createGameState(roomId, roomName, hostId) {
+function createGame(roomId, roomName, hostId) {
   return {
     roomId: roomId,
     roomName: roomName,
@@ -459,7 +459,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
       if (gameData) {
         console.log('✅ Found existing game in database, restoring state...');
         // Create room structure from DB data
-        globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        globalState.rooms[SINGLE_ROOM_ID] = createGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
         
         // Restore game status and round
         globalState.rooms[SINGLE_ROOM_ID].gameStatus = gameData.game_status;
@@ -507,7 +507,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         const newGameId = getNextGameId();
         const newGameCode = `game_${newGameId}`;
         
-        globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        globalState.rooms[SINGLE_ROOM_ID] = createGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
         globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
         globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
         globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
@@ -534,7 +534,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
       const newGameId = getNextGameId();
       const newGameCode = `game_${newGameId}`;
       
-      globalState.rooms[SINGLE_ROOM_ID] = createGameState(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+      globalState.rooms[SINGLE_ROOM_ID] = createGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
       globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
       globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
       globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
@@ -1749,7 +1749,7 @@ socket.on('login', async ({ username, password }) => {
   socket.on('createRoom', ({ playerId, roomName }) => {
     const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     
-    globalState.rooms[roomId] = createGameState(roomId, roomName, playerId);
+    globalState.rooms[roomId] = createGame(roomId, roomName, playerId);
     
     socket.join(roomId);
     socket.emit('roomCreated', { 
