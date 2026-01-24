@@ -1586,7 +1586,7 @@ const playerId = getNextPlayerId();
   });
   
   // Login existing user
-  socket.on('login', async ({ username, password }) => {
+socket.on('login', async ({ username, password }) => {
   console.log('=== LOGIN REQUEST ===');
   console.log('Username:', username);
   console.log('Raw password:', password);
@@ -1646,6 +1646,10 @@ const playerId = getNextPlayerId();
           role: role
         };
         user = globalState.users[username];
+        
+        // Cache the userId for future use
+        userIdCache[username] = dbUser.user_id;
+        
         console.log('User loaded from database:', username, 'playerId:', playerId, 'role:', role);
         saveState();
       } else {
@@ -1663,6 +1667,11 @@ const playerId = getNextPlayerId();
       passwordLength: user.password ? user.password.length : 0,
       role: user.role
     });
+    
+    // Make sure userId is cached
+    if (user.userId && !userIdCache[username]) {
+      userIdCache[username] = user.userId;
+    }
   }
   
   if (!user) {
@@ -1697,7 +1706,9 @@ const playerId = getNextPlayerId();
   // Check if user is already in an active game
   let activeGame = null;
   try {
+    // Use the userId from the user object
     const userId = user.userId;
+    
     if (userId) {
       activeGame = await db.getPlayerActiveGame(userId);
       if (activeGame && activeGame.game_status) {
@@ -1708,6 +1719,8 @@ const playerId = getNextPlayerId();
           activeGame = null;
         }
       }
+    } else {
+      console.log(`⚠️ No userId available for ${username} to check active games`);
     }
   } catch (err) {
     console.warn('⚠️ Could not check for active game:', err.message);
