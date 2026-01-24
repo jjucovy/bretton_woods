@@ -408,12 +408,17 @@ async function saveCrisisResponse(gameCode, userId, crisisId, choiceId, year) {
 }
 
 module.exports = {
+  // Core
   callAPI,
+  testConnection,
+  
+  // Schema
   setupSchema,
   ensureScoreColumns,
-  saveCrisisResponse,
-  setupSchema,
-  ensureScoreColumns,
+  
+  // ID Counters
+  getHighestGameId,
+  getHighestPlayerId,
   
   // Users
   getAllUsers,
@@ -458,15 +463,13 @@ module.exports = {
   getLeaderboard,
   
   // Crises
-  saveDeployment,
-  
   getCrises,
   getCrisisOptions,
   saveCrisisResponse,
   
-  // Game state management
-  releaseAllPlayers,
+  // Deployments
+  saveDeployment,
   
-  // Test
-  testConnection
+  // Game state management
+  releaseAllPlayers
 };
