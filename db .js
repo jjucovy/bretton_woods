@@ -10,20 +10,36 @@ async function callAPI(action, data = {}) {
   try {
     console.log(`[DB API Call] Action: ${action}`);
     
+    // Create form data instead of JSON
+    const formData = new URLSearchParams();
+    formData.append('action', action);
+    
+    // Add all data fields
+    for (const key in data) {
+      if (data.hasOwnProperty(key)) {
+        formData.append(key, data[key]);
+      }
+    }
+    
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'X-API-Key': API_KEY
       },
-      body: JSON.stringify({ action, ...data })
+      body: formData.toString()
     });
     
     if (!response.ok) {
+      const text = await response.text();
+      console.error('HTTP Error Response:', text.substring(0, 500));
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    const result = await response.json();
+    const text = await response.text();
+    console.log(`[DB API Raw Response]:`, text.substring(0, 200));
+    
+    const result = JSON.parse(text);
     console.log(`[DB API Response] Action: ${action} - Success:`, result.success !== false);
     
     return result;
