@@ -3107,7 +3107,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   socket.on('startNewGame', async ({ roomId, playerId }) => {
   const room = globalState.rooms[roomId];
   if (!room) {
-    socket.emit('startNewGameResult', { success: false, message: 'Room not found' });
+    socket.emit('createNewGame', { success: false, message: 'Room not found' });
     return;
   }
   
@@ -3116,7 +3116,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   const isRoomHost = room.hostId === playerId;
   
   if (!isSuperAdmin && !isRoomHost) {
-    socket.emit('startNewGameResult', { success: false, message: 'Only the game admin can start a new game' });
+    socket.emit('createNewGame', { success: false, message: 'Only the game admin can start a new game' });
     return;
   }
   
@@ -3223,7 +3223,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       }
     };
     
-    socket.emit('startNewGameResult', { 
+    socket.emit('createNewGame', { 
       success: true, 
       message: 'New game started!',
       gameId: newGameId,
@@ -3247,7 +3247,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     console.log(`✅ New game ${newGameId} started in lobby phase - ready for players`);
   } catch (error) {
     console.error(`❌ Error starting new game:`, error.message);
-    socket.emit('startNewGameResult', { 
+    socket.emit('createNewGame', { 
       success: false, 
       message: `Failed to start new game: ${error.message}` 
     });
