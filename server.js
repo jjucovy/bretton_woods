@@ -3159,7 +3159,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   
   // Step 4: Create new game in database with LOBBY status
   try {
-    const createResult = await db.callAPI('createGameInLobby', {
+    const createResult = await db.callAPI('createGame', {
       gameCode: newGameCode,
       gameId: newGameId,
       createdBy: playerId
