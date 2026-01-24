@@ -80,6 +80,8 @@ async function createUser(username, password, role = 'student', email = '', disp
 
 // ============ GAMES ============
 async function createGame(gameCode, createdBy = null) {
+
+  alert('call')
   return callAPI('createGame', { gameCode, createdBy });
 }
 
