@@ -206,44 +206,7 @@ async function testConnection() {
   return callAPI('test');
 }
 
-// db.js - Database module for MySQL operations
-const axios = require('axios');
-const qs = require('qs');
 
-const PHP_API_ENDPOINT = 'https://jucovy.com/api.php';
-
-// Generic API call function
-async function callAPI(action, data = {}) {
-  try {
-    const response = await axios.post(PHP_API_ENDPOINT, 
-      qs.stringify({
-        ...data,
-        action: action
-      }), 
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-API-Key': API_KEY
-        }
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error(`API call failed for action ${action}:`, error.message);
-    throw error;
-  }
-}
-
-// Test database connection
-async function testConnection() {
-  try {
-    const result = await callAPI('testConnection');
-    return result && result.success;
-  } catch (err) {
-    console.error('Database connection test failed:', err.message);
-    return false;
-  }
-}
 
 // Get user by username
 async function getUser(username) {
