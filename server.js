@@ -2850,16 +2850,22 @@ io.on('connection', (socket) => {
       
       const oldGameCode = room.gameCode || roomId;
       try {
-        const releaseResponse = await axios.post(PHP_API_ENDPOINT,
-          qs.stringify({
+        const releaseResponse = await fetch(PHP_API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY
+          },
+          body: JSON.stringify({
             action: 'releasePlayersFromGame',
             gameCode: oldGameCode
-          }),
-          { headers: { 'X-API-Key': API_KEY } }
-        );
+          })
+        });
         
-        if (releaseResponse.data.success) {
-          console.log(`✅ Released ${releaseResponse.data.playersReleased} players from old game`);
+        const releaseData = await releaseResponse.json();
+        
+        if (releaseData.success) {
+          console.log(`✅ Released ${releaseData.playersReleased} players from old game`);
         }
       } catch (err) {
         console.log(`⚠️ Could not release players from database: ${err.message}`);
@@ -2871,20 +2877,26 @@ io.on('connection', (socket) => {
       console.log(`🆕 Generated new gameCode: ${newGameCode}`);
       
       try {
-        const createGameResponse = await axios.post(PHP_API_ENDPOINT,
-          qs.stringify({
+        const createGameResponse = await fetch(PHP_API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY
+          },
+          body: JSON.stringify({
             action: 'createGame',
             gameCode: newGameCode,
             createdBy: playerId
-          }),
-          { headers: { 'X-API-Key': API_KEY } }
-        );
+          })
+        });
         
-        if (createGameResponse.data.success || createGameResponse.data.game_id) {
-          console.log(`✅ NEW game created in database with ID: ${createGameResponse.data.game_id}, gameCode: ${newGameCode}`);
+        const createGameData = await createGameResponse.json();
+        
+        if (createGameData.success || createGameData.game_id) {
+          console.log(`✅ NEW game created in database with ID: ${createGameData.game_id}, gameCode: ${newGameCode}`);
           room.gameCode = newGameCode;
         } else {
-          console.log(`⚠️ createGame response: ${JSON.stringify(createGameResponse.data)}`);
+          console.log(`⚠️ createGame response: ${JSON.stringify(createGameData)}`);
         }
       } catch (err) {
         console.log(`⚠️ Could not create new game in database: ${err.message}`);
