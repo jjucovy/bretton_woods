@@ -55,6 +55,26 @@ async function initializeIdCounters() {
   }
 }
 
+// Function to find the active lobby game with available slots
+async function findActiveLobbyGame() {
+  try {
+    const result = await db.callAPI('findActiveLobbyGame', {});
+    if (result && result.game_id) {
+      console.log(`✅ Found active lobby game: game_id=${result.game_id}, gameCode=${result.game_code}, players=${result.player_count}/7`);
+      return {
+        gameId: result.game_id,
+        gameCode: result.game_code,
+        playerCount: parseInt(result.player_count) || 0
+      };
+    }
+    console.log(`ℹ️ No active lobby game found with available slots`);
+    return null;
+  } catch (err) {
+    console.error('❌ Error finding active lobby game:', err.message);
+    return null;
+  }
+}
+
 // Function to get next game ID
 function getNextGameId() {
   highestGameId++;
