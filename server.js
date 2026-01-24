@@ -3063,15 +3063,16 @@ socket.on('startNewGame', async ({ roomId, playerId }) => {
     const oldGameCode = room.gameCode || roomId;
     
     // Step 1: Mark old game as completed in database
-    try {
-      await db.callAPI('updateGameStatus', {
-        gameCode: oldGameCode,
-        status: 'completed'
-      });
-      console.log(`✅ Marked old game ${oldGameCode} as completed`);
-    } catch (err) {
-      console.log(`⚠️ Could not update old game status: ${err.message}`);
-    }
+    // Replace the updateGameStatus call in startNewGame:
+try {
+  await db.callAPI('updateGameStatus', {
+    gameCode: oldGameCode,
+    status: 'completed'
+  });
+  console.log(`✅ Marked old game ${oldGameCode} as completed`);
+} catch (err) {
+  console.log(`⚠️ Could not update old game status: ${err.message}`);
+}
     
     // Step 2: Release all players from old game
     try {
