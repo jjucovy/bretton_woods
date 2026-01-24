@@ -206,8 +206,230 @@ async function testConnection() {
   return callAPI('test');
 }
 
+// db.js - Database module for MySQL operations
+const axios = require('axios');
+const qs = require('qs');
+
+const PHP_API_ENDPOINT = 'https://jucovy.com/api.php';
+const API_KEY = 'bretton-woods-secret-key-2024';
+
+// Generic API call function
+async function callAPI(action, data = {}) {
+  try {
+    const response = await axios.post(PHP_API_ENDPOINT, 
+      qs.stringify({
+        ...data,
+        action: action
+      }), 
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-API-Key': API_KEY
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`API call failed for action ${action}:`, error.message);
+    throw error;
+  }
+}
+
+// Test database connection
+async function testConnection() {
+  try {
+    const result = await callAPI('testConnection');
+    return result && result.success;
+  } catch (err) {
+    console.error('Database connection test failed:', err.message);
+    return false;
+  }
+}
+
+// Get user by username
+async function getUser(username) {
+  try {
+    return await callAPI('getUser', { username });
+  } catch (err) {
+    console.error('getUser failed:', err.message);
+    return null;
+  }
+}
+
+// Get all users
+async function getAllUsers() {
+  try {
+    const result = await callAPI('getAllUsers');
+    return result && result.users ? result.users : [];
+  } catch (err) {
+    console.error('getAllUsers failed:', err.message);
+    return [];
+  }
+}
+
+// Create new user
+async function createUser(username, passwordHash, role = 'player') {
+  try {
+    return await callAPI('createUser', { username, passwordHash, role });
+  } catch (err) {
+    console.error('createUser failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+// Other database functions...
+async function getGame(gameCode) {
+  try {
+    return await callAPI('getGame', { gameCode });
+  } catch (err) {
+    console.error('getGame failed:', err.message);
+    return null;
+  }
+}
+
+async function createGame(gameCode, createdBy) {
+  try {
+    return await callAPI('createGame', { gameCode, createdBy });
+  } catch (err) {
+    console.error('createGame failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function updateGame(gameCode, updates) {
+  try {
+    return await callAPI('updateGame', { gameCode, ...updates });
+  } catch (err) {
+    console.error('updateGame failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function getPlayers(gameCode) {
+  try {
+    const result = await callAPI('getPlayers', { gameCode });
+    return result && result.players ? result.players : [];
+  } catch (err) {
+    console.error('getPlayers failed:', err.message);
+    return [];
+  }
+}
+
+async function addPlayer(gameCode, userId, countryCode, countryName) {
+  try {
+    return await callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
+  } catch (err) {
+    console.error('addPlayer failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function setupSchema() {
+  try {
+    return await callAPI('setupSchema');
+  } catch (err) {
+    console.error('setupSchema failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function ensureScoreColumns() {
+  try {
+    return await callAPI('ensureScoreColumns');
+  } catch (err) {
+    console.error('ensureScoreColumns failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function saveVote(gameCode, userId, round, issueId, issueTitle, choice, optionText, pointsEarned) {
+  try {
+    return await callAPI('saveVote', { 
+      gameCode, userId, round, issueId, issueTitle, choice, optionText, pointsEarned 
+    });
+  } catch (err) {
+    console.error('saveVote failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function saveRoundResult(gameCode, round, phase, results) {
+  try {
+    return await callAPI('saveRoundResult', { gameCode, round, phase, results: JSON.stringify(results) });
+  } catch (err) {
+    console.error('saveRoundResult failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function savePolicy(gameCode, userId, round, policy) {
+  try {
+    return await callAPI('savePolicy', { gameCode, userId, round, policy: JSON.stringify(policy) });
+  } catch (err) {
+    console.error('savePolicy failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function saveEconomicState(gameCode, country, year, state) {
+  try {
+    return await callAPI('saveEconomicState', { gameCode, country, year, state: JSON.stringify(state) });
+  } catch (err) {
+    console.error('saveEconomicState failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function saveGameResult(gameCode, country, score, breakdown) {
+  try {
+    return await callAPI('saveGameResult', { gameCode, country, score, breakdown: JSON.stringify(breakdown) });
+  } catch (err) {
+    console.error('saveGameResult failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function updatePlayerPoints(gameCode, userId, points, phase) {
+  try {
+    return await callAPI('updatePlayerPoints', { gameCode, userId, points, phase });
+  } catch (err) {
+    console.error('updatePlayerPoints failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function getPlayerActiveGame(userId) {
+  try {
+    return await callAPI('getPlayerActiveGame', { userId });
+  } catch (err) {
+    console.error('getPlayerActiveGame failed:', err.message);
+    return null;
+  }
+}
+
+async function saveDeployment(gameCode, playerId, deployment) {
+  try {
+    return await callAPI('saveDeployment', { gameCode, playerId, deployment: JSON.stringify(deployment) });
+  } catch (err) {
+    console.error('saveDeployment failed:', err.message);
+    return { error: err.message };
+  }
+}
+
+async function saveCrisisResponse(gameCode, userId, crisisId, choiceId, year) {
+  try {
+    return await callAPI('saveCrisisResponse', { gameCode, userId, crisisId, choiceId, year });
+  } catch (err) {
+    console.error('saveCrisisResponse failed:', err.message);
+    return { error: err.message };
+  }
+}
+
 module.exports = {
-  // Schema
+  callAPI,
+  setupSchema,
+  ensureScoreColumns,
+  saveCrisisResponse,
   setupSchema,
   ensureScoreColumns,
   
