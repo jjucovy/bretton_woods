@@ -1721,7 +1721,20 @@ socket.on('login', async ({ username, password }) => {
   try {
     // Use the userId from the user object
     const userId = user.userId;
-    
+    / At line 1721, after: const userId = user.userId;
+if (!userId && user.playerId) {
+  // userId missing from cached user - fetch from database
+  try {
+    const dbUser = await db.getUser(username);
+    if (dbUser && dbUser.user_id) {
+      user.userId = dbUser.user_id;
+      userIdCache[username] = dbUser.user_id;
+      console.log(`✅ Fetched missing userId from database: ${dbUser.user_id}`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not fetch userId from database');
+  }
+}
     if (userId) {
       activeGame = await db.getPlayerActiveGame(userId);
       if (activeGame && activeGame.game_status) {
