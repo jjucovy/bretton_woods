@@ -3103,6 +3103,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   console.log('=== START NEW GAME REQUEST ===');
   console.log('Room ID:', roomId);
   console.log('Player ID:', playerId);
+  console.log('Current highestGameId:', highestGameId);
   
   const room = globalState.rooms[roomId];
   if (!room) {
@@ -3161,8 +3162,10 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         createdBy: playerId
       });
       
-      if (!createResult || !createResult.success) {
-        console.error('❌ Failed to create new game in database:', createResult);
+      console.log('createGameInLobby result:', createResult);
+      
+      if (!createResult) {
+        console.error('❌ Failed to create new game in database - no result');
         socket.emit('startNewGameResult', { 
           success: false, 
           message: 'Failed to create new game in database' 
@@ -3227,7 +3230,6 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     console.log(`✅ New game ${newGameId} created in room ${roomId}`);
     console.log(`   Old game: ${oldGameId} (${oldGameCode}) → completed`);
     console.log(`   New game: ${newGameId} (${newGameCode}) → lobby`);
-    console.log(`   Created by: ${isSuperAdmin ? 'superadmin' : 'room host'}`);
     console.log('========================');
   } catch (error) {
     console.error(`❌ Error in startNewGame:`, error);
@@ -3237,6 +3239,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     });
   }
 });
+  
   // ADMIN: Toggle auto-advance setting
   socket.on('toggleAutoAdvance', ({ roomId, playerId, enabled, delay }) => {
     const room = globalState.rooms[roomId];
