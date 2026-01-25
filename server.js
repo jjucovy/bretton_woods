@@ -1857,18 +1857,6 @@ console.log('room.gameStatus:', room.gameStatus);
 console.log('==============================');
 
 
-**Expected output:**
-```
-room.roomId: main-game
-room.gameId: 40 (type: number)
-room.gameCode: game_40 (type: string)
-room.gamePhase: lobby
-room.gameStatus: lobby
-```
-
-**If you're seeing:**
-```
-room.gameId: main-game
   // Find the correct active lobby game from database
   const activeLobbyGame = await findActiveLobbyGame();
   
