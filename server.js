@@ -435,119 +435,120 @@ app.get('/api/export-users', (req, res) => {
 // END USER MANAGEMENT
 // ============================================
 
-
 // ============================================
-// SINGLE-ROOM MODE: Auto-create main game room
-// ============================================
-// ============================================
-// SINGLE-ROOM MODE: Auto-create main game room
+// SINGLE-ROOM MODE: Check for active game
 // ============================================
 const SINGLE_ROOM_ID = 'main-game';
 
-console.log('🔍 Checking for main game room...');
-console.log('   Current rooms:', Object.keys(globalState.rooms));
+console.log('🔍 Checking for active game...');
 
-if (!globalState.rooms[SINGLE_ROOM_ID]) {
-  // Try finding active lobby game first
-  (async () => {
-    try {
-      console.log('📂 Looking for active lobby game...');
+(async () => {
+  try {
+    // Look for an active lobby game in the database
+    const activeLobbyGame = await findActiveLobbyGame();
+    
+    if (activeLobbyGame) {
+      console.log(`✅ Found active lobby game: ${activeLobbyGame.gameCode} (game_id: ${activeLobbyGame.gameId})`);
       
-      // Look for most recent lobby game
-      const activeLobby = await findActiveLobbyGame();
+      // Create room structure in memory
+      globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+      globalState.rooms[SINGLE_ROOM_ID].gameId = activeLobbyGame.gameId;
+      globalState.rooms[SINGLE_ROOM_ID].gameCode = activeLobbyGame.gameCode;
+      globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
+      globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
+      globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
       
-      if (activeLobby && activeLobby.gameCode) {
-        console.log(`✅ Found active lobby game: ${activeLobby.gameCode} (game_id: ${activeLobby.gameId})`);
+      // Try to restore players
+      try {
+        const players = await db.getPlayers(activeLobbyGame.gameCode);
+        console.log(`   📋 Found ${players.length} players in lobby`);
         
-        // Create room structure
-        // AFTER:
-const gameCode = activeLobby ? activeLobby.gameCode : newGameCode;
-globalState.rooms[gameCode] = createNewGame(gameCode, 'Bretton Woods 1944', null);
-// Also maintain a reference for compatibility
-globalState.rooms[SINGLE_ROOM_ID] = globalState.rooms[gameCode];
-        globalState.rooms[SINGLE_ROOM_ID].gameId = activeLobby.gameId;
-        globalState.rooms[SINGLE_ROOM_ID].gameCode = activeLobby.gameCode;
-        globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
-        globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
-        globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
-        
-        // Try to load players if any
-        try {
-          const players = await db.getPlayers(activeLobby.gameCode);
-          console.log(`   📋 Found ${players.length} players in lobby`);
+        for (const p of players) {
+          if (!p.country_id || !p.country_code) {
+            console.log(`   ⚠️  Skipping player ${p.username} - no country assigned`);
+            continue;
+          }
           
-          for (const p of players) {
-            // Skip players with NULL country_id
-            if (!p.country_id || !p.country_code) {
-              console.log(`   ⚠️  Skipping player ${p.username} - no country assigned`);
-              continue;
-            }
-            
-            const playerId = `player_db_${p.user_id}`;
-            const countryName = p.country_name || p.country_code;
-            
-            globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
-              playerId: playerId,
-              userId: p.user_id,
-              username: p.username,
-              country: countryName,
-              countryCode: p.country_code,
-              countryId: p.country_id
-            };
-            
-            console.log(`   ✅ Restored player: ${p.username} as ${countryName}`);
-          }
-        } catch (err) {
-          console.log('   ⚠️  Could not load players:', err.message);
+          const playerId = `player_db_${p.user_id}`;
+          const countryName = p.country_name || p.country_code;
+          
+          globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
+            playerId: playerId,
+            userId: p.user_id,
+            username: p.username,
+            country: countryName,
+            countryCode: p.country_code,
+            countryId: p.country_id
+          };
+          
+          console.log(`   ✅ Restored player: ${p.username} as ${countryName}`);
         }
-        
-      } else {
-        console.log('📝 No active lobby game found, creating new one...');
-        
-        const newGameId = getNextGameId();
-        const timestamp = Date.now();
-        const newGameCode = `GAME-${timestamp}`;  // ✅ Clean format
-        
-        globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
-        globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
-        globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
-        globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
-        globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
-        globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
-        
-        // Create in database
-        try {
-          const dbResult = await db.createNewGame(newGameCode, null);
-          if (dbResult && dbResult.game_id) {
-            globalState.rooms[SINGLE_ROOM_ID].gameId = dbResult.game_id;
-            console.log(`✅ Created new lobby game in database: ${newGameCode} (game_id: ${dbResult.game_id})`);
-          } else {
-            console.error('❌ Failed to create game in database:', dbResult);
-          }
-        } catch (err) {
-          console.error('❌ Error creating game in database:', err.message);
-        }
+      } catch (err) {
+        console.log('   ⚠️  Could not load players:', err.message);
       }
       
       updateRoomList();
       saveState();
       
-    } catch (err) {
-      console.error('❌ Error loading/creating main game:', err);
+    } else {
+      console.log('ℹ️  No active lobby game found');
+      console.log('   Waiting for superadmin to create a game...');
       
-      // Fallback: create local game only
-      console.log('   Creating fallback local game...');
-      globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
-      globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
-      globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
+      // DO NOT create a game automatically!
+      // Just create an empty room structure that will be populated when admin creates game
+      globalState.rooms[SINGLE_ROOM_ID] = {
+        roomId: SINGLE_ROOM_ID,
+        roomName: 'Bretton Woods 1944',
+        hostId: null,
+        gameId: null,
+        gameCode: null,
+        gameStarted: false,
+        currentRound: 0,
+        players: {},
+        votes: {},
+        readyPlayers: [],
+        gamePhase: 'waiting',  // Special state: waiting for game creation
+        scores: { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 },
+        roundHistory: [],
+        militaryDeployments: militaryDeploymentsData,
+        phase2: {
+          active: false,
+          currentYear: 1946,
+          maxYears: 7,
+          policies: {},
+          yearlyData: {},
+          achievements: {},
+          crises: {
+            active: null,
+            history: [],
+            responses: {}
+          }
+        },
+        maxPlayers: 7,
+        createdAt: Date.now(),
+        autoAdvance: true,
+        autoAdvanceDelay: 5000,
+        waitingForAdmin: true  // Flag to indicate no game exists yet
+      };
+      
       updateRoomList();
       saveState();
     }
-  })();
-} else {
-  console.log('✅ Main game room already exists');
-}
-
+    
+  } catch (err) {
+    console.error('❌ Error checking for active game:', err);
+    console.log('   Server will wait for admin to create a game');
+    
+    // Create waiting room structure
+    globalState.rooms[SINGLE_ROOM_ID] = {
+      roomId: SINGLE_ROOM_ID,
+      roomName: 'Bretton Woods 1944',
+      gamePhase: 'waiting',
+      players: {},
+      waitingForAdmin: true
+    };
+  }
+})();
 // ============================================
 
 // Auto-save every 2 minutes
@@ -1886,14 +1887,12 @@ socket.on('login', async ({ username, password }) => {
   
   // Join game in room
 socket.on('joinGame', async ({ roomId, playerId, country }) => {
-  console.log(`🎮 joinGame: roomId=${roomId}, playerId=${playerId}, country=${country}`);
+  console.log(`🎮 joinGame called: roomId=${roomId}, playerId=${playerId}, country=${country}`);
 
-  // Always use main-game room in single-room mode
-  const actualRoomId = SINGLE_ROOM_ID;
+  const actualRoomId = 'main-game';
   const room = globalState.rooms[actualRoomId];
   
   if (!room) {
-    console.error(`❌ Room '${actualRoomId}' not found in memory`);
     socket.emit('joinResult', { 
       success: false, 
       message: 'Game room not found. Please refresh the page.' 
@@ -1901,6 +1900,17 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     return;
   }
   
+  // ✅ NEW CHECK: Is game waiting for admin to create?
+  if (room.waitingForAdmin || room.gamePhase === 'waiting') {
+    socket.emit('joinResult', { 
+      success: false, 
+      message: 'No game is currently active. Please wait for the teacher to start a new game.',
+      waitingForGame: true
+    });
+    return;
+  }
+  
+  // Continue with rest of handler... 
   console.log(`   ✅ Room found: gameId=${room.gameId}, gameCode=${room.gameCode}, phase=${room.gamePhase}`);
   
   // Find active lobby game in database
@@ -3150,158 +3160,84 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   console.log('=== START NEW GAME REQUEST ===');
   console.log('Room ID:', roomId);
   console.log('Player ID:', playerId);
-  console.log('Current highestGameId:', highestGameId);
-   
-
+  
   const room = globalState.rooms[roomId];
   if (!room) {
-    console.log('ERROR: Room not found');
     socket.emit('startNewGameResult', { success: false, message: 'Room not found' });
     return;
   }
   
   const user = Object.values(globalState.users).find(u => u.playerId === playerId);
   
-  // DEBUG: Show authorization details
-  console.log('=== AUTHORIZATION DEBUG ===');
-  console.log('User found:', user ? 'YES' : 'NO');
-  if (user) {
-    console.log('User role:', user.role);
-    console.log('User playerId:', user.playerId);
-  }
-  console.log('Room hostId:', room.hostId);
-  console.log('Room hostId type:', typeof room.hostId);
-  console.log('PlayerId type:', typeof playerId);
-  console.log('IDs match:', room.hostId === playerId);
-  console.log('All users:', Object.keys(globalState.users));
-  console.log('========================');
-  
-  const isSuperAdmin = user && user.role === 'superadmin';
-  const isRoomHost = room.hostId === playerId;
-  
-  console.log('Is SuperAdmin:', isSuperAdmin);
-  console.log('Is Room Host:', isRoomHost);
-  
-  if (!isSuperAdmin && !isRoomHost) {
-    console.log('ERROR: Not authorized');
-    socket.emit('startNewGameResult', { success: false, message: 'Only the game admin can start a new game' });
+  // Check authorization
+  if (!user || user.role !== 'superadmin') {
+    console.log('❌ Unauthorized: Only superadmin can create games');
+    socket.emit('startNewGameResult', { 
+      success: false, 
+      message: 'Only administrators can create new games' 
+    });
     return;
   }
   
-  // ... rest of the code  
-  const oldGameCode = room.gameCode;
-  console.log('Old game code:', oldGameCode);
+  console.log('✅ Authorization passed: superadmin creating game');
   
+  // Generate new game
+  const newGameId = getNextGameId();
+  const timestamp = Date.now();
+  const newGameCode = `GAME-${timestamp}`;
+  
+  // Create in database
   try {
-    // Step 1: Mark old game as completed in database
-    if (oldGameCode) {
-      try {
-        console.log('Step 1: Marking old game as completed...');
-        const updateResult = await db.callAPI('updateGameStatus', { 
-          gameCode: oldGameCode, 
-          status: 'completed' 
-        });
-        console.log('updateGameStatus result:', updateResult);
-        console.log(`✅ Old game ${oldGameCode} marked as completed`);
-      } catch (err) {
-        console.error('❌ Failed to mark old game as completed:', err.message);
-        console.error('Error stack:', err.stack);
-      }
-    }
+    const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+    const userId = await getUserId(username);
     
-    // Step 2: Release all players from the old game in database
-    if (oldGameCode) {
-      try {
-        console.log('Step 2: Releasing players from old game...');
-        const releaseResult = await db.callAPI('releasePlayersFromGame', { 
-          gameCode: oldGameCode 
-        });
-        console.log('releasePlayersFromGame result:', releaseResult);
-        console.log(`✅ Released all players from old game ${oldGameCode}`);
-      } catch (err) {
-        console.error('❌ Failed to release players:', err.message);
-        console.error('Error stack:', err.stack);
-      }
-    }
+    const dbResult = await db.createNewGame(newGameCode, userId);
     
-    // Step 3: Generate new game ID and code
-    console.log('Step 3: Generating new game ID...');
-    const newGameId = getNextGameId();
-    const newGameCode = `game_${newGameId}`;
-    console.log(`📝 Creating new game: game_id=${newGameId}, gameCode=${newGameCode}`);
-    
-    // Step 4: Create new game in database with LOBBY status and current_round = 0
-    try {
-      console.log('Step 4: Creating new game in database...');
-      console.log('Calling createGameInLobby with:', {
-        gameCode: newGameCode,
-        gameId: newGameId,
-        createdBy: playerId
-      });
-      
-      const createResult = await db.callAPI('createGameInLobby', {
-        gameCode: newGameCode,
-        gameId: newGameId,
-        createdBy: playerId
-      });
-      
-      console.log('createGameInLobby raw result:', JSON.stringify(createResult, null, 2));
-      
-      console.log(`✅ New game created in database: ${newGameCode}`);
-    } catch (err) {
-      console.error('❌ Error creating new game:', err.message);
-      console.error('Error stack:', err.stack);
+    if (!dbResult || dbResult.error) {
+      console.error('❌ Failed to create game in database:', dbResult?.error);
       socket.emit('startNewGameResult', { 
         success: false, 
-        message: 'Error creating new game: ' + err.message 
+        message: 'Database error: Could not create game' 
       });
       return;
     }
     
-    // Step 5: Reset room state in memory
-    console.log('Step 5: Resetting room state...');
-    const oldGameId = room.gameId;
-    room.gameId = newGameId;
+    console.log(`✅ Game created in database: game_id=${dbResult.game_id}`);
+    
+    // Update room in memory
+    room.gameId = dbResult.game_id;
     room.gameCode = newGameCode;
+    room.gamePhase = 'lobby';
     room.gameStarted = false;
     room.currentRound = 0;
-    room.gamePhase = 'lobby';
-    room.gameStatus = 'lobby';
+    room.waitingForAdmin = false;  // ✅ Clear waiting flag
+    room.hostId = playerId;
+    room.players = {};  // Clear any old players
     room.votes = {};
-    room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
-    room.roundHistory = [];
     room.readyPlayers = [];
-    room.players = {}; // Clear all players - they must rejoin
-    room.phase2 = {
-      active: false,
-      currentYear: 1946,
-      maxYears: 7,
-      policies: {},
-      yearlyData: {},
-      achievements: {},
-      deployments: [],
-      conflicts: [],
-      battleDecisions: [],
-      crises: {
-        active: null,
-        history: [],
-        responses: {}
-      }
-    };
+    room.roundHistory = [];
     
-    console.log(`✅ Room state reset: game_id ${oldGameId} → ${newGameId}`);
-    
-    // Step 6: Broadcast updates
-    console.log('Step 6: Broadcasting updates...');
-    socket.emit('startNewGameResult', { 
-      success: true, 
-      gameId: newGameId,
-      gameCode: newGameCode
-    });
-    
+    saveState();
     broadcastToRoom(roomId);
     broadcastRoomList();
-    saveState();
+    
+    socket.emit('startNewGameResult', { 
+      success: true, 
+      gameId: dbResult.game_id,
+      gameCode: newGameCode,
+      message: 'New game created successfully'
+    });
+    
+    console.log(`✅ New game ${dbResult.game_id} created by admin ${username}`);
+    
+  } catch (err) {
+    console.error('❌ Error creating game:', err);
+    socket.emit('startNewGameResult', { 
+      success: false, 
+      message: 'Server error: ' + err.message 
+    });
+  }
+});
       // At the end of the startNewGame handler, right before the final console.log
 console.log('=== ROOM STATE AFTER RESET ===');
 console.log('room.roomId:', room.roomId);
