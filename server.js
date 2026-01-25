@@ -513,8 +513,10 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         }
         
         updateRoomList();
-      } else {
-        console.log('📝 No game found in database, creating new game in LOBBY...');
+      } 
+      
+      else {
+        /*console.log('📝 No game found in database, creating new game in LOBBY...');
         const newGameId = getNextGameId();
         const newGameCode = `game_${newGameId}`;
         
@@ -536,7 +538,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           createdBy: null
         });
         
-        console.log(`✅ New game created in LOBBY: game_id=${newGameId}, gameCode=${newGameCode}`);
+        console.log(`✅ New game created in LOBBY: game_id=${newGameId}, gameCode=${newGameCode}`);*/
       }
     } catch (err) {
       console.error('❌ Error loading game on startup:', err.message);
@@ -545,7 +547,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
       const newGameId = getNextGameId();
       const newGameCode = `game_${newGameId}`;
       
-      globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+     // globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
       globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
       globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
       globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
