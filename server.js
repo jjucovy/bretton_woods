@@ -3470,7 +3470,7 @@ console.log('==============================');
 });
 
 // Start server with database connection
-sync function startServer() {
+async function startServer() {
   // Test database connection
   const dbConnected = await db.test();
    // Initialize ID counters from database FIRST
