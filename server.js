@@ -3493,7 +3493,7 @@ console.log('==============================');
     } catch (err) {
       console.warn('⚠️ Schema setup warning:', err.message);
     }
-  }
+  }*/
   
   server.listen(PORT, () => {
     console.log('🌍 Bretton Woods Multi-Room Server');
@@ -3505,6 +3505,6 @@ console.log('==============================');
     console.log(`🏠 Rooms: ${Object.keys(globalState.rooms).length}`);
     console.log('===================================');
   });
-}/*
+//}
 
 startServer();
