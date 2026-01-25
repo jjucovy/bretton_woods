@@ -3099,7 +3099,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   
  
   // ADMIN: Start new game (resets current game and releases all players)
-  socket.on('startNewGame', async ({ roomId, playerId }) => {
+ socket.on('startNewGame', async ({ roomId, playerId }) => {
   console.log('=== START NEW GAME REQUEST ===');
   console.log('Room ID:', roomId);
   console.log('Player ID:', playerId);
@@ -3113,8 +3113,26 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   }
   
   const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+  
+  // DEBUG: Show authorization details
+  console.log('=== AUTHORIZATION DEBUG ===');
+  console.log('User found:', user ? 'YES' : 'NO');
+  if (user) {
+    console.log('User role:', user.role);
+    console.log('User playerId:', user.playerId);
+  }
+  console.log('Room hostId:', room.hostId);
+  console.log('Room hostId type:', typeof room.hostId);
+  console.log('PlayerId type:', typeof playerId);
+  console.log('IDs match:', room.hostId === playerId);
+  console.log('All users:', Object.keys(globalState.users));
+  console.log('========================');
+  
   const isSuperAdmin = user && user.role === 'superadmin';
   const isRoomHost = room.hostId === playerId;
+  
+  console.log('Is SuperAdmin:', isSuperAdmin);
+  console.log('Is Room Host:', isRoomHost);
   
   if (!isSuperAdmin && !isRoomHost) {
     console.log('ERROR: Not authorized');
@@ -3122,6 +3140,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     return;
   }
   
+  // ... rest of the code  
   const oldGameCode = room.gameCode;
   console.log('Old game code:', oldGameCode);
   
