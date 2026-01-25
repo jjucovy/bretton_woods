@@ -439,118 +439,111 @@ app.get('/api/export-users', (req, res) => {
 // ============================================
 // SINGLE-ROOM MODE: Auto-create main game room
 // ============================================
+// ============================================
+// SINGLE-ROOM MODE: Auto-create main game room
+// ============================================
 const SINGLE_ROOM_ID = 'main-game';
 
 console.log('🔍 Checking for main game room...');
 console.log('   Current rooms:', Object.keys(globalState.rooms));
 
 if (!globalState.rooms[SINGLE_ROOM_ID]) {
-  // Try loading from database first
+  // Try finding active lobby game first
   (async () => {
     try {
-      console.log('📂 Loading game from database...');
-      const gameData = await db.getGame(SINGLE_ROOM_ID);
+      console.log('📂 Looking for active lobby game...');
       
-      if (gameData) {
-        console.log('✅ Found existing game in database, restoring state...');
-        // Create room structure from DB data
+      // Look for most recent lobby game
+      const activeLobby = await findActiveLobbyGame();
+      
+      if (activeLobby && activeLobby.gameCode) {
+        console.log(`✅ Found active lobby game: ${activeLobby.gameCode} (game_id: ${activeLobby.gameId})`);
+        
+        // Create room structure
         globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        globalState.rooms[SINGLE_ROOM_ID].gameId = activeLobby.gameId;
+        globalState.rooms[SINGLE_ROOM_ID].gameCode = activeLobby.gameCode;
+        globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
+        globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
+        globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
         
-        // Restore game status and round
-        globalState.rooms[SINGLE_ROOM_ID].gameStatus = gameData.game_status;
-        globalState.rooms[SINGLE_ROOM_ID].gamePhase = gameData.game_status === 'lobby' ? 'lobby' : 
-                                                      gameData.game_status === 'phase1_active' ? 'voting' :
-                                                      gameData.game_status === 'phase2_active' ? 'phase2' :
-                                                      gameData.game_status === 'completed' ? 'complete' : 'lobby';
-        globalState.rooms[SINGLE_ROOM_ID].currentRound = parseInt(gameData.current_round) || 0;
-        globalState.rooms[SINGLE_ROOM_ID].gameStarted = gameData.game_status !== 'lobby';
-        
-        console.log(`✅ Game restored: status=${gameData.game_status}, phase=${globalState.rooms[SINGLE_ROOM_ID].gamePhase}, started=${globalState.rooms[SINGLE_ROOM_ID].gameStarted}`);
-        
-        // Only restore players if game is active
-        if (gameData.game_status !== 'lobby') {
-          try {
-            const players = await db.getPlayers(SINGLE_ROOM_ID);
-            console.log('   📋 Restored', players.length, 'players from database');
-            for (const p of players) {
-              const playerId = `player_db_${p.user_id}`;
-              const countryName = getCountryName(p.country_code);
-              globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
-                playerId: playerId,
-                userId: p.user_id,
-                username: p.username,
-                country: countryName,
-                countryCode: p.country_code,
-                countryId: p.country_id
-              };
-              
-              let pointsValue = p.total_points || p.totalPoints || p.points || p.phase1_score || 0;
-              if (pointsValue && !isNaN(parseInt(pointsValue))) {
-                globalState.rooms[SINGLE_ROOM_ID].scores[countryName] = parseInt(pointsValue);
-              }
+        // Try to load players if any
+        try {
+          const players = await db.getPlayers(activeLobby.gameCode);
+          console.log(`   📋 Found ${players.length} players in lobby`);
+          
+          for (const p of players) {
+            // Skip players with NULL country_id
+            if (!p.country_id || !p.country_code) {
+              console.log(`   ⚠️  Skipping player ${p.username} - no country assigned`);
+              continue;
             }
-          } catch (err) {
-            console.log('   Warning: Could not restore players:', err.message);
+            
+            const playerId = `player_db_${p.user_id}`;
+            const countryName = p.country_name || p.country_code;
+            
+            globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
+              playerId: playerId,
+              userId: p.user_id,
+              username: p.username,
+              country: countryName,
+              countryCode: p.country_code,
+              countryId: p.country_id
+            };
+            
+            console.log(`   ✅ Restored player: ${p.username} as ${countryName}`);
           }
-        } else {
-          console.log('   ℹ️  Game is in lobby - no players to restore');
+        } catch (err) {
+          console.log('   ⚠️  Could not load players:', err.message);
         }
         
-        updateRoomList();
       } else {
-        console.log('📝 No game found in database, creating new game in LOBBY...');
+        console.log('📝 No active lobby game found, creating new one...');
+        
         const newGameId = getNextGameId();
-        const newGameCode = `game_${newGameId}`;
+        const timestamp = Date.now();
+        const newGameCode = `GAME-${timestamp}`;  // ✅ Clean format
         
         globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
         globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
         globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
         globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
-        globalState.rooms[SINGLE_ROOM_ID].gameStatus = 'lobby';
         globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
         globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
         
-        updateRoomList();
-        saveState();
-        
-        // Create in database with lobby status
-        await db.callAPI('createNewGame', {
-          gameCode: newGameCode,
-          gameId: newGameId,
-          createdBy: null
-        });
-        
-        console.log(`✅ New game created in LOBBY: game_id=${newGameId}, gameCode=${newGameCode}`);
+        // Create in database
+        try {
+          const dbResult = await db.createNewGame(newGameCode, null);
+          if (dbResult && dbResult.game_id) {
+            globalState.rooms[SINGLE_ROOM_ID].gameId = dbResult.game_id;
+            console.log(`✅ Created new lobby game in database: ${newGameCode} (game_id: ${dbResult.game_id})`);
+          } else {
+            console.error('❌ Failed to create game in database:', dbResult);
+          }
+        } catch (err) {
+          console.error('❌ Error creating game in database:', err.message);
+        }
       }
+      
+      updateRoomList();
+      saveState();
+      
     } catch (err) {
-      console.error('❌ Error loading game on startup:', err.message);
-      console.log('📝 Creating fresh game room in LOBBY...');
+      console.error('❌ Error loading/creating main game:', err);
       
-      const newGameId = getNextGameId();
-      const newGameCode = `game_${newGameId}`;
-      
+      // Fallback: create local game only
+      console.log('   Creating fallback local game...');
       globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
-      globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
-      globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
       globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
-      globalState.rooms[SINGLE_ROOM_ID].gameStatus = 'lobby';
       globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
-      globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
-      
       updateRoomList();
       saveState();
     }
   })();
+} else {
+  console.log('✅ Main game room already exists');
 }
-  else {
-  console.log('✅ Main game room already exists in memory:', SINGLE_ROOM_ID);
-  console.log('   Room details:', {
-    roomId: globalState.rooms[SINGLE_ROOM_ID].roomId,
-    gameStarted: globalState.rooms[SINGLE_ROOM_ID].gameStarted,
-    playerCount: Object.keys(globalState.rooms[SINGLE_ROOM_ID].players).length,
-    currentRound: globalState.rooms[SINGLE_ROOM_ID].currentRound
-  });
-}
+
 // ============================================
 
 // Auto-save every 2 minutes
@@ -2032,13 +2025,13 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       const countryCode = countryCodes[country] || country;
       
       // Add player to the correct game
-      const addPlayerResult = await db.callAPI('addPlayerToGame', {
-        gameId: activeLobbyGame.gameId,
-        userId: userId,
-        countryCode: countryCode,
-        countryName: countryName,
-        playerId: gamePlayerId
-      });
+      // ✅ CORRECT - Use the standard addPlayer endpoint
+const addPlayerResult = await db.addPlayer(
+  activeLobbyGame.gameCode,  // gameCode string
+  userId,                     // userId integer
+  countryCode,                // countryCode string - API will convert to countryId
+  countryName                 // countryName string
+);
       
       if (addPlayerResult && addPlayerResult.success) {
         console.log(`✅ Player ${username} (${country}) synced to MySQL game_id ${activeLobbyGame.gameId} with player_id ${gamePlayerId}`);
