@@ -237,16 +237,16 @@ async function releaseAllPlayers(gameCode) {
   return callAPI('releaseAllPlayers', { gameCode });
 }
 
-/*// ============ TESTING ============
+// ============ TESTING ============
 async function test() {
   return callAPI('test');
-}*/
+}
 
 // ============ EXPORTS ============
 module.exports = {
   // Core
   callAPI,
-  
+  test
   // Schema
   setupSchema,
   ensureScoreColumns,
