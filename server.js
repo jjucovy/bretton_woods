@@ -3472,7 +3472,7 @@ console.log('==============================');
 // Start server with database connection
 async function startServer() {
   // Test database connection
-  const dbConnected = await db.testConnection();
+  const dbConnected = await db.test();
    // Initialize ID counters from database FIRST
   if (dbConnected) {
     await initializeIdCounters(); // ← ADD THIS LINE
