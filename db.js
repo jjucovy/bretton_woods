@@ -246,7 +246,7 @@ async function test() {
 module.exports = {
   // Core
   callAPI,
-  test
+  test,
   // Schema
   setupSchema,
   ensureScoreColumns,
