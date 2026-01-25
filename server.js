@@ -3471,7 +3471,7 @@ console.log('==============================');
 
 // Start server with database connection
 sync function startServer() {
-/*  // Test database connection
+  // Test database connection
   const dbConnected = await db.test();
    // Initialize ID counters from database FIRST
   if (dbConnected) {
@@ -3493,7 +3493,7 @@ sync function startServer() {
     } catch (err) {
       console.warn('⚠️ Schema setup warning:', err.message);
     }
-  }*/
+  }
   
   server.listen(PORT, () => {
     console.log('🌍 Bretton Woods Multi-Room Server');
