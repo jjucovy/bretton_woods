@@ -460,7 +460,11 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         console.log(`✅ Found active lobby game: ${activeLobby.gameCode} (game_id: ${activeLobby.gameId})`);
         
         // Create room structure
-        globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        // AFTER:
+const gameCode = activeLobby ? activeLobby.gameCode : newGameCode;
+globalState.rooms[gameCode] = createNewGame(gameCode, 'Bretton Woods 1944', null);
+// Also maintain a reference for compatibility
+globalState.rooms[SINGLE_ROOM_ID] = globalState.rooms[gameCode];
         globalState.rooms[SINGLE_ROOM_ID].gameId = activeLobby.gameId;
         globalState.rooms[SINGLE_ROOM_ID].gameCode = activeLobby.gameCode;
         globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
@@ -1882,31 +1886,42 @@ socket.on('login', async ({ username, password }) => {
   
   // Join game in room
 socket.on('joinGame', async ({ roomId, playerId, country }) => {
+  console.log(`🎮 joinGame: roomId=${roomId}, playerId=${playerId}, country=${country}`);
 
-  // Find the correct active lobby game from database
-  const activeLobbyGame = await findActiveLobbyGame();
+  // Always use main-game room in single-room mode
+  const actualRoomId = SINGLE_ROOM_ID;
+  const room = globalState.rooms[actualRoomId];
   
-  if (!activeLobbyGame) {
+  if (!room) {
+    console.error(`❌ Room '${actualRoomId}' not found in memory`);
     socket.emit('joinResult', { 
       success: false, 
-      message: 'No active game available. Please wait for the teacher to start a new game.' 
+      message: 'Game room not found. Please refresh the page.' 
     });
     return;
   }
   
-  // Use the active lobby game's room ID
-  const actualRoomId = activeLobbyGame.gameCode;
-  console.log(`   Using active lobby game: ${actualRoomId} (game_id: ${activeLobbyGame.gameId})`);
+  console.log(`   ✅ Room found: gameId=${room.gameId}, gameCode=${room.gameCode}, phase=${room.gamePhase}`);
   
-  const room = globalState.rooms[actualRoomId];
+  // Find active lobby game in database
+  const activeLobbyGame = await findActiveLobbyGame();
   
-  if (!room) {
-    console.error(`❌ Room not found in memory: ${actualRoomId}`);
+  if (!activeLobbyGame) {
+    console.error('❌ No active lobby game in database');
     socket.emit('joinResult', { 
       success: false, 
-      message: `Game not found in server memory. Please refresh and try again.` 
+      message: 'No active game available. Please ask the teacher to start a new game.' 
     });
     return;
+  }
+  
+  console.log(`   📊 Active lobby: gameId=${activeLobbyGame.gameId}, gameCode=${activeLobbyGame.gameCode}, players=${activeLobbyGame.playerCount || 0}`);
+  
+  // Sync room with active lobby game (in case of mismatch)
+  if (room.gameId !== activeLobbyGame.gameId) {
+    console.log(`   🔄 Syncing room gameId: ${room.gameId} → ${activeLobbyGame.gameId}`);
+    room.gameId = activeLobbyGame.gameId;
+    room.gameCode = activeLobbyGame.gameCode;
   }
   
   // Check if game is still in lobby phase
@@ -1940,11 +1955,10 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   
   // Check if country is already taken
   const taken = Object.values(room.players).some(p => p.country === country);
-  
   if (taken) {
     socket.emit('joinResult', { 
       success: false, 
-      message: 'Country already taken' 
+      message: `${country} is already taken by another player.` 
     });
     return;
   }
@@ -1953,99 +1967,99 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   if (room.players[playerId]) {
     socket.emit('joinResult', { 
       success: false, 
-      message: `You are already in this game as ${room.players[playerId].country}. Please refresh if you want to change countries.` 
+      message: `You are already in this game as ${room.players[playerId].country}. Refresh to change countries.` 
     });
     return;
   }
   
+  console.log(`   ✅ All checks passed, adding player...`);
+  
   // Generate incremental player_id for this game
   const gamePlayerId = getNextPlayerId();
   
-  // Join the socket to the correct room
+  // Join the socket to the room
   socket.join(actualRoomId);
   
+  // Add player to room
   room.players[playerId] = {
     id: playerId,
+    playerId: playerId,  // For compatibility
     gamePlayerId: gamePlayerId,
     country: country,
     socketId: socket.id,
     joinedAt: Date.now()
   };
+  
+  console.log(`   ✅ Player added to room: ${playerId} as ${country}`);
+  
+  // Emit success to client
   socket.emit('joinResult', { 
-  success: true, 
-  gamePlayerId: gamePlayerId,
-  roomId: roomId,
-  gameId: room.gameId  // ✅ This is correct - room.gameId is the numeric ID
-});
+    success: true, 
+    gamePlayerId: gamePlayerId,
+    roomId: actualRoomId,
+    gameId: room.gameId,
+    country: country
+  });
+  
+  // Broadcast updated state
   broadcastToRoom(actualRoomId);
   broadcastRoomList();
   saveState();
   
-  // Sync to MySQL - add player with correct game_id
+  // Sync to MySQL
   (async () => {
     try {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      console.log(`🔍 Syncing player to game_id ${activeLobbyGame.gameId}: playerId=${playerId}`);
+      console.log(`   📊 Syncing to MySQL: username=${username}, country=${country}`);
       
       if (!username) {
-        console.warn(`⚠️ Could not find username for playerId ${playerId}`);
+        console.warn(`   ⚠️  Could not find username for playerId ${playerId}`);
         return;
       }
       
       const userId = await getUserId(username);
-      console.log(`🔍 Got userId: ${userId || 'NOT FOUND'}`);
+      console.log(`   📊 Got userId: ${userId}`);
       
       if (!userId) {
-        console.warn(`⚠️ Could not get MySQL user_id for ${username}`);
+        console.warn(`   ⚠️  Could not get MySQL user_id for ${username}`);
         return;
       }
       
-      // Get country name and code
-      const countryNames = { 
-        USA: 'United States', 
-        UK: 'United Kingdom', 
-        USSR: 'Soviet Union', 
-        France: 'France', 
-        China: 'China', 
-        India: 'India', 
-        Argentina: 'Argentina' 
-      };
-      
+      // Map country name to code
       const countryCodes = {
         'USA': 'USA',
         'UK': 'UK',
-        'USSR': 'USS',
+        'USSR': 'USS',  // ✅ Database uses USS
         'France': 'FRA',
         'China': 'CHN',
         'India': 'IND',
         'Argentina': 'ARG'
       };
       
-      const countryName = countryNames[country] || country;
-      const countryCode = countryCodes[country] || country;
+      const countryCode = countryCodes[country] || country.substring(0, 3).toUpperCase();
       
-      // Add player to the correct game
-      // ✅ CORRECT - Use the standard addPlayer endpoint
-const addPlayerResult = await db.addPlayer(
-  activeLobbyGame.gameCode,  // gameCode string
-  userId,                     // userId integer
-  countryCode,                // countryCode string - API will convert to countryId
-  countryName                 // countryName string
-);
+      console.log(`   📊 Calling addPlayer: gameCode=${activeLobbyGame.gameCode}, userId=${userId}, countryCode=${countryCode}`);
       
-      if (addPlayerResult && addPlayerResult.success) {
-        console.log(`✅ Player ${username} (${country}) synced to MySQL game_id ${activeLobbyGame.gameId} with player_id ${gamePlayerId}`);
+      // ✅ Use the correct API endpoint
+      const addPlayerResult = await db.addPlayer(
+        activeLobbyGame.gameCode,
+        userId,
+        countryCode,
+        country
+      );
+      
+      if (addPlayerResult && !addPlayerResult.error) {
+        console.log(`   ✅ Player ${username} (${country}) synced to MySQL game_id ${activeLobbyGame.gameId}`);
       } else {
-        console.error(`❌ Failed to add player to game:`, addPlayerResult);
+        console.error(`   ❌ Failed to add player to MySQL:`, addPlayerResult);
       }
     } catch (err) {
-      console.error(`❌ Error syncing player to MySQL:`, err.message);
+      console.error(`   ❌ Error syncing player to MySQL:`, err.message);
     }
   })();
   
-  console.log(`✅ Player ${playerId} joined as ${country} in game ${activeLobbyGame.gameId} (${actualRoomId}) with player_id ${gamePlayerId}`);
-});
-  
+  console.log(`✅ Player ${playerId} joined as ${country} in game ${activeLobbyGame.gameId} with player_id ${gamePlayerId}`);
+});  
   // Rejoin game after disconnect/reconnect
   socket.on('rejoinGame', ({ roomId, playerId, country }) => {
     const room = globalState.rooms[roomId];
