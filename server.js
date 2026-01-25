@@ -1847,7 +1847,28 @@ socket.on('login', async ({ username, password }) => {
   // Join game in room
 socket.on('joinGame', async ({ roomId, playerId, country }) => {
   console.log(`🎮 Join game request: roomId=${roomId}, playerId=${playerId}, country=${country}`);
-  
+  // At the end of the startNewGame handler, right before the final console.log
+console.log('=== ROOM STATE AFTER RESET ===');
+console.log('room.roomId:', room.roomId);
+console.log('room.gameId:', room.gameId, 'type:', typeof room.gameId);
+console.log('room.gameCode:', room.gameCode, 'type:', typeof room.gameCode);
+console.log('room.gamePhase:', room.gamePhase);
+console.log('room.gameStatus:', room.gameStatus);
+console.log('==============================');
+
+
+**Expected output:**
+```
+room.roomId: main-game
+room.gameId: 40 (type: number)
+room.gameCode: game_40 (type: string)
+room.gamePhase: lobby
+room.gameStatus: lobby
+```
+
+**If you're seeing:**
+```
+room.gameId: main-game
   // Find the correct active lobby game from database
   const activeLobbyGame = await findActiveLobbyGame();
   
