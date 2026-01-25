@@ -1848,10 +1848,10 @@ socket.on('login', async ({ username, password }) => {
 socket.on('joinGame', async ({ roomId, playerId, country }) => {
   console.log(`🎮 Join game request: roomId=${roomId}, playerId=${playerId}, country=${country}`);
   
-  // Find the correct active lobby game from database
-  const activeLobbyGame = await findActiveLobbyGame();
+  const room = globalState.rooms[roomId];
   
-  if (!activeLobbyGame) {
+  if (!room) {
+    if (!activeLobbyGame) {
     socket.emit('joinResult', { 
       success: false, 
       message: 'No active game available. Please wait for the teacher to start a new game.' 
