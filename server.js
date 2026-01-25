@@ -3470,7 +3470,7 @@ console.log('==============================');
 });
 
 // Start server with database connection
-async function startServer() {
+/*async function startServer() {
   // Test database connection
   const dbConnected = await db.test();
    // Initialize ID counters from database FIRST
@@ -3505,6 +3505,6 @@ async function startServer() {
     console.log(`🏠 Rooms: ${Object.keys(globalState.rooms).length}`);
     console.log('===================================');
   });
-}
+}/*
 
 startServer();
