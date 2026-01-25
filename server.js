@@ -1721,7 +1721,7 @@ socket.on('login', async ({ username, password }) => {
   try {
     // Use the userId from the user object
     const userId = user.userId;
-    / At line 1721, after: const userId = user.userId;
+   // At line 1721, after: const userId = user.userId;
 if (!userId && user.playerId) {
   // userId missing from cached user - fetch from database
   try {
