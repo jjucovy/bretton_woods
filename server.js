@@ -32,6 +32,7 @@ const COUNTRY_CODE_TO_NAME = {
 // Cache for tracking highest IDs
 let highestGameId = 0;
 let highestPlayerId = 0;
+let gameCodeCounter = 0;  // ✅ Counter for generating gameCode: "game1", "game2", etc.
 
 // Function to initialize highest IDs from database on startup
 async function initializeIdCounters() {
@@ -45,6 +46,21 @@ async function initializeIdCounters() {
     const highestPlayerFromDb = await db.getHighestPlayerId();
     highestPlayerId = highestPlayerFromDb || 0;
     console.log(`✅ Initialized highestPlayerId: ${highestPlayerId}`);
+    
+    // Initialize gameCodeCounter from existing games
+    try {
+      const result = await db.callAPI('getHighestGameCode', {});
+      if (result && result.highest_number) {
+        gameCodeCounter = parseInt(result.highest_number) || 0;
+        console.log(`✅ Initialized gameCodeCounter: ${gameCodeCounter}`);
+      } else {
+        gameCodeCounter = 0;
+        console.log(`✅ Initialized gameCodeCounter: 0 (no existing games)`);
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not get highest game code:', err.message);
+      gameCodeCounter = 0;
+    }
   } catch (err) {
     console.warn('⚠️ Could not initialize ID counters from database:', err.message);
     console.log('   Will start from 0 and increment as needed');
@@ -166,12 +182,12 @@ const militaryDeploymentsData = require('./military-deployments.json');
 const crisisEventsData = require('./crisis-events.json');
 
 // Create default game state template
-function createNewGame(roomId, roomName, hostId) {
+function createNewGame(gameCode, roomName, hostId) {
   return {
-    roomId: roomId,
+    gameCode: gameCode,  // ✅ Use gameCode instead of roomId
     roomName: roomName,
     hostId: hostId,
-    gameId: null,  // ✅ Will be set when database creates the game
+    gameId: null,  // ✅ Will be set from database
     gameStarted: false,
     currentRound: 0,
     players: {},
@@ -184,20 +200,20 @@ function createNewGame(roomId, roomName, hostId) {
     phase2: {
       active: false,
       currentYear: 1946,
-      maxYears: 7,
-      policies: {},
-      yearlyData: {},
+      maxYears: 7, // 1946-1952
+      policies: {}, // year -> country -> policy
+      yearlyData: {}, // year -> country -> economic data
       achievements: {},
       crises: {
-        active: null,
-        history: [],
-        responses: {}
+        active: null, // Current active crisis
+        history: [], // Resolved crises
+        responses: {} // playerId -> response choice
       }
     },
     maxPlayers: 7,
     createdAt: Date.now(),
-    autoAdvance: true,
-    autoAdvanceDelay: 5000
+    autoAdvance: true, // Auto-advance when all players submit
+    autoAdvanceDelay: 5000 // Delay in ms before auto-advancing (for Phase 1 results viewing)
   };
 }
 
@@ -435,120 +451,122 @@ app.get('/api/export-users', (req, res) => {
 // END USER MANAGEMENT
 // ============================================
 
+
 // ============================================
-// SINGLE-ROOM MODE: Check for active game
+// SINGLE-ROOM MODE: Auto-create main game room
 // ============================================
 const SINGLE_ROOM_ID = 'main-game';
 
-console.log('🔍 Checking for active game...');
+console.log('🔍 Checking for main game room...');
+console.log('   Current rooms:', Object.keys(globalState.rooms));
 
-(async () => {
-  try {
-    // Look for an active lobby game in the database
-    const activeLobbyGame = await findActiveLobbyGame();
-    
-    if (activeLobbyGame) {
-      console.log(`✅ Found active lobby game: ${activeLobbyGame.gameCode} (game_id: ${activeLobbyGame.gameId})`);
+if (!globalState.rooms[SINGLE_ROOM_ID]) {
+  // Try loading from database first
+  (async () => {
+    try {
+      console.log('📂 Loading game from database...');
+      const gameData = await db.getGame(SINGLE_ROOM_ID);
       
-      // Create room structure in memory
+      if (gameData) {
+        console.log('✅ Found existing game in database, restoring state...');
+        // Create room structure from DB data
+        globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        
+        // Restore game status and round
+        globalState.rooms[SINGLE_ROOM_ID].gameStatus = gameData.game_status;
+        globalState.rooms[SINGLE_ROOM_ID].gamePhase = gameData.game_status === 'lobby' ? 'lobby' : 
+                                                      gameData.game_status === 'phase1_active' ? 'voting' :
+                                                      gameData.game_status === 'phase2_active' ? 'phase2' :
+                                                      gameData.game_status === 'completed' ? 'complete' : 'lobby';
+        globalState.rooms[SINGLE_ROOM_ID].currentRound = parseInt(gameData.current_round) || 0;
+        globalState.rooms[SINGLE_ROOM_ID].gameStarted = gameData.game_status !== 'lobby';
+        
+        console.log(`✅ Game restored: status=${gameData.game_status}, phase=${globalState.rooms[SINGLE_ROOM_ID].gamePhase}, started=${globalState.rooms[SINGLE_ROOM_ID].gameStarted}`);
+        
+        // Only restore players if game is active
+        if (gameData.game_status !== 'lobby') {
+          try {
+            const players = await db.getPlayers(SINGLE_ROOM_ID);
+            console.log('   📋 Restored', players.length, 'players from database');
+            for (const p of players) {
+              const playerId = `player_db_${p.user_id}`;
+              const countryName = getCountryName(p.country_code);
+              globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
+                playerId: playerId,
+                userId: p.user_id,
+                username: p.username,
+                country: countryName,
+                countryCode: p.country_code,
+                countryId: p.country_id
+              };
+              
+              let pointsValue = p.total_points || p.totalPoints || p.points || p.phase1_score || 0;
+              if (pointsValue && !isNaN(parseInt(pointsValue))) {
+                globalState.rooms[SINGLE_ROOM_ID].scores[countryName] = parseInt(pointsValue);
+              }
+            }
+          } catch (err) {
+            console.log('   Warning: Could not restore players:', err.message);
+          }
+        } else {
+          console.log('   ℹ️  Game is in lobby - no players to restore');
+        }
+        
+        updateRoomList();
+      } else {
+        console.log('📝 No game found in database, creating new game in LOBBY...');
+        const newGameId = getNextGameId();
+        const newGameCode = `game_${newGameId}`;
+        
+        globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+        globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
+        globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
+        globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
+        globalState.rooms[SINGLE_ROOM_ID].gameStatus = 'lobby';
+        globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
+        globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
+        
+        updateRoomList();
+        saveState();
+        
+        // Create in database with lobby status
+        await db.callAPI('createNewGame', {
+          gameCode: newGameCode,
+          gameId: newGameId,
+          createdBy: null
+        });
+        
+        console.log(`✅ New game created in LOBBY: game_id=${newGameId}, gameCode=${newGameCode}`);
+      }
+    } catch (err) {
+      console.error('❌ Error loading game on startup:', err.message);
+      console.log('📝 Creating fresh game room in LOBBY...');
+      
+      const newGameId = getNextGameId();
+      const newGameCode = `game_${newGameId}`;
+      
       globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
-      globalState.rooms[SINGLE_ROOM_ID].gameId = activeLobbyGame.gameId;
-      globalState.rooms[SINGLE_ROOM_ID].gameCode = activeLobbyGame.gameCode;
+      globalState.rooms[SINGLE_ROOM_ID].gameId = newGameId;
+      globalState.rooms[SINGLE_ROOM_ID].gameCode = newGameCode;
       globalState.rooms[SINGLE_ROOM_ID].gamePhase = 'lobby';
+      globalState.rooms[SINGLE_ROOM_ID].gameStatus = 'lobby';
       globalState.rooms[SINGLE_ROOM_ID].gameStarted = false;
       globalState.rooms[SINGLE_ROOM_ID].currentRound = 0;
-      
-      // Try to restore players
-      try {
-        const players = await db.getPlayers(activeLobbyGame.gameCode);
-        console.log(`   📋 Found ${players.length} players in lobby`);
-        
-        for (const p of players) {
-          if (!p.country_id || !p.country_code) {
-            console.log(`   ⚠️  Skipping player ${p.username} - no country assigned`);
-            continue;
-          }
-          
-          const playerId = `player_db_${p.user_id}`;
-          const countryName = p.country_name || p.country_code;
-          
-          globalState.rooms[SINGLE_ROOM_ID].players[playerId] = {
-            playerId: playerId,
-            userId: p.user_id,
-            username: p.username,
-            country: countryName,
-            countryCode: p.country_code,
-            countryId: p.country_id
-          };
-          
-          console.log(`   ✅ Restored player: ${p.username} as ${countryName}`);
-        }
-      } catch (err) {
-        console.log('   ⚠️  Could not load players:', err.message);
-      }
-      
-      updateRoomList();
-      saveState();
-      
-    } else {
-      console.log('ℹ️  No active lobby game found');
-      console.log('   Waiting for superadmin to create a game...');
-      
-      // DO NOT create a game automatically!
-      // Just create an empty room structure that will be populated when admin creates game
-      globalState.rooms[SINGLE_ROOM_ID] = {
-        roomId: SINGLE_ROOM_ID,
-        roomName: 'Bretton Woods 1944',
-        hostId: null,
-        gameId: null,
-        gameCode: null,
-        gameStarted: false,
-        currentRound: 0,
-        players: {},
-        votes: {},
-        readyPlayers: [],
-        gamePhase: 'waiting',  // Special state: waiting for game creation
-        scores: { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 },
-        roundHistory: [],
-        militaryDeployments: militaryDeploymentsData,
-        phase2: {
-          active: false,
-          currentYear: 1946,
-          maxYears: 7,
-          policies: {},
-          yearlyData: {},
-          achievements: {},
-          crises: {
-            active: null,
-            history: [],
-            responses: {}
-          }
-        },
-        maxPlayers: 7,
-        createdAt: Date.now(),
-        autoAdvance: true,
-        autoAdvanceDelay: 5000,
-        waitingForAdmin: true  // Flag to indicate no game exists yet
-      };
       
       updateRoomList();
       saveState();
     }
-    
-  } catch (err) {
-    console.error('❌ Error checking for active game:', err);
-    console.log('   Server will wait for admin to create a game');
-    
-    // Create waiting room structure
-    globalState.rooms[SINGLE_ROOM_ID] = {
-      roomId: SINGLE_ROOM_ID,
-      roomName: 'Bretton Woods 1944',
-      gamePhase: 'waiting',
-      players: {},
-      waitingForAdmin: true
-    };
-  }
-})();
+  })();
+}
+  else {
+  console.log('✅ Main game room already exists in memory:', SINGLE_ROOM_ID);
+  console.log('   Room details:', {
+    roomId: globalState.rooms[SINGLE_ROOM_ID].roomId,
+    gameStarted: globalState.rooms[SINGLE_ROOM_ID].gameStarted,
+    playerCount: Object.keys(globalState.rooms[SINGLE_ROOM_ID].players).length,
+    currentRound: globalState.rooms[SINGLE_ROOM_ID].currentRound
+  });
+}
 // ============================================
 
 // Auto-save every 2 minutes
@@ -1740,74 +1758,45 @@ socket.on('login', async ({ username, password }) => {
   
   // Create new room
   socket.on('createRoom', ({ playerId, roomName }) => {
-  // Generate a simple, clean game code for the database
-  const timestamp = Date.now();
-  const gameCode = `GAME-${timestamp}`;  // ✅ Clean, predictable format
-  
-  // Use gameCode as roomId for consistency
-  const roomId = gameCode;
-  
-  globalState.rooms[roomId] = createNewGame(roomId, roomName, playerId);
-  
-  socket.join(roomId);
-  
-  // Sync to MySQL FIRST, then emit success
-  (async () => {
-    try {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
-      
-      if (!userId) {
-        console.error(`❌ Cannot create game: user not found for playerId ${playerId}`);
-        socket.emit('roomCreated', { 
-          success: false, 
-          error: 'User not found. Please log in again.' 
-        });
-        delete globalState.rooms[roomId];
-        return;
+    // Generate gameCode in format "game1", "game2", etc.
+    const gameCode = `game${++gameCodeCounter}`;
+    
+    // Create game object with gameCode
+    const room = createNewGame(gameCode, roomName, playerId);
+    room.gameCode = gameCode;  // ✅ Store gameCode in room
+    globalState.rooms[gameCode] = room;
+    
+    socket.join(gameCode);
+    socket.emit('roomCreated', { 
+      success: true, 
+      roomId: gameCode,  // Return gameCode as roomId
+      roomName: roomName,
+      gameCode: gameCode
+    });
+    
+    broadcastRoomList();
+    saveState();
+    
+    // Sync to MySQL
+    (async () => {
+      try {
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        const userId = username ? await getUserId(username) : null;
+        const result = await db.createNewGame(gameCode, userId || 0);
+        if (result && result.game_id) {
+          room.gameId = result.game_id;  // ✅ Store actual database game_id
+          console.log(`📊 Game created in MySQL: gameCode=${gameCode}, game_id=${result.game_id}`);
+        } else {
+          console.error(`❌ Failed to create game in MySQL: ${gameCode}`, result);
+        }
+      } catch (err) {
+        console.error(`❌ Error creating game in MySQL: ${gameCode}`, err.message);
       }
-      
-      // Create game in database
-      const dbResult = await db.createNewGame(gameCode, userId);
-      
-      if (!dbResult || dbResult.error) {
-        console.error(`❌ Failed to create game in database:`, dbResult?.error || 'Unknown error');
-        socket.emit('roomCreated', { 
-          success: false, 
-          error: 'Database error: Could not create game. Please try again.' 
-        });
-        delete globalState.rooms[roomId];
-        return;
-      }
-      
-      console.log(`✅ Game created in MySQL: ${gameCode} (game_id: ${dbResult.game_id})`);
-      
-      // Store the database game_id in the room
-      globalState.rooms[roomId].gameId = dbResult.game_id;
-      
-      // Now emit success
-      socket.emit('roomCreated', { 
-        success: true, 
-        roomId: roomId,
-        roomName: roomName,
-        gameId: dbResult.game_id
-      });
-      
-      broadcastRoomList();
-      saveState();
-      
-      console.log(`✅ Room created: ${roomName} (${roomId}) by ${playerId}, game_id: ${dbResult.game_id}`);
-      
-    } catch (err) {
-      console.error(`❌ Error creating game:`, err);
-      socket.emit('roomCreated', { 
-        success: false, 
-        error: 'Server error: ' + err.message 
-      });
-      delete globalState.rooms[roomId];
-    }
-  })();
-});
+    })();
+    
+    console.log(`✅ Room created: ${roomName} (${gameCode}) by ${playerId}`);
+  });
+  
   // Join existing room
   socket.on('joinRoom', ({ roomId, playerId }) => {
     if (!globalState.rooms[roomId]) {
@@ -1887,51 +1876,31 @@ socket.on('login', async ({ username, password }) => {
   
   // Join game in room
 socket.on('joinGame', async ({ roomId, playerId, country }) => {
-  console.log(`🎮 joinGame called: roomId=${roomId}, playerId=${playerId}, country=${country}`);
 
-  const actualRoomId = 'main-game';
-  const room = globalState.rooms[actualRoomId];
-  
-  if (!room) {
-    socket.emit('joinResult', { 
-      success: false, 
-      message: 'Game room not found. Please refresh the page.' 
-    });
-    return;
-  }
-  
-  // ✅ NEW CHECK: Is game waiting for admin to create?
-  if (room.waitingForAdmin || room.gamePhase === 'waiting') {
-    socket.emit('joinResult', { 
-      success: false, 
-      message: 'No game is currently active. Please wait for the teacher to start a new game.',
-      waitingForGame: true
-    });
-    return;
-  }
-  
-  // Continue with rest of handler... 
-  console.log(`   ✅ Room found: gameId=${room.gameId}, gameCode=${room.gameCode}, phase=${room.gamePhase}`);
-  
-  // Find active lobby game in database
+  // Find the correct active lobby game from database
   const activeLobbyGame = await findActiveLobbyGame();
   
   if (!activeLobbyGame) {
-    console.error('❌ No active lobby game in database');
     socket.emit('joinResult', { 
       success: false, 
-      message: 'No active game available. Please ask the teacher to start a new game.' 
+      message: 'No active game available. Please wait for the teacher to start a new game.' 
     });
     return;
   }
   
-  console.log(`   📊 Active lobby: gameId=${activeLobbyGame.gameId}, gameCode=${activeLobbyGame.gameCode}, players=${activeLobbyGame.playerCount || 0}`);
+  // Use the active lobby game's room ID
+  const actualRoomId = activeLobbyGame.gameCode;
+  console.log(`   Using active lobby game: ${actualRoomId} (game_id: ${activeLobbyGame.gameId})`);
   
-  // Sync room with active lobby game (in case of mismatch)
-  if (room.gameId !== activeLobbyGame.gameId) {
-    console.log(`   🔄 Syncing room gameId: ${room.gameId} → ${activeLobbyGame.gameId}`);
-    room.gameId = activeLobbyGame.gameId;
-    room.gameCode = activeLobbyGame.gameCode;
+  const room = globalState.rooms[actualRoomId];
+  
+  if (!room) {
+    console.error(`❌ Room not found in memory: ${actualRoomId}`);
+    socket.emit('joinResult', { 
+      success: false, 
+      message: `Game not found in server memory. Please refresh and try again.` 
+    });
+    return;
   }
   
   // Check if game is still in lobby phase
@@ -1965,10 +1934,11 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   
   // Check if country is already taken
   const taken = Object.values(room.players).some(p => p.country === country);
+  
   if (taken) {
     socket.emit('joinResult', { 
       success: false, 
-      message: `${country} is already taken by another player.` 
+      message: 'Country already taken' 
     });
     return;
   }
@@ -1977,99 +1947,97 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   if (room.players[playerId]) {
     socket.emit('joinResult', { 
       success: false, 
-      message: `You are already in this game as ${room.players[playerId].country}. Refresh to change countries.` 
+      message: `You are already in this game as ${room.players[playerId].country}. Please refresh if you want to change countries.` 
     });
     return;
   }
   
-  console.log(`   ✅ All checks passed, adding player...`);
-  
   // Generate incremental player_id for this game
   const gamePlayerId = getNextPlayerId();
   
-  // Join the socket to the room
+  // Join the socket to the correct room
   socket.join(actualRoomId);
   
-  // Add player to room
   room.players[playerId] = {
     id: playerId,
-    playerId: playerId,  // For compatibility
     gamePlayerId: gamePlayerId,
+    userId: null,  // ✅ Will be set from database lookup
     country: country,
     socketId: socket.id,
     joinedAt: Date.now()
   };
-  
-  console.log(`   ✅ Player added to room: ${playerId} as ${country}`);
-  
-  // Emit success to client
   socket.emit('joinResult', { 
-    success: true, 
-    gamePlayerId: gamePlayerId,
-    roomId: actualRoomId,
-    gameId: room.gameId,
-    country: country
-  });
-  
-  // Broadcast updated state
+  success: true, 
+  gamePlayerId: gamePlayerId,
+  roomId: roomId,
+  gameId: room.gameId  // ✅ This is correct - room.gameId is the numeric ID
+});
   broadcastToRoom(actualRoomId);
   broadcastRoomList();
   saveState();
   
-  // Sync to MySQL
+  // Sync to MySQL - add player with correct game_id
   (async () => {
     try {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      console.log(`   📊 Syncing to MySQL: username=${username}, country=${country}`);
+      console.log(`🔍 Syncing player to game_id ${activeLobbyGame.gameId}: playerId=${playerId}`);
       
       if (!username) {
-        console.warn(`   ⚠️  Could not find username for playerId ${playerId}`);
+        console.warn(`⚠️ Could not find username for playerId ${playerId}`);
         return;
       }
       
       const userId = await getUserId(username);
-      console.log(`   📊 Got userId: ${userId}`);
+      console.log(`🔍 Got userId: ${userId || 'NOT FOUND'}`);
       
       if (!userId) {
-        console.warn(`   ⚠️  Could not get MySQL user_id for ${username}`);
+        console.warn(`⚠️ Could not get MySQL user_id for ${username}`);
         return;
       }
       
-      // Map country name to code
+      // Get country name and code
+      const countryNames = { 
+        USA: 'United States', 
+        UK: 'United Kingdom', 
+        USSR: 'Soviet Union', 
+        France: 'France', 
+        China: 'China', 
+        India: 'India', 
+        Argentina: 'Argentina' 
+      };
+      
       const countryCodes = {
         'USA': 'USA',
         'UK': 'UK',
-        'USSR': 'USS',  // ✅ Database uses USS
+        'USSR': 'USS',
         'France': 'FRA',
         'China': 'CHN',
         'India': 'IND',
         'Argentina': 'ARG'
       };
       
-      const countryCode = countryCodes[country] || country.substring(0, 3).toUpperCase();
+      const countryName = countryNames[country] || country;
+      const countryCode = countryCodes[country] || country;
       
-      console.log(`   📊 Calling addPlayer: gameCode=${activeLobbyGame.gameCode}, userId=${userId}, countryCode=${countryCode}`);
+      // Store userId in player object for later use
+      room.players[playerId].userId = userId;
       
-      // ✅ Use the correct API endpoint
-      const addPlayerResult = await db.addPlayer(
-        activeLobbyGame.gameCode,
-        userId,
-        countryCode,
-        country
-      );
+      // Add player to the correct game using gameCode
+      const addPlayerResult = await db.addPlayer(actualRoomId, userId, countryCode, countryName);
       
       if (addPlayerResult && !addPlayerResult.error) {
-        console.log(`   ✅ Player ${username} (${country}) synced to MySQL game_id ${activeLobbyGame.gameId}`);
+        console.log(`✅ Player ${username} (${country}) synced to MySQL game ${actualRoomId} (game_id: ${activeLobbyGame.gameId})`);
       } else {
-        console.error(`   ❌ Failed to add player to MySQL:`, addPlayerResult);
+        console.error(`❌ Failed to add player to game:`, addPlayerResult?.error || addPlayerResult);
       }
     } catch (err) {
-      console.error(`   ❌ Error syncing player to MySQL:`, err.message);
+      console.error(`❌ Error syncing player to MySQL:`, err.message);
     }
   })();
   
-  console.log(`✅ Player ${playerId} joined as ${country} in game ${activeLobbyGame.gameId} with player_id ${gamePlayerId}`);
-});  
+  console.log(`✅ Player ${playerId} joined as ${country} in game ${activeLobbyGame.gameId} (${actualRoomId}) with player_id ${gamePlayerId}`);
+});
+  
   // Rejoin game after disconnect/reconnect
   socket.on('rejoinGame', ({ roomId, playerId, country }) => {
     const room = globalState.rooms[roomId];
@@ -2213,9 +2181,11 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   broadcastRoomList();
   saveState();
   
-  // Sync game start to MySQL
+  // Sync game start to MySQL using gameCode
   const gameStatus = skipPhase1 ? 'phase2_active' : 'phase1_active';
-  dbSync(db.updateGame, roomId, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 });
+  db.updateGame(room.gameCode, { status: gameStatus, startedAt: true, currentRound: skipPhase1 ? 11 : 1 }).catch(err => {
+    console.error(`❌ Failed to sync game start to MySQL:`, err.message);
+  });
   console.log(`📊 Game status synced to MySQL: ${gameStatus}`);
   
   console.log(`Game started in room ${roomId} by admin`);
@@ -2293,7 +2263,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
               room.currentRound++;
               if (room.currentRound > 10) {
                 initializePhase2(roomId);
-                await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+                await db.updateGame(room.gameCode, { status: 'phase2_active', currentRound: 11 }).catch(err => {
+                  console.error('❌ Failed to update game to phase2:', err.message);
+                });
               } else {
                 room.gamePhase = 'voting';
                 room.votes = {};
@@ -2412,15 +2384,19 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
           }
         } catch (err) { /* ignore */ }
         
-        await dbSync(db.saveRoundResult, roomId, room.currentRound, 1, {
+        await db.saveRoundResult(room.gameCode, room.currentRound, 1, {
           winningOptionId: winningOption,
           winningOptionText: winningOptionText,
           totalVotes: playerIds.length,
           results: { voteTally, roundScores, issueTitle }
+        }).catch(err => {
+          console.error('❌ Failed to save round result:', err.message);
         });
         
         // Update game state in DB
-        await dbSync(db.updateGame, roomId, { currentRound: room.currentRound });
+        await db.updateGame(room.gameCode, { currentRound: room.currentRound }).catch(err => {
+          console.error('❌ Failed to update game:', err.message);
+        });
         console.log(`📊 Round ${room.currentRound} results saved to MySQL`);
       })();
       
@@ -2444,7 +2420,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
           // Check if Phase 1 is complete - start Phase 2
           if (currentRoom.currentRound > 10) {
             initializePhase2(roomId);
-            await dbSync(db.updateGame, roomId, { status: 'phase2_active', currentRound: 11 });
+            await db.updateGame(currentRoom.gameCode, { status: 'phase2_active', currentRound: 11 }).catch(err => {
+              console.error('❌ Failed to update game to phase2:', err.message);
+            });
             console.log('[AUTO] Phase 1 complete! Starting Phase 2: Post-war economic management');
           } else {
             currentRoom.gamePhase = 'voting';
@@ -2482,14 +2460,18 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         } catch (err) { /* ignore */ }
         
         const pointsEarned = room.roundScores?.[voterCountry] || 0;
-        await dbSync(db.saveVote, roomId, userId, room.currentRound, 
-          `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned);
+        await db.saveVote(room.gameCode, userId, room.currentRound, 
+          `issue_${room.currentRound}`, issueTitle, choice, optionText, pointsEarned).catch(err => {
+            console.error('❌ Failed to save vote:', err.message);
+          });
         console.log(`📊 Vote synced: ${username} (${voterCountry}) -> ${choice}`);
         
         // Also update player total points to phase1_score column
         if (room.scores?.[voterCountry]) {
           console.log(`💾 Saving Phase 1 points to DB: ${username} (${voterCountry}) -> ${room.scores[voterCountry]} points`);
-          const pointsResult = await dbSync(db.updatePlayerPoints, roomId, userId, room.scores[voterCountry], 'phase1');
+          const pointsResult = await db.updatePlayerPoints(room.gameCode, userId, room.scores[voterCountry], 'phase1').catch(err => {
+            console.error('❌ Failed to save points:', err.message);
+          });
           if (pointsResult?.error) {
             console.error(`❌ Failed to save points to DB:`, pointsResult.error);
           } else {
@@ -2609,11 +2591,15 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     const submittedPolicy = room.phase2.policies[currentYear][player.country];
     console.log(`   syncing to MySQL...`);
     (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
+      // Use stored userId if available, otherwise look it up
+      let userId = player.userId;
+      if (!userId) {
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        userId = username ? await getUserId(username) : null;
+      }
       if (userId) {
         const phase2Round = currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-        await dbSync(db.savePolicy, roomId, userId, phase2Round, {
+        await db.savePolicy(room.gameCode, userId, phase2Round, {
           year: currentYear,
           interestRate: submittedPolicy.centralBankRate || 0,
           govtSpending: submittedPolicy.militarySpending || 0,
@@ -2621,8 +2607,10 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
           currencyPolicy: `rate_${submittedPolicy.exchangeRate || 1}`,
           policyFocus: submittedPolicy.isCommandEconomy ? 'heavy_industry' : 'balanced',
           rationale: JSON.stringify(submittedPolicy)
+        }).catch(err => {
+          console.error('❌ Failed to save policy:', err.message);
         });
-        console.log(`📊 Policy synced to MySQL: ${username} (${currentYear})`);
+        console.log(`📊 Policy synced to MySQL: ${player.country} (${currentYear})`);
       }
     })();
     
@@ -2658,7 +2646,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         calculatePhase2Scores(roomId);
         room.gamePhase = 'complete';
         room.phase2.active = false;
-        dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+        db.updateGame(room.gameCode, { status: 'completed', currentRound: 12 }).catch(err => {
+          console.error('❌ Failed to update game completion:', err.message);
+        });
         console.log('[AUTO] Phase 2 complete! Final scores calculated.');
         broadcastToRoom(roomId);
         saveState();
@@ -2676,7 +2666,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       
       // Sync to database
       const phase2Round = room.phase2.currentYear - 1945; // 1946=round 1, 1947=round 2, etc.
-      dbSync(db.updateGame, roomId, { currentRound: 10 + phase2Round });
+      db.updateGame(room.gameCode, { currentRound: 10 + phase2Round }).catch(err => {
+        console.error('❌ Failed to update game round:', err.message);
+      });
       console.log(`📊 Synced Phase 2 year ${room.phase2.currentYear} to MySQL (round ${10 + phase2Round})`);
       
       // Check for crisis events this year
@@ -2758,9 +2750,13 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     
     // Sync deployment to MySQL
     (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
-      console.log(`🔍 Deployment sync debug: username=${username}, playerId=${playerId}, gameCode=${room.gameCode}`);
+      // Use stored userId if available
+      let userId = player.userId;
+      if (!userId) {
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        userId = username ? await getUserId(username) : null;
+      }
+      console.log(`🔍 Deployment sync debug: userId=${userId}, playerId=${playerId}, gameCode=${room.gameCode}`);
       if (userId) {
         const deploymentData = {
           country: deployment.country,
@@ -2771,8 +2767,10 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
           deploymentInfluence: 0
         };
         console.log(`🔍 Deployment data:`, JSON.stringify(deploymentData));
-        await dbSync(db.saveDeployment, room.gameCode, playerId, deploymentData);
-        console.log(`📊 Deployment synced to MySQL: ${username} (${deployment.region})`)
+        await db.saveDeployment(room.gameCode, userId, deploymentData).catch(err => {
+          console.error('❌ Failed to save deployment:', err.message);
+        });
+        console.log(`📊 Deployment synced to MySQL: ${deployment.country} (${deployment.region})`)
       } else {
         console.error(`❌ Cannot sync deployment: userId is null for playerId ${playerId}`);
       }
@@ -2925,11 +2923,17 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     
     // Sync crisis response to MySQL
     (async () => {
-      const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
-      const userId = username ? await getUserId(username) : null;
+      // Use stored userId if available
+      let userId = player.userId;
+      if (!userId) {
+        const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
+        userId = username ? await getUserId(username) : null;
+      }
       if (userId) {
-        await dbSync(db.saveCrisisResponse, room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear);
-        console.log(`📊 Crisis response synced to MySQL: ${username}`);
+        await db.saveCrisisResponse(room.gameCode, userId, crisis.id, choiceId, room.phase2.currentYear).catch(err => {
+          console.error('❌ Failed to sync crisis response:', err.message);
+        });
+        console.log(`📊 Crisis response synced to MySQL: ${country}`);
       }
     })();
     
@@ -3076,7 +3080,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
-      dbSync(db.updateGame, roomId, { status: 'completed', currentRound: 12 });
+      db.updateGame(room.gameCode, { status: 'completed', currentRound: 12 }).catch(err => {
+        console.error('❌ Failed to update game completion:', err.message);
+      });
       console.log('Phase 2 complete! Final scores calculated.');
       broadcastToRoom(roomId);
       saveState();
@@ -3146,7 +3152,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
-    dbSync(db.updateGame, roomId, { status: 'lobby', currentRound: 0 });
+    db.updateGame(room.gameCode, { status: 'lobby', currentRound: 0 }).catch(err => {
+      console.error('❌ Failed to update game reset:', err.message);
+    });
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
@@ -3155,13 +3163,14 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   });
   
  
- // ADMIN: Start new game (resets current game and releases all players)
+  // ADMIN: Start new game (resets current game and releases all players)
  socket.on('startNewGame', async ({ roomId, playerId }) => {
   console.log('=== START NEW GAME REQUEST ===');
   console.log('Room ID:', roomId);
   console.log('Player ID:', playerId);
   console.log('Current highestGameId:', highestGameId);
-   
+    console.log(`🎮 Join game request: roomId=${roomId}, playerId=${playerId}, country=${country}`);
+
 
   const room = globalState.rooms[roomId];
   if (!room) {

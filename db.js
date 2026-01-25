@@ -1,6 +1,6 @@
 /**
  * Database module - calls PHP API on Hostinger
- * FIXED VERSION - matches actual database schema
+ * Complete game state persistence
  */
 
 const API_URL = 'https://jucovy.com/api.php';
@@ -49,69 +49,7 @@ async function ensureScoreColumns() {
   return callAPI('ensureScoreColumns');
 }
 
-// ============ USERS ============
-async function getAllUsers() {
-  try {
-    const result = await callAPI('getAllUsers');
-    return result && result.users ? result.users : [];
-  } catch (err) {
-    console.error('getAllUsers failed:', err.message);
-    return [];
-  }
-}
-
-async function getUser(username) {
-  try {
-    return await callAPI('getUser', { username });
-  } catch (err) {
-    console.error('getUser failed:', err.message);
-    return null;
-  }
-}
-
-async function createUser(username, password, role = 'student', email = '', displayName = '') {
-  try {
-    return await callAPI('createUser', { 
-      username, 
-      password, 
-      role, 
-      email, 
-      displayName: displayName || username 
-    });
-  } catch (err) {
-    console.error('createUser failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-// ============ GAMES ============
-async function createNewGame(gameCode, createdBy) {
-  try {
-    return await callAPI('createNewGame', { gameCode, createdBy });
-  } catch (err) {
-    console.error('createNewGame failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-async function getGame(gameCode) {
-  try {
-    return await callAPI('getGame', { gameCode });
-  } catch (err) {
-    console.error('getGame failed:', err.message);
-    return null;
-  }
-}
-
-async function updateGame(gameCode, updates) {
-  try {
-    return await callAPI('updateGame', { gameCode, ...updates });
-  } catch (err) {
-    console.error('updateGame failed:', err.message);
-    return { error: err.message };
-  }
-}
-
+// ============ ID COUNTERS ============
 async function getHighestGameId() {
   try {
     const result = await callAPI('getHighestGameId', {});
@@ -134,456 +72,177 @@ async function getHighestPlayerId() {
   }
 }
 
-async function findActiveLobbyGame() {
+// ✅ NEW: Get highest game code number for initializing counter
+async function getHighestGameCode() {
   try {
-    return await callAPI('findActiveLobbyGame', {});
+    const result = await callAPI('getHighestGameCode', {});
+    console.log('[getHighestGameCode] Result:', result);
+    return result;
   } catch (err) {
-    console.error('findActiveLobbyGame failed:', err.message);
-    return null;
+    console.error('getHighestGameCode failed:', err.message);
+    return { highest_number: 0 };
   }
+}
+
+// ============ USERS ============
+async function getAllUsers() {
+  return callAPI('getAllUsers');
+}
+
+async function getUser(username) {
+  return callAPI('getUser', { username });
+}
+
+async function createUser(username, password, role = 'student', email = '', displayName = '') {
+  return callAPI('createUser', { username, password, role, email, displayName: displayName || username });
+}
+
+// ============ GAMES ============
+async function createNewGame(gameCode, createdBy) {
+  return callAPI('createNewGame', { gameCode, createdBy });
+}
+
+async function getGame(gameCode) {
+  return callAPI('getGame', { gameCode });
+}
+
+async function updateGame(gameCode, updates) {
+  return callAPI('updateGame', { gameCode, ...updates });
 }
 
 // ============ PLAYERS ============
-// NOTE: Database uses country_id (foreign key), not countryCode/countryName directly
-async function addPlayer(gameCode, userId, countryId) {
-  try {
-    return await callAPI('addPlayer', { 
-      gameCode, 
-      userId, 
-      countryId  // ✅ FIXED: Use countryId, not countryCode/countryName
-    });
-  } catch (err) {
-    console.error('addPlayer failed:', err.message);
-    return { error: err.message };
-  }
+async function addPlayer(gameCode, userId, countryCode, countryName) {
+  return callAPI('addPlayer', { gameCode, userId, countryCode, countryName });
 }
 
 async function getPlayers(gameCode) {
-  try {
-    const result = await callAPI('getPlayers', { gameCode });
-    console.log('🔍 [getPlayers API Result]', JSON.stringify(result, null, 2).substring(0, 1000));
-    return result && result.players ? result.players : [];
-  } catch (err) {
-    console.error('getPlayers failed:', err.message);
-    return [];
-  }
+  const result = await callAPI('getPlayers', { gameCode });
+  console.log('🔍 [getPlayers API Result]', JSON.stringify(result, null, 2).substring(0, 1000));
+  return result;
 }
 
 async function getPlayerActiveGame(userId) {
-  try {
-    return await callAPI('getPlayerActiveGame', { userId });
-  } catch (err) {
-    console.error('getPlayerActiveGame failed:', err.message);
-    return null;
-  }
+  return callAPI('getPlayerActiveGame', { userId });
 }
 
-// NOTE: Database has separate phase1_score and phase2_score columns
 async function updatePlayerPoints(gameCode, userId, points, phase = 'phase1', addPoints = 0) {
-  try {
-    return await callAPI('updatePlayerPoints', { 
-      gameCode, 
-      userId, 
-      points,      // Absolute score
-      phase,       // 'phase1' or 'phase2'
-      addPoints    // Points to add (delta)
-    });
-  } catch (err) {
-    console.error('updatePlayerPoints failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('updatePlayerPoints', { gameCode, userId, points, phase, addPoints });
 }
 
 // ============ VOTES (Phase 1) ============
 async function saveVote(gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned = 0) {
-  try {
-    return await callAPI('saveVote', { 
-      gameCode, 
-      userId, 
-      round, 
-      issueId, 
-      issueTitle, 
-      optionId,      // ✅ FIXED: API expects optionId, not choice
-      optionText, 
-      pointsEarned 
-    });
-  } catch (err) {
-    console.error('saveVote failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('saveVote', { gameCode, userId, round, issueId, issueTitle, optionId, optionText, pointsEarned });
 }
 
 async function getVotes(gameCode, round = null) {
-  try {
-    return await callAPI('getVotes', { gameCode, round });
-  } catch (err) {
-    console.error('getVotes failed:', err.message);
-    return [];
-  }
+  return callAPI('getVotes', { gameCode, round });
 }
 
 // ============ POLICY DECISIONS (Phase 2) ============
 async function savePolicy(gameCode, userId, round, policyData) {
-  try {
-    return await callAPI('savePolicy', { 
-      gameCode, 
-      userId, 
-      round, 
-      ...policyData  // Spread policy fields
-    });
-  } catch (err) {
-    console.error('savePolicy failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('savePolicy', { gameCode, userId, round, ...policyData });
 }
 
 async function getPolicies(gameCode, round = null) {
-  try {
-    return await callAPI('getPolicies', { gameCode, round });
-  } catch (err) {
-    console.error('getPolicies failed:', err.message);
-    return [];
-  }
+  return callAPI('getPolicies', { gameCode, round });
 }
 
 // ============ ROUND RESULTS ============
 async function saveRoundResult(gameCode, round, phase, resultData) {
-  try {
-    return await callAPI('saveRoundResult', { 
-      gameCode, 
-      round, 
-      phase, 
-      ...resultData  // Spread result fields
-    });
-  } catch (err) {
-    console.error('saveRoundResult failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('saveRoundResult', { gameCode, round, phase, ...resultData });
 }
 
 async function getRoundResults(gameCode) {
-  try {
-    return await callAPI('getRoundResults', { gameCode });
-  } catch (err) {
-    console.error('getRoundResults failed:', err.message);
-    return [];
-  }
+  return callAPI('getRoundResults', { gameCode });
 }
 
 // ============ FULL GAME STATE ============
 async function getFullGameState(gameCode) {
-  try {
-    return await callAPI('getFullGameState', { gameCode });
-  } catch (err) {
-    console.error('getFullGameState failed:', err.message);
-    return null;
-  }
+  return callAPI('getFullGameState', { gameCode });
 }
 
 // ============ LEADERBOARD ============
 async function getLeaderboard(gameCode = null) {
-  try {
-    return await callAPI('getLeaderboard', { gameCode });
-  } catch (err) {
-    console.error('getLeaderboard failed:', err.message);
-    return [];
-  }
+  return callAPI('getLeaderboard', { gameCode });
 }
 
 // ============ CRISES ============
 async function getCrises(year = null) {
-  try {
-    return await callAPI('getCrises', { year });
-  } catch (err) {
-    console.error('getCrises failed:', err.message);
-    return [];
-  }
+  return callAPI('getCrises', { year });
 }
 
 async function getCrisisOptions(crisisId, countryCode = null) {
-  try {
-    return await callAPI('getCrisisOptions', { crisisId, countryCode });
-  } catch (err) {
-    console.error('getCrisisOptions failed:', err.message);
-    return [];
-  }
+  return callAPI('getCrisisOptions', { crisisId, countryCode });
 }
 
 async function saveCrisisResponse(gameCode, userId, crisisId, optionId, year = null) {
-  try {
-    return await callAPI('saveCrisisResponse', { 
-      gameCode, 
-      userId,      // ✅ API expects userId, not playerId
-      crisisId, 
-      optionId,    // ✅ FIXED: optionId, not choiceId
-      year
-    });
-  } catch (err) {
-    console.error('saveCrisisResponse failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('saveCrisisResponse', { 
+    gameCode, 
+    userId,  // ✅ API expects userId, not playerId
+    crisisId, 
+    optionId,
+    year
+  });
 }
 
-// ============ MILITARY DEPLOYMENTS ============
+// ============ DEPLOYMENTS ============
 async function saveDeployment(gameCode, userId, deploymentData) {
-  try {
-    return await callAPI('saveDeployment', { 
-      gameCode, 
-      userId,      // ✅ API expects userId, not playerId
-      country: deploymentData.country,
-      region: deploymentData.region,
-      troops: deploymentData.troops,
-      branch: deploymentData.branch,  // ✅ CRITICAL: API requires this
-      year: deploymentData.year,
-      deploymentInfluence: deploymentData.deploymentInfluence || 0
-    });
-  } catch (err) {
-    console.error('saveDeployment failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-async function getDeployments(gameCode, year = null) {
-  try {
-    return await callAPI('getDeployments', { gameCode, year });
-  } catch (err) {
-    console.error('getDeployments failed:', err.message);
-    return [];
-  }
+  return callAPI('saveDeployment', { 
+    gameCode, 
+    userId, 
+    country: deploymentData.country,
+    region: deploymentData.region,
+    troops: deploymentData.troops,
+    branch: deploymentData.branch,
+    year: deploymentData.year,
+    deploymentInfluence: deploymentData.deploymentInfluence || 0
+  });
 }
 
 // ============ ECONOMIC STATE ============
 async function saveEconomicState(gameCode, countryCode, year, stateData) {
-  try {
-    return await callAPI('saveEconomicState', {
-      gameCode,
-      countryCode,  // ✅ Pass country code, not country_id
-      year,
-      gdpGrowth: stateData.gdpGrowth,
-      inflation: stateData.inflation,
-      unemployment: stateData.unemployment,
-      tradeBalance: stateData.tradeBalance,
-      reserves: stateData.reserves,
-      stability: stateData.stability
-    });
-  } catch (err) {
-    console.error('saveEconomicState failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('saveEconomicState', {
+    gameCode,
+    countryCode,
+    year,
+    gdpGrowth: stateData.gdpGrowth,
+    inflation: stateData.inflation,
+    unemployment: stateData.unemployment,
+    tradeBalance: stateData.tradeBalance,
+    reserves: stateData.reserves,
+    stability: stateData.stability
+  });
 }
 
 async function getEconomicState(gameCode, countryCode = null, year = null) {
-  try {
-    return await callAPI('getEconomicState', { gameCode, countryCode, year });
-  } catch (err) {
-    console.error('getEconomicState failed:', err.message);
-    return [];
-  }
+  return callAPI('getEconomicState', { gameCode, countryCode, year });
 }
 
 // ============ GAME RESULTS ============
 async function saveGameResult(gameCode, countryCode, finalScore, breakdown = null) {
-  try {
-    return await callAPI('saveGameResult', {
-      gameCode,
-      countryCode,
-      finalScore,
-      breakdown: breakdown ? JSON.stringify(breakdown) : null
-    });
-  } catch (err) {
-    console.error('saveGameResult failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('saveGameResult', {
+    gameCode,
+    countryCode,
+    finalScore,
+    breakdown: breakdown ? JSON.stringify(breakdown) : null
+  });
 }
 
 async function getGameResults(gameCode) {
-  try {
-    return await callAPI('getGameResults', { gameCode });
-  } catch (err) {
-    console.error('getGameResults failed:', err.message);
-    return [];
-  }
+  return callAPI('getGameResults', { gameCode });
 }
 
 // ============ GAME STATE MANAGEMENT ============
 async function releaseAllPlayers(gameCode) {
-  try {
-    return await callAPI('releaseAllPlayers', { gameCode });
-  } catch (err) {
-    console.error('releaseAllPlayers failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('releaseAllPlayers', { gameCode });
 }
 
-// ============ BATTLES ============
-async function proposeBattle(gameCode, year, country1, country2, region, battleData) {
-  try {
-    return await callAPI('proposeBattle', {
-      gameCode,
-      year,
-      country1,
-      country2,
-      region,
-      ...battleData
-    });
-  } catch (err) {
-    console.error('proposeBattle failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-async function submitBattleDecision(battleId, country, decision, committedForces = 0) {
-  try {
-    return await callAPI('submitBattleDecision', {
-      battleId,
-      country,
-      decision,
-      committedForces
-    });
-  } catch (err) {
-    console.error('submitBattleDecision failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-async function resolveBattle(battleId) {
-  try {
-    return await callAPI('resolveBattle', { battleId });
-  } catch (err) {
-    console.error('resolveBattle failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-async function getBattles(gameCode, year = null) {
-  try {
-    return await callAPI('getBattles', { gameCode, year });
-  } catch (err) {
-    console.error('getBattles failed:', err.message);
-    return [];
-  }
-}
-
-async function getBattleResults(gameCode) {
-  try {
-    return await callAPI('getBattleResults', { gameCode });
-  } catch (err) {
-    console.error('getBattleResults failed:', err.message);
-    return [];
-  }
-}
-
-// ============ ALLIANCES ============
-async function proposeAlliance(gameCode, year, country1, country2) {
-  try {
-    return await callAPI('proposeAlliance', {
-      gameCode,
-      year,
-      country1,
-      country2
-    });
-  } catch (err) {
-    console.error('proposeAlliance failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-async function respondToAlliance(allianceId, response) {
-  try {
-    return await callAPI('respondToAlliance', {
-      allianceId,
-      response  // 'ACCEPTED' or 'REJECTED'
-    });
-  } catch (err) {
-    console.error('respondToAlliance failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-async function getAlliances(gameCode, year = null) {
-  try {
-    return await callAPI('getAlliances', { gameCode, year });
-  } catch (err) {
-    console.error('getAlliances failed:', err.message);
-    return [];
-  }
-}
-
-// ============ SCORING HELPERS ============
-async function getBattleScores(gameId, country) {
-  try {
-    return await callAPI('getBattleScores', { gameId, country });
-  } catch (err) {
-    console.error('getBattleScores failed:', err.message);
-    return { victories: 0, defeats: 0, negotiated: 0, territory_regions: 0 };
-  }
-}
-
-async function getAlliancePoints(gameId, country) {
-  try {
-    return await callAPI('getAlliancePoints', { gameId, country });
-  } catch (err) {
-    console.error('getAlliancePoints failed:', err.message);
-    return { active_alliances: 0 };
-  }
-}
-
-async function getEconomicDamage(gameId, country) {
-  try {
-    return await callAPI('getEconomicDamage', { gameId, country });
-  } catch (err) {
-    console.error('getEconomicDamage failed:', err.message);
-    return { total_damage: 0 };
-  }
-}
-
-async function getCrisisPointsByCountry(gameId, country) {
-  try {
-    return await callAPI('getCrisisPointsByCountry', { gameId, country });
-  } catch (err) {
-    console.error('getCrisisPointsByCountry failed:', err.message);
-    return { total_points: 0 };
-  }
-}
-
-async function updatePlayerPhase2Score(playerId, phase2Score) {
-  try {
-    return await callAPI('updatePlayerPhase2Score', { playerId, phase2Score });
-  } catch (err) {
-    console.error('updatePlayerPhase2Score failed:', err.message);
-    return { error: err.message };
-  }
-}
-
-// ============ COUNTRIES ============
-async function getCountries() {
-  try {
-    return await callAPI('getCountries', {});
-  } catch (err) {
-    console.error('getCountries failed:', err.message);
-    return [];
-  }
-}
-
-async function getCountryByCode(countryCode) {
-  try {
-    return await callAPI('getCountryByCode', { countryCode });
-  } catch (err) {
-    console.error('getCountryByCode failed:', err.message);
-    return null;
-  }
-}
-
-// ============ TEST ============
+// ============ TESTING ============
 async function testConnection() {
-  try {
-    return await callAPI('test');
-  } catch (err) {
-    console.error('testConnection failed:', err.message);
-    return { error: err.message };
-  }
+  return callAPI('test');
 }
 
+// ============ EXPORTS ============
 module.exports = {
   // Core
   callAPI,
@@ -596,6 +255,7 @@ module.exports = {
   // ID Counters
   getHighestGameId,
   getHighestPlayerId,
+  getHighestGameCode,
   
   // Users
   getAllUsers,
@@ -606,18 +266,12 @@ module.exports = {
   createNewGame,
   getGame,
   updateGame,
-  findActiveLobbyGame,
   
   // Players
   addPlayer,
   getPlayers,
   getPlayerActiveGame,
   updatePlayerPoints,
-  updatePlayerPhase2Score,
-  
-  // Countries
-  getCountries,
-  getCountryByCode,
   
   // Votes
   saveVote,
@@ -652,25 +306,6 @@ module.exports = {
   
   // Deployments
   saveDeployment,
-  getDeployments,
-  
-  // Battles
-  proposeBattle,
-  submitBattleDecision,
-  resolveBattle,
-  getBattles,
-  getBattleResults,
-  
-  // Alliances
-  proposeAlliance,
-  respondToAlliance,
-  getAlliances,
-  
-  // Scoring helpers
-  getBattleScores,
-  getAlliancePoints,
-  getEconomicDamage,
-  getCrisisPointsByCountry,
   
   // Game state management
   releaseAllPlayers
