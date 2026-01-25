@@ -238,7 +238,7 @@ async function releaseAllPlayers(gameCode) {
 }
 
 // ============ TESTING ============
-async function testConnection() {
+async function test() {
   return callAPI('test');
 }
 
@@ -246,7 +246,7 @@ async function testConnection() {
 module.exports = {
   // Core
   callAPI,
-  testConnection,
+  test,
   
   // Schema
   setupSchema,
