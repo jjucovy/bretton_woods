@@ -171,7 +171,7 @@ function createNewGame(roomId, roomName, hostId) {
     roomId: roomId,
     roomName: roomName,
     hostId: hostId,
-    gameId: Date.now(),
+    gameId: null,  // ✅ Will be set when database creates the game
     gameStarted: false,
     currentRound: 0,
     players: {},
@@ -184,20 +184,20 @@ function createNewGame(roomId, roomName, hostId) {
     phase2: {
       active: false,
       currentYear: 1946,
-      maxYears: 7, // 1946-1952
-      policies: {}, // year -> country -> policy
-      yearlyData: {}, // year -> country -> economic data
+      maxYears: 7,
+      policies: {},
+      yearlyData: {},
       achievements: {},
       crises: {
-        active: null, // Current active crisis
-        history: [], // Resolved crises
-        responses: {} // playerId -> response choice
+        active: null,
+        history: [],
+        responses: {}
       }
     },
     maxPlayers: 7,
     createdAt: Date.now(),
-    autoAdvance: true, // Auto-advance when all players submit
-    autoAdvanceDelay: 5000 // Delay in ms before auto-advancing (for Phase 1 results viewing)
+    autoAdvance: true,
+    autoAdvanceDelay: 5000
   };
 }
 
@@ -1742,31 +1742,74 @@ socket.on('login', async ({ username, password }) => {
   
   // Create new room
   socket.on('createRoom', ({ playerId, roomName }) => {
-    const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    
-    globalState.rooms[roomId] = createNewGame(roomId, roomName, playerId);
-    
-    socket.join(roomId);
-    socket.emit('roomCreated', { 
-      success: true, 
-      roomId: roomId,
-      roomName: roomName
-    });
-    
-    broadcastRoomList();
-    saveState();
-    
-    // Sync to MySQL
-    (async () => {
+  // Generate a simple, clean game code for the database
+  const timestamp = Date.now();
+  const gameCode = `GAME-${timestamp}`;  // ✅ Clean, predictable format
+  
+  // Use gameCode as roomId for consistency
+  const roomId = gameCode;
+  
+  globalState.rooms[roomId] = createNewGame(roomId, roomName, playerId);
+  
+  socket.join(roomId);
+  
+  // Sync to MySQL FIRST, then emit success
+  (async () => {
+    try {
       const username = Object.keys(globalState.users).find(u => globalState.users[u].playerId === playerId);
       const userId = username ? await getUserId(username) : null;
-      await dbSync(db.createNewGame, roomId, userId);
-      console.log(`📊 Game created in MySQL: ${roomId}`);
-    })();
-    
-    console.log(`Room created: ${roomName} (${roomId}) by ${playerId}`);
-  });
-  
+      
+      if (!userId) {
+        console.error(`❌ Cannot create game: user not found for playerId ${playerId}`);
+        socket.emit('roomCreated', { 
+          success: false, 
+          error: 'User not found. Please log in again.' 
+        });
+        delete globalState.rooms[roomId];
+        return;
+      }
+      
+      // Create game in database
+      const dbResult = await db.createNewGame(gameCode, userId);
+      
+      if (!dbResult || dbResult.error) {
+        console.error(`❌ Failed to create game in database:`, dbResult?.error || 'Unknown error');
+        socket.emit('roomCreated', { 
+          success: false, 
+          error: 'Database error: Could not create game. Please try again.' 
+        });
+        delete globalState.rooms[roomId];
+        return;
+      }
+      
+      console.log(`✅ Game created in MySQL: ${gameCode} (game_id: ${dbResult.game_id})`);
+      
+      // Store the database game_id in the room
+      globalState.rooms[roomId].gameId = dbResult.game_id;
+      
+      // Now emit success
+      socket.emit('roomCreated', { 
+        success: true, 
+        roomId: roomId,
+        roomName: roomName,
+        gameId: dbResult.game_id
+      });
+      
+      broadcastRoomList();
+      saveState();
+      
+      console.log(`✅ Room created: ${roomName} (${roomId}) by ${playerId}, game_id: ${dbResult.game_id}`);
+      
+    } catch (err) {
+      console.error(`❌ Error creating game:`, err);
+      socket.emit('roomCreated', { 
+        success: false, 
+        error: 'Server error: ' + err.message 
+      });
+      delete globalState.rooms[roomId];
+    }
+  })();
+});
   // Join existing room
   socket.on('joinRoom', ({ roomId, playerId }) => {
     if (!globalState.rooms[roomId]) {
