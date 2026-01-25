@@ -3144,8 +3144,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   console.log('Room ID:', roomId);
   console.log('Player ID:', playerId);
   console.log('Current highestGameId:', highestGameId);
-    console.log(`🎮 Join game request: roomId=${roomId}, playerId=${playerId}, country=${country}`);
-
+   
 
   const room = globalState.rooms[roomId];
   if (!room) {
