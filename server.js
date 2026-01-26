@@ -2796,14 +2796,19 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
       const latestConflict = room.phase2.conflicts[room.phase2.conflicts.length - 1];
       console.log(`🎖️ Battle System Triggered: Conflict in ${latestConflict.region}`);
-      
-      // Emit battle alert to all players in room
-      io.to(roomId).emit('militaryConflict', {
-        region: latestConflict.region,
-        countries: latestConflict.countries,
-        year: room.phase2.currentYear,
-        message: `Military conflict detected in ${latestConflict.region}!`
-      });
+    
+// AFTER:
+// Only emit to players, not admin
+Object.values(room.players).forEach(player => {
+  if (player.role !== 'superadmin' && latestConflict.countries.includes(player.country)) {
+    io.to(player.socketId).emit('militaryConflict', {
+      region: latestConflict.region,
+      countries: latestConflict.countries,
+      year: room.phase2.currentYear,
+      message: `Military conflict detected in ${latestConflict.region}!`
+    });
+  }
+});
       
       // Also trigger database battle detection asynchronously
       (async () => {
@@ -2824,19 +2829,27 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     broadcastToRoom(roomId);
     saveState();
   });
-
-  // BATTLE SYSTEM: Submit battle decision
-  socket.on('submitBattleDecision', async (data) => {
-    const { battleId, region, decision, country, year } = data;
-    const roomId = SINGLE_ROOM_ID; // Single room mode
-    const room = globalState.rooms[roomId];
+// In submitBattleDecision handler, add this check at the top:
+socket.on('submitBattleDecision', async (data) => {
+  const { battleId, region, decision, country, year } = data;
+  const roomId = SINGLE_ROOM_ID;
+  const room = globalState.rooms[roomId];
+  
+  if (!room) {
+    console.error('❌ [Battle Decision] Room not found:', roomId);
+    return;
+  }
+  
+  // ✅ ADD THIS CHECK:
+  if (!country) {
+    console.log('⚠️ [Battle Decision] Ignoring decision from admin (no country)');
+    return;
+  }
+  
+  console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
+  // ... rest of code
+});
     
-    if (!room) {
-      console.error('❌ [Battle Decision] Room not found:', roomId);
-      return;
-    }
-    
-    console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
     
     // Store battle decision in room state (for future battle resolution)
     if (!room.phase2.battleDecisions) {
