@@ -2647,9 +2647,7 @@ function YearEndBattlePhase({
         <h3>⚠️ Tie Detected - Revote Required!</h3>
       </div>
     )}
-    
-   
-                    {gameState.gamePhase === 'voting' && (
+      {gameState.gamePhase === 'voting' && (
                       <div>
                         {/* Round Header */}
                         <div style={{
@@ -3035,6 +3033,8 @@ function YearEndBattlePhase({
                       </div>
                     )}
 
+  </div>
+    )} 
                     {/* RESULTS PHASE */}
                     {gameState.gamePhase === 'results' && (
                       <div>
