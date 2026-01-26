@@ -3498,7 +3498,6 @@ console.log('==============================');
     
     console.log(`Client disconnected: ${socket.id}`);
   });
-});
 
 // Start server with database connection
 async function startServer() {
