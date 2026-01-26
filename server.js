@@ -2883,7 +2883,7 @@ socket.on('submitBattleDecision', async (data) => {
   
   broadcastToRoom(roomId);
   saveState();
-});
+
     
     // Sync to database
     (async () => {
@@ -2902,10 +2902,7 @@ socket.on('submitBattleDecision', async (data) => {
       }
     })();
     
-    // Broadcast updated state to room
-    broadcastToRoom(roomId);
-    saveState();
-     
+    
 
   
 // BATTLE SYSTEM: Check if all decisions are in and resolve battle
@@ -2972,7 +2969,7 @@ function checkAndResolveBattles(roomId) {
     }
   })
 }
-
+});
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
     const room = globalState.rooms[roomId];
