@@ -7,7 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 const qs = require('qs');
-});
+
 // Database module for MySQL persistence
 const db = require('./db');
 
