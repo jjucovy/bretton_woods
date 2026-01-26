@@ -2789,7 +2789,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         console.error(`❌ Cannot sync deployment: userId is null for playerId ${playerId}`);
       }
     })();
-   
+    
    // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
 if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
   // Loop through ALL conflicts for current year
@@ -2808,6 +2808,9 @@ if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
             message: `Military conflict detected in ${conflict.region}!`
           });
         }
+      });
+    });
+}
 // AFTER:
 // Only emit to players, not admin
 Object.values(room.players).forEach(player => {
@@ -2836,12 +2839,12 @@ Object.values(room.players).forEach(player => {
           console.error(`❌ Database battle detection error: ${err.message}`);
         }
       })();
-
+    }
     
     broadcastToRoom(roomId);
     saveState();
-  
-})
+  });
+
   // PLAYER: Submit battle decision
 socket.on('submitBattleDecision', async (data) => {
   const { battleId, region, decision, country, year } = data;
@@ -3622,5 +3625,4 @@ async function startServer() {
 }
 
 startServer();
-
-}
+})
