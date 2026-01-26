@@ -3293,11 +3293,12 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
     }
     
     // Step 5: Reset room state in memory
-    console.log('Step 5: Resetting room state...');
-    const oldGameId = room.gameId;
-    room.gameId = newGameId;
-    room.gameCode = newGameCode;
-    room.gameStarted = false;
+console.log('Step 5: Resetting room state...');
+const oldGameId = room.gameId;
+room.gameId = newGameId;
+room.gameCode = newGameCode;  // e.g., "game_56"room.gameId = newGameId;
+
+        room.gameStarted = false;
     room.currentRound = 0;
     room.gamePhase = 'lobby';
     room.gameStatus = 'lobby';
