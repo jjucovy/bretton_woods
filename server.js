@@ -2829,18 +2829,24 @@ Object.values(room.players).forEach(player => {
   });
 
   // PLAYER: Submit battle decision
-socket.on('socket.on('submitBattleDecision', async (data)) => {
-    const { battleId, region, decision, country, year } = data;
-    const roomId = SINGLE_ROOM_ID; // Single room mode
-    const room = globalState.rooms[roomId];
-    
-    if (!room) {
-      console.error('❌ [Battle Decision] Room not found:', roomId);
-      return;
-    }
-    
-    console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
-    
+socket.on('submitBattleDecision', async (data) => {
+  const { battleId, region, decision, country, year } = data;
+  const roomId = SINGLE_ROOM_ID;
+  const room = globalState.rooms[roomId];
+  
+  if (!room) {
+    console.error('❌ [Battle Decision] Room not found:', roomId);
+    return;
+  }
+  
+  // ✅ ADD THIS CHECK:
+  if (!country) {
+    console.log('⚠️ [Battle Decision] Ignoring decision from admin (no country)');
+    return;
+  }
+  
+  console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
+  
     // Store battle decision in room state (for future battle resolution)
     if (!room.phase2.battleDecisions) {
       room.phase2.battleDecisions = [];
@@ -2875,8 +2881,8 @@ socket.on('socket.on('submitBattleDecision', async (data)) => {
     // Broadcast updated state to room
     broadcastToRoom(roomId);
     saveState();
-  });
-)}
+      })
+
 
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
