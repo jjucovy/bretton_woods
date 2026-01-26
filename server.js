@@ -2808,9 +2808,6 @@ if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
             message: `Military conflict detected in ${conflict.region}!`
           });
         }
-      });
-    });
-}
 // AFTER:
 // Only emit to players, not admin
 Object.values(room.players).forEach(player => {
