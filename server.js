@@ -250,7 +250,7 @@ function saveState() {
     }
     
     fs.writeFileSync(STATE_FILE, JSON.stringify(globalState, null, 2));
-    console.log('💾 Multi-room state saved');
+    console.log('💾 Game state saved');
   } catch (err) {
     console.error('❌ Error saving state:', err);
   }
@@ -3234,7 +3234,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         console.log('Step 1: Marking old game as completed...');
         const updateResult = await db.callAPI('updateGameStatus', { 
           gameCode: oldGameCode, 
-          status: 'completed' 
+          game_status: 'completed' 
         });
         console.log('updateGameStatus result:', updateResult);
         console.log(`✅ Old game ${oldGameCode} marked as completed`);
