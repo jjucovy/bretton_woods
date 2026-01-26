@@ -3292,16 +3292,22 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       return;
     }
     
-    // Step 5: Reset room state in memory
-console.log('Step 5: Resetting room state...');
-const oldGameId = room.gameId;
-room.gameId = newGameId;
-room.gameCode = newGameCode;  // e.g., "game_56"room.gameId = newGameId;
+// Step 5: Create NEW room with new gameCode as key
+console.log('Step 5: Creating new room in memory...');
 
-        room.gameStarted = false;
-    room.currentRound = 0;
-    room.gamePhase = 'lobby';
-    room.gameStatus = 'lobby';
+// Delete old room
+delete globalState.rooms[roomId];
+
+// Create NEW room with gameCode as the key
+globalState.rooms[newGameCode] = createNewGame(newGameCode, 'Bretton Woods 1944', playerId);
+globalState.rooms[newGameCode].gameId = newGameId;
+globalState.rooms[newGameCode].gameCode = newGameCode;
+globalState.rooms[newGameCode].gamePhase = 'lobby';
+globalState.rooms[newGameCode].gameStatus = 'lobby';
+globalState.rooms[newGameCode].gameStarted = false;
+globalState.rooms[newGameCode].currentRound = 0;
+
+console.log(`✅ Room created: globalState.rooms['${newGameCode}']`);
     room.votes = {};
     room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
     room.roundHistory = [];
