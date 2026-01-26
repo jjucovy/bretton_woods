@@ -2790,11 +2790,27 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       }
     })();
     
-    // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
-    if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
-      const latestConflict = room.phase2.conflicts[room.phase2.conflicts.length - 1];
-      console.log(`🎖️ Battle System Triggered: Conflict in ${latestConflict.region}`);
-    
+   // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
+if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
+  // Loop through ALL conflicts for current year
+  room.phase2.conflicts
+    .filter(c => c.year === room.phase2.currentYear)
+    .forEach(conflict => {
+      console.log(`🎖️ Battle System Triggered: Conflict in ${conflict.region}`);
+      
+      // Emit battle alert ONLY to players involved (not admin)
+      Object.values(room.players).forEach(player => {
+        if (player.role !== 'superadmin' && conflict.countries.includes(player.country)) {
+          io.to(player.socketId).emit('militaryConflict', {
+            region: conflict.region,
+            countries: conflict.countries,
+            year: room.phase2.currentYear,
+            message: `Military conflict detected in ${conflict.region}!`
+          });
+        }
+      });
+    });
+}
 // AFTER:
 // Only emit to players, not admin
 Object.values(room.players).forEach(player => {
@@ -2861,6 +2877,14 @@ socket.on('submitBattleDecision', async (data) => {
       year,
       timestamp: new Date().toISOString()
     });
+
+    
+  // ✅ ADD THIS:
+  checkAndResolveBattles(roomId);
+  
+  broadcastToRoom(roomId);
+  saveState();
+});
     
     // Sync to database
     (async () => {
@@ -2884,6 +2908,71 @@ socket.on('submitBattleDecision', async (data) => {
     saveState();
       });
 
+  
+// BATTLE SYSTEM: Check if all decisions are in and resolve battle
+function checkAndResolveBattles(roomId) {
+  const room = globalState.rooms[roomId];
+  if (!room || !room.phase2.conflicts) return;
+  
+  const currentYear = room.phase2.currentYear;
+  const currentConflicts = room.phase2.conflicts.filter(c => c.year === currentYear);
+  
+  currentConflicts.forEach(conflict => {
+    // Get all battle decisions for this conflict
+    const decisionsForThisBattle = (room.phase2.battleDecisions || []).filter(d => 
+      d.region === conflict.region && d.year === currentYear
+    );
+    
+    // Check if all involved countries have decided (excluding admin)
+    const involvedPlayers = Object.values(room.players).filter(p => 
+      p.role !== 'superadmin' && conflict.countries.includes(p.country)
+    );
+    
+    const allDecisionsIn = involvedPlayers.every(player => 
+      decisionsForThisBattle.some(d => d.country === player.country)
+    );
+    
+    if (allDecisionsIn && decisionsForThisBattle.length > 0) {
+      console.log(`⚔️ Resolving battle in ${conflict.region}`);
+      
+      // Calculate battle outcome
+      const fightCount = decisionsForThisBattle.filter(d => d.decision === 'FIGHT').length;
+      const negotiateCount = decisionsForThisBattle.filter(d => d.decision === 'NEGOTIATE').length;
+      const retreatCount = decisionsForThisBattle.filter(d => d.decision === 'RETREAT').length;
+      
+      let outcome;
+      if (fightCount >= 2) {
+        outcome = 'MAJOR_CONFLICT';
+      } else if (negotiateCount >= 2) {
+        outcome = 'NEGOTIATED_SETTLEMENT';
+      } else if (retreatCount >= 1) {
+        outcome = 'RETREAT';
+      } else {
+        outcome = 'MINOR_SKIRMISH';
+      }
+      
+      // Store battle result
+      if (!room.phase2.battleResults) {
+        room.phase2.battleResults = [];
+      }
+      
+      room.phase2.battleResults.push({
+        region: conflict.region,
+        year: currentYear,
+        outcome: outcome,
+        decisions: decisionsForThisBattle,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Remove resolved conflict
+      room.phase2.conflicts = room.phase2.conflicts.filter(c => 
+        !(c.region === conflict.region && c.year === currentYear)
+      );
+      
+      console.log(`✅ Battle resolved: ${conflict.region} - ${outcome}`);
+    }
+  });
+}
 
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
