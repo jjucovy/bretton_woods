@@ -140,7 +140,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-const PORT = process.env.PORT || 65002;
+const PORT = process.env.PORT || 5432;
 const STATE_FILE = path.join(__dirname, 'game-state.json');
 
 // Serve game HTML as the main page (MUST come before static middleware!)
