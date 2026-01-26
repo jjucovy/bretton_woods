@@ -638,6 +638,8 @@ function broadcastToRoom(roomId) {
     currentRound: room.currentRound,
     phase2Active: room.phase2?.active,
     phase2Year: room.phase2?.currentYear,
+    isRevote: room.isRevote || false,
+    revoteMessage: room.revoteMessage || '',
     readyPlayersCount: room.readyPlayers?.length,
     playersCount: Object.keys(room.players).length,
     scores: room.scores,
