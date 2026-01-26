@@ -3535,3 +3535,4 @@ async function startServer() {
 }
 
 startServer();
+})
