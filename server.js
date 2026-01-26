@@ -470,10 +470,9 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
       if (gameData) {
         console.log('✅ Found existing game in database, restoring state...');
         // Create room structure from DB data
-        const gameCodeToUse = gameData.game_code || `game_${gameData.game_id}`;
-        globalState.rooms[gameCodeToUse] = createNewGame(gameCodeToUse, 'Bretton Woods 1944', null);
-        globalState.rooms[gameCodeToUse].gameId = gameData.game_id;
-        globalState.rooms[gameCodeToUse].gameCode = gameCodeToUse;
+        globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
+
+        
         // Restore game status and round
         globalState.rooms[SINGLE_ROOM_ID].gameStatus = gameData.game_status;
         globalState.rooms[SINGLE_ROOM_ID].gamePhase = gameData.game_status === 'lobby' ? 'lobby' : 
@@ -1906,7 +1905,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   }
   
   // Use the active lobby game's room ID
-  const actualRoomId = activeLobbyGame.gameCode;
+  const actualRoomId = 'main-game';  // ✅ Use single-room constant
   console.log(`   Using active lobby game: ${actualRoomId} (game_id: ${activeLobbyGame.gameId})`);
   
   const room = globalState.rooms[actualRoomId];
@@ -3293,23 +3292,18 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       });
       return;
     }
+    // Step 5: Reset room state in memory
+console.log('Step 5: Resetting room state...');
+const oldGameId = room.gameId;
+room.gameId = newGameId;
+room.gameCode = newGameCode;
+room.gameStarted = false;
+room.currentRound = 0;
+room.gamePhase = 'lobby';
+room.gameStatus = 'lobby';
+// ... rest of reset code
+
     
-// Step 5: Create NEW room with new gameCode as key
-console.log('Step 5: Creating new room in memory...');
-
-// Delete old room
-delete globalState.rooms[roomId];
-
-// Create NEW room with gameCode as the key
-globalState.rooms[newGameCode] = createNewGame(newGameCode, 'Bretton Woods 1944', playerId);
-globalState.rooms[newGameCode].gameId = newGameId;
-globalState.rooms[newGameCode].gameCode = newGameCode;
-globalState.rooms[newGameCode].gamePhase = 'lobby';
-globalState.rooms[newGameCode].gameStatus = 'lobby';
-globalState.rooms[newGameCode].gameStarted = false;
-globalState.rooms[newGameCode].currentRound = 0;
-
-console.log(`✅ Room created: globalState.rooms['${newGameCode}']`);
     room.votes = {};
     room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
     room.roundHistory = [];
@@ -3342,7 +3336,7 @@ socket.emit('startNewGameResult', {
   gameCode: newGameCode
 });
 
-broadcastToRoom(newGameCode);  // ← Use newGameCode, not roomId
+broadcastToRoom(roomId);  // ← Use newGameCode, not roomId
 broadcastRoomList();
 saveState();
       // At the end of the startNewGame handler, right before the final console.log
