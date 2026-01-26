@@ -2848,7 +2848,6 @@ socket.on('submitBattleDecision', async (data) => {
   
   console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
   // ... rest of code
-});
     
     
     // Store battle decision in room state (for future battle resolution)
