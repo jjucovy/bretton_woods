@@ -2829,7 +2829,7 @@ Object.values(room.players).forEach(player => {
   });
 
   // PLAYER: Submit battle decision
-socket.on('socket.on('submitBattleDecision', async (data) => {
+socket.on('socket.on('submitBattleDecision', async (data)) => {
     const { battleId, region, decision, country, year } = data;
     const roomId = SINGLE_ROOM_ID; // Single room mode
     const room = globalState.rooms[roomId];
