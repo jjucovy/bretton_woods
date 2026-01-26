@@ -2876,6 +2876,7 @@ socket.on('socket.on('submitBattleDecision', async (data) => {
     broadcastToRoom(roomId);
     saveState();
   });
+)}
 
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
