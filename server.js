@@ -140,7 +140,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-const PORT = process.env.PORT || 5432;
 const STATE_FILE = path.join(__dirname, 'game-state.json');
 
 // Serve game HTML as the main page (MUST come before static middleware!)
@@ -3586,6 +3585,8 @@ console.log('==============================');
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
+const PORT = process.env.PORT || 5432;
+
 // Start server with database connection
 async function startServer() {
   // Test database connection
