@@ -2798,6 +2798,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
 // AFTER:
 // Only emit to players, not admin
 Object.values(room.players).forEach(player => {
+  console.log(player.role);
   if (player.role !== 'superadmin' && latestConflict.countries.includes(player.country)) {
     io.to(player.socketId).emit('militaryConflict', {
       region: latestConflict.region,
