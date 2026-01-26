@@ -1537,7 +1537,7 @@ io.on('connection', (socket) => {
   
   // Send current room list
   socket.emit('roomListUpdate', globalState.roomList);
-  
+});
   // Register new user
   socket.on('register', async ({ username, password }) => {
     if (!username || !password) {
@@ -3532,6 +3532,6 @@ async function startServer() {
     console.log(`🏠 Rooms: ${Object.keys(globalState.rooms).length}`);
     console.log('===================================');
   });
-}
-}
+
+
 startServer();
