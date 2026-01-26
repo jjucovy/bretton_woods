@@ -2881,7 +2881,7 @@ socket.on('submitBattleDecision', async (data) => {
     // Broadcast updated state to room
     broadcastToRoom(roomId);
     saveState();
-      })
+      });
 
 
   // CRISIS: Submit response to active crisis
@@ -3532,6 +3532,6 @@ async function startServer() {
     console.log(`🏠 Rooms: ${Object.keys(globalState.rooms).length}`);
     console.log('===================================');
   });
-
+}
 
 startServer();
