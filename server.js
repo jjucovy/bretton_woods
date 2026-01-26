@@ -2906,7 +2906,7 @@ socket.on('submitBattleDecision', async (data) => {
     // Broadcast updated state to room
     broadcastToRoom(roomId);
     saveState();
-      });
+     
 
   
 // BATTLE SYSTEM: Check if all decisions are in and resolve battle
@@ -2971,7 +2971,7 @@ function checkAndResolveBattles(roomId) {
       
       console.log(`✅ Battle resolved: ${conflict.region} - ${outcome}`);
     }
-  });
+  }
 }
 
   // CRISIS: Submit response to active crisis
@@ -3623,6 +3623,6 @@ async function startServer() {
     console.log('===================================');
   });
 }
-
+})
 startServer();
 
