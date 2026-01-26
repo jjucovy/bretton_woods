@@ -140,7 +140,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 65002;
 const STATE_FILE = path.join(__dirname, 'game-state.json');
 
 // Serve game HTML as the main page (MUST come before static middleware!)
@@ -250,7 +250,7 @@ function saveState() {
     }
     
     fs.writeFileSync(STATE_FILE, JSON.stringify(globalState, null, 2));
-    console.log('💾 Game state saved');
+    console.log('💾 Multi-room state saved');
   } catch (err) {
     console.error('❌ Error saving state:', err);
   }
@@ -471,7 +471,6 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
         console.log('✅ Found existing game in database, restoring state...');
         // Create room structure from DB data
         globalState.rooms[SINGLE_ROOM_ID] = createNewGame(SINGLE_ROOM_ID, 'Bretton Woods 1944', null);
-
         
         // Restore game status and round
         globalState.rooms[SINGLE_ROOM_ID].gameStatus = gameData.game_status;
@@ -1537,7 +1536,7 @@ io.on('connection', (socket) => {
   
   // Send current room list
   socket.emit('roomListUpdate', globalState.roomList);
-
+  
   // Register new user
   socket.on('register', async ({ username, password }) => {
     if (!username || !password) {
@@ -1722,7 +1721,9 @@ socket.on('login', async ({ username, password }) => {
   try {
     // Use the userId from the user object
     const userId = user.userId;
+   // At line 1721, after: const userId = user.userId;
 if (!userId && user.playerId) {
+  // userId missing from cached user - fetch from database
   try {
     const dbUser = await db.getUser(username);
     if (dbUser && dbUser.user_id) {
@@ -1903,7 +1904,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   }
   
   // Use the active lobby game's room ID
-  const actualRoomId = 'main-game';  // ✅ Use single-room constant
+  const actualRoomId = activeLobbyGame.gameCode;
   console.log(`   Using active lobby game: ${actualRoomId} (game_id: ${activeLobbyGame.gameId})`);
   
   const room = globalState.rooms[actualRoomId];
@@ -2790,40 +2791,18 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       }
     })();
     
-   // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
-if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
-  // Loop through ALL conflicts for current year
-  room.phase2.conflicts
-    .filter(c => c.year === room.phase2.currentYear)
-    .forEach(conflict => {
-      console.log(`🎖️ Battle System Triggered: Conflict in ${conflict.region}`);
+    // BATTLE SYSTEM: Detect and emit conflicts after deployment saves
+    if (room.phase2.conflicts && room.phase2.conflicts.length > 0) {
+      const latestConflict = room.phase2.conflicts[room.phase2.conflicts.length - 1];
+      console.log(`🎖️ Battle System Triggered: Conflict in ${latestConflict.region}`);
       
-      // Emit battle alert ONLY to players involved (not admin)
-      Object.values(room.players).forEach(player => {
-        if (player.role !== 'superadmin' && conflict.countries.includes(player.country)) {
-          io.to(player.socketId).emit('militaryConflict', {
-            region: conflict.region,
-            countries: conflict.countries,
-            year: room.phase2.currentYear,
-            message: `Military conflict detected in ${conflict.region}!`
-          });
-        }
+      // Emit battle alert to all players in room
+      io.to(roomId).emit('militaryConflict', {
+        region: latestConflict.region,
+        countries: latestConflict.countries,
+        year: room.phase2.currentYear,
+        message: `Military conflict detected in ${latestConflict.region}!`
       });
-    });
-}
-// AFTER:
-// Only emit to players, not admin
-Object.values(room.players).forEach(player => {
-  console.log(player.role);
-  if (player.role !== 'superadmin' && latestConflict.countries.includes(player.country)) {
-    io.to(player.socketId).emit('militaryConflict', {
-      region: latestConflict.region,
-      countries: latestConflict.countries,
-      year: room.phase2.currentYear,
-      message: `Military conflict detected in ${latestConflict.region}!`
-    });
-  }
-});
       
       // Also trigger database battle detection asynchronously
       (async () => {
@@ -2839,31 +2818,25 @@ Object.values(room.players).forEach(player => {
           console.error(`❌ Database battle detection error: ${err.message}`);
         }
       })();
-    
+    }
     
     broadcastToRoom(roomId);
     saveState();
   });
 
-  // PLAYER: Submit battle decision
-socket.on('submitBattleDecision', async (data) => {
-  const { battleId, region, decision, country, year } = data;
-  const roomId = SINGLE_ROOM_ID;
-  const room = globalState.rooms[roomId];
-  
-  if (!room) {
-    console.error('❌ [Battle Decision] Room not found:', roomId);
-    return;
-  }
-  
-  // ✅ ADD THIS CHECK:
-  if (!country) {
-    console.log('⚠️ [Battle Decision] Ignoring decision from admin (no country)');
-    return;
-  }
-  
-  console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
-  
+  // BATTLE SYSTEM: Submit battle decision
+  socket.on('submitBattleDecision', async (data) => {
+    const { battleId, region, decision, country, year } = data;
+    const roomId = SINGLE_ROOM_ID; // Single room mode
+    const room = globalState.rooms[roomId];
+    
+    if (!room) {
+      console.error('❌ [Battle Decision] Room not found:', roomId);
+      return;
+    }
+    
+    console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
+    
     // Store battle decision in room state (for future battle resolution)
     if (!room.phase2.battleDecisions) {
       room.phase2.battleDecisions = [];
@@ -2877,14 +2850,6 @@ socket.on('submitBattleDecision', async (data) => {
       year,
       timestamp: new Date().toISOString()
     });
-
-    
-  // ✅ ADD THIS:
-  checkAndResolveBattles(roomId);
-  
-  broadcastToRoom(roomId);
-  saveState();
-});
     
     // Sync to database
     (async () => {
@@ -2906,73 +2871,7 @@ socket.on('submitBattleDecision', async (data) => {
     // Broadcast updated state to room
     broadcastToRoom(roomId);
     saveState();
-     
-
-  
-// BATTLE SYSTEM: Check if all decisions are in and resolve battle
-function checkAndResolveBattles(roomId) {
-  const room = globalState.rooms[roomId];
-  if (!room || !room.phase2.conflicts) return;
-  
-  const currentYear = room.phase2.currentYear;
-  const currentConflicts = room.phase2.conflicts.filter(c => c.year === currentYear);
-  
-  currentConflicts.forEach(conflict => {
-    // Get all battle decisions for this conflict
-    const decisionsForThisBattle = (room.phase2.battleDecisions || []).filter(d => 
-      d.region === conflict.region && d.year === currentYear
-    );
-    
-    // Check if all involved countries have decided (excluding admin)
-    const involvedPlayers = Object.values(room.players).filter(p => 
-      p.role !== 'superadmin' && conflict.countries.includes(p.country)
-    );
-    
-    const allDecisionsIn = involvedPlayers.every(player => 
-      decisionsForThisBattle.some(d => d.country === player.country)
-    );
-    
-    if (allDecisionsIn && decisionsForThisBattle.length > 0) {
-      console.log(`⚔️ Resolving battle in ${conflict.region}`);
-      
-      // Calculate battle outcome
-      const fightCount = decisionsForThisBattle.filter(d => d.decision === 'FIGHT').length;
-      const negotiateCount = decisionsForThisBattle.filter(d => d.decision === 'NEGOTIATE').length;
-      const retreatCount = decisionsForThisBattle.filter(d => d.decision === 'RETREAT').length;
-      
-      let outcome;
-      if (fightCount >= 2) {
-        outcome = 'MAJOR_CONFLICT';
-      } else if (negotiateCount >= 2) {
-        outcome = 'NEGOTIATED_SETTLEMENT';
-      } else if (retreatCount >= 1) {
-        outcome = 'RETREAT';
-      } else {
-        outcome = 'MINOR_SKIRMISH';
-      }
-      
-      // Store battle result
-      if (!room.phase2.battleResults) {
-        room.phase2.battleResults = [];
-      }
-      
-      room.phase2.battleResults.push({
-        region: conflict.region,
-        year: currentYear,
-        outcome: outcome,
-        decisions: decisionsForThisBattle,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Remove resolved conflict
-      room.phase2.conflicts = room.phase2.conflicts.filter(c => 
-        !(c.region === conflict.region && c.year === currentYear)
-      );
-      
-      console.log(`✅ Battle resolved: ${conflict.region} - ${outcome}`);
-    }
-  })
-}
+  });
 
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
@@ -3334,7 +3233,7 @@ function checkAndResolveBattles(roomId) {
         console.log('Step 1: Marking old game as completed...');
         const updateResult = await db.callAPI('updateGameStatus', { 
           gameCode: oldGameCode, 
-          game_status: 'completed' 
+          status: 'completed' 
         });
         console.log('updateGameStatus result:', updateResult);
         console.log(`✅ Old game ${oldGameCode} marked as completed`);
@@ -3392,18 +3291,16 @@ function checkAndResolveBattles(roomId) {
       });
       return;
     }
-    // Step 5: Reset room state in memory
-console.log('Step 5: Resetting room state...');
-const oldGameId = room.gameId;
-room.gameId = newGameId;
-room.gameCode = newGameCode;
-room.gameStarted = false;
-room.currentRound = 0;
-room.gamePhase = 'lobby';
-room.gameStatus = 'lobby';
-// ... rest of reset code
-
     
+    // Step 5: Reset room state in memory
+    console.log('Step 5: Resetting room state...');
+    const oldGameId = room.gameId;
+    room.gameId = newGameId;
+    room.gameCode = newGameCode;
+    room.gameStarted = false;
+    room.currentRound = 0;
+    room.gamePhase = 'lobby';
+    room.gameStatus = 'lobby';
     room.votes = {};
     room.scores = { USA: 0, UK: 0, USSR: 0, France: 0, China: 0, India: 0, Argentina: 0 };
     room.roundHistory = [];
@@ -3428,17 +3325,17 @@ room.gameStatus = 'lobby';
     
     console.log(`✅ Room state reset: game_id ${oldGameId} → ${newGameId}`);
     
-// Step 6: Broadcast updates
-console.log('Step 6: Broadcasting updates...');
-socket.emit('startNewGameResult', { 
-  success: true, 
-  gameId: newGameId,
-  gameCode: newGameCode
-});
-
-broadcastToRoom(roomId);  // ← Use newGameCode, not roomId
-broadcastRoomList();
-saveState();
+    // Step 6: Broadcast updates
+    console.log('Step 6: Broadcasting updates...');
+    socket.emit('startNewGameResult', { 
+      success: true, 
+      gameId: newGameId,
+      gameCode: newGameCode
+    });
+    
+    broadcastToRoom(roomId);
+    broadcastRoomList();
+    saveState();
       // At the end of the startNewGame handler, right before the final console.log
 console.log('=== ROOM STATE AFTER RESET ===');
 console.log('room.roomId:', room.roomId);
@@ -3585,6 +3482,7 @@ console.log('==============================');
     
     console.log(`Client disconnected: ${socket.id}`);
   });
+});
 
 // Start server with database connection
 async function startServer() {
@@ -3625,4 +3523,3 @@ async function startServer() {
 }
 
 startServer();
-});
