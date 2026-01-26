@@ -2635,18 +2635,27 @@ function YearEndBattlePhase({
                     </div>
 
                     {/* VOTING PHASE */}
-
-{(gameState.gamePhase === 'voting' || gameState.gamePhase === 'revoting') && (
+{gameState.gamePhase === 'voting' && (
   <div>
-    {gameState.gamePhase === 'revoting' && (
-      <div style={{ 
-        padding: '16px', 
-        background: '#fef3c7', 
-        marginBottom: '20px' 
+    {gameState.isRevote && (
+      <div style={{
+        padding: '16px',
+        background: '#fef3c7',
+        borderRadius: '8px',
+        marginBottom: '20px',
+        border: '2px solid #f59e0b'
       }}>
-        <h3>⚠️ Tie Detected - Revote Required!</h3>
+        <h3 style={{ color: '#92400e', margin: 0 }}>
+          ⚠️ Revote Required!
+        </h3>
+        <p style={{ color: '#78350f', margin: '8px 0 0 0' }}>
+          {gameState.revoteMessage || 'There was a tie. Please vote again.'}
+        </p>
       </div>
     )}
+    
+    {/* Rest of voting UI */}
+  
       {gameState.gamePhase === 'voting' && (
                       <div>
                         {/* Round Header */}
