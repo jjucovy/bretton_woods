@@ -2839,7 +2839,7 @@ Object.values(room.players).forEach(player => {
           console.error(`❌ Database battle detection error: ${err.message}`);
         }
       })();
-    }
+    
     
     broadcastToRoom(roomId);
     saveState();
