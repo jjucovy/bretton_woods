@@ -1722,9 +1722,7 @@ socket.on('login', async ({ username, password }) => {
   try {
     // Use the userId from the user object
     const userId = user.userId;
-   // At line 1721, after: const userId = user.userId;
 if (!userId && user.playerId) {
-  // userId missing from cached user - fetch from database
   try {
     const dbUser = await db.getUser(username);
     if (dbUser && dbUser.user_id) {
@@ -2829,7 +2827,8 @@ Object.values(room.players).forEach(player => {
     broadcastToRoom(roomId);
     saveState();
   });
-// In submitBattleDecision handler, add this check at the top:
+
+  // PLAYER: Submit battle decision
 socket.on('submitBattleDecision', async (data) => {
   const { battleId, region, decision, country, year } = data;
   const roomId = SINGLE_ROOM_ID;
@@ -2840,29 +2839,59 @@ socket.on('submitBattleDecision', async (data) => {
     return;
   }
   
-  // ✅ ADD THIS CHECK:
+  // Check if this is from admin (no country = admin observer)
   if (!country) {
     console.log('⚠️ [Battle Decision] Ignoring decision from admin (no country)');
     return;
   }
   
   console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
-  // ... rest of code
-    
-    
-    // Store battle decision in room state (for future battle resolution)
-    if (!room.phase2.battleDecisions) {
-      room.phase2.battleDecisions = [];
-    }
-    
-    room.phase2.battleDecisions.push({
-      battleId: battleId || `${region}-${year}`,
-      region,
-      country,
-      decision,
-      year,
-      timestamp: new Date().toISOString()
-    });
+  
+  // Store battle decision in room state (for future battle resolution)
+  if (!room.phase2.battleDecisions) {
+    room.phase2.battleDecisions = [];
+  }
+  
+  room.phase2.battleDecisions.push({
+    battleId: battleId || `${region}-${year}`,
+    region,
+    country,
+    decision,
+    year,
+    timestamp: new Date().toISOString()
+  });// PLAYER: Submit battle decision
+
+  socket.on('submitBattleDecision', async (data) => {
+  const { battleId, region, decision, country, year } = data;
+  const roomId = SINGLE_ROOM_ID;
+  const room = globalState.rooms[roomId];
+  
+  if (!room) {
+    console.error('❌ [Battle Decision] Room not found:', roomId);
+    return;
+  }
+  
+  // Check if this is from admin (no country = admin observer)
+  if (!country) {
+    console.log('⚠️ [Battle Decision] Ignoring decision from admin (no country)');
+    return;
+  }
+  
+  console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
+  
+  // Store battle decision in room state (for future battle resolution)
+  if (!room.phase2.battleDecisions) {
+    room.phase2.battleDecisions = [];
+  }
+  
+  room.phase2.battleDecisions.push({
+    battleId: battleId || `${region}-${year}`,
+    region,
+    country,
+    decision,
+    year,
+    timestamp: new Date().toISOString()
+  });
     
     // Sync to database
     (async () => {
