@@ -2971,7 +2971,7 @@ function checkAndResolveBattles(roomId) {
       
       console.log(`✅ Battle resolved: ${conflict.region} - ${outcome}`);
     }
-  }
+  })
 }
 
   // CRISIS: Submit response to active crisis
