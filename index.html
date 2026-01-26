@@ -2220,14 +2220,24 @@ function YearEndBattlePhase({
 
           // Game handlers
           const handleJoinGame = (country) => {
-            if (userRole === 'superadmin') {
-              console.log('Admin cannot join as player');
-              return;
-            }
-            
-            socket.emit('joinGame', { roomId: SINGLE_ROOM_ID, playerId, country });
-          };
-
+  console.log('🎮 handleJoinGame called:', { country, userRole, playerId });
+  
+  if (userRole === 'superadmin') {
+    console.log('❌ Admin blocked from joining');
+    return;
+  }
+  
+  console.log('📤 Emitting joinGame event...');
+  socket.emit('joinGame', { roomId: SINGLE_ROOM_ID, playerId, country });
+  
+  // Listen for result
+  socket.once('joinResult', (result) => {
+    console.log('📥 joinResult received:', result);
+    if (!result.success) {
+      alert(`Failed to join: ${result.message}`);
+    }
+  });
+};
           const handleLeaveGame = () => {
             socket.emit('leaveGame', { roomId: SINGLE_ROOM_ID, playerId });
             setPlayerCountry(null);
@@ -4070,7 +4080,8 @@ function YearEndBattlePhase({
                     {userRole === 'superadmin' && (
                       <div style={{
                         padding: '20px',
-                        background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+         
+                          background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
                         borderRadius: '8px',
                         border: '2px solid #dc2626',
                         textAlign: 'center'
