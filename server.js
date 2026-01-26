@@ -2292,8 +2292,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         } else {
           // Trigger revote
           console.log(`🔄 Triggering revote - clearing votes and waiting for new submissions`);
-          room.gamePhase = 'revoting';
-          room.votes = {}; // Clear votes for revote
+          room.gamePhase = 'voting';
+          room.isRevote = true;  // Add a flag
+          room.revoteMessage = 'Tie detected! Revote between options A and B';room.votes = {}; // Clear votes for revote
           room.voteTally = voteTally;
           room.roundOutcome = `TIE! Revoting required (attempt ${room.voteAttempts[roundKey]}/3)`;
           
