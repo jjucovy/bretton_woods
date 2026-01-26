@@ -3533,5 +3533,5 @@ async function startServer() {
     console.log('===================================');
   });
 }
-});
+
 startServer();
