@@ -2082,10 +2082,10 @@ function YearEndBattlePhase({
               }
             });
             
-            socket.on('joinResult', ({ success, message, roomId }) => {
+socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
   if (success) {
-    actualRoomId = roomId;  // ← Store the actual room ID
-    console.log('✓ Joined room:', actualRoomId);
+    window.actualRoomId = actualRoomId || roomId;  // Store globally
+    console.log('✓ Joined room:', window.actualRoomId);
   } else {
     console.error('Failed to join game:', message);
   }
