@@ -2040,8 +2040,8 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
       room.players[playerId].userId = userId;
       
       // Add player to the correct game using gameCode
-      const addPlayerResult = await db.addPlayer(actualRoomId, userId, countryCode, countryName);
-      
+      const addPlayerResult = await db.addPlayer(activeLobbyGame.gameCode, userId, countryCode, countryName);
+
       if (addPlayerResult && !addPlayerResult.error) {
         console.log(`✅ Player ${username} (${country}) synced to MySQL game ${actualRoomId} (game_id: ${activeLobbyGame.gameId})`);
       } else {
