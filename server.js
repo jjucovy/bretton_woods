@@ -3550,12 +3550,8 @@ async function startServer() {
     await initializeIdCounters();
     await initializeRooms();  // ← ADD THIS LINE
   }  // Test database connection
-  const dbConnected = await db.test();
-   // Initialize ID counters from database FIRST
-  if (dbConnected) {
-    await initializeIdCounters(); // ← ADD THIS LINE
-  }  
-  //Ensure database schema exists
+
+    //Ensure database schema exists
   if (dbConnected) {
     try {
       await db.setupSchema();
