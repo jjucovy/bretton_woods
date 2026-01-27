@@ -2787,7 +2787,6 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
         console.log(`🔍 Deployment data:`, JSON.stringify(deploymentData));
         await db.saveDeployment(gameCode, userId, deploymentData) 
           console.error('❌ Failed to save deployment:', err.message);
-        });
         console.log(`📊 Deployment synced to MySQL: ${deployment.country} (${deployment.region})`)
       } else {
         console.error(`❌ Cannot sync deployment: userId is null for playerId ${playerId}`);
