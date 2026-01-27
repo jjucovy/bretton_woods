@@ -2833,10 +2833,9 @@ Object.values(room.players).forEach(player => {
     saveState();
   });
 
-  // PLAYER: Submit battle decision
+// PLAYER: Submit battle decision
 socket.on('submitBattleDecision', async (data) => {
-  const { battleId, region, decision, country, year } = data;
-  const roomId = SINGLE_ROOM_ID;
+  const { battleId, region, decision, country, year, roomId } = data;
   const room = globalState.rooms[roomId];
   
   if (!room) {
@@ -2844,7 +2843,6 @@ socket.on('submitBattleDecision', async (data) => {
     return;
   }
   
-  // ✅ ADD THIS CHECK:
   if (!country) {
     console.log('⚠️ [Battle Decision] Ignoring decision from admin (no country)');
     return;
@@ -2852,43 +2850,41 @@ socket.on('submitBattleDecision', async (data) => {
   
   console.log(`🎖️ [Battle Decision] ${country} chose ${decision} in ${region} (Year ${year})`);
   
-    // Store battle decision in room state (for future battle resolution)
-    if (!room.phase2.battleDecisions) {
-      room.phase2.battleDecisions = [];
-    }
-    
-    room.phase2.battleDecisions.push({
-      battleId: battleId || `${region}-${year}`,
-      region,
-      country,
-      decision,
-      year,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Sync to database
-    (async () => {
-      try {
-        const result = await db.callAPI('recordBattleDecision', {
-          gameCode: room.gameCode || roomId,
-          battleId: battleId || `${region}-${year}`,
-          country,
-          decision,
-          region,
-          year
-        });
-        console.log(`📊 Battle decision synced to MySQL: ${country} - ${decision}`);
-      } catch (err) {
-        console.error(`❌ Failed to sync battle decision: ${err.message}`);
-      }
-    })();
-    
-    // Broadcast updated state to room
-    broadcastToRoom(roomId);
-    saveState();
+  // Store battle decision
+  if (!room.phase2.battleDecisions) {
+    room.phase2.battleDecisions = [];
+  }
+  
+  room.phase2.battleDecisions.push({
+    battleId: battleId || `${region}-${year}`,
+    region,
+    country,
+    decision,
+    year,
+    timestamp: new Date().toISOString()
+  });
+  
+  // Sync to database with correct gameCode
+  (async () => {
+    try {
+      const result = await db.callAPI('recordBattleDecision', {
+        gameCode: room.gameCode,
+        battleId: battleId || `${region}-${year}`,
+        country,
+        decision,
+        region,
+        year
       });
-
-
+      console.log(`📊 Battle decision synced to MySQL: ${country} - ${decision}`);
+    } catch (err) {
+      console.error(`❌ Failed to sync battle decision: ${err.message}`);
+    }
+  })();
+  
+  broadcastToRoom(roomId);
+  saveState();
+});
+  
   // CRISIS: Submit response to active crisis
   socket.on('submitCrisisResponse', ({ roomId, playerId, choiceId }) => {
     const room = globalState.rooms[roomId];
