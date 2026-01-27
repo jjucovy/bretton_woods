@@ -2637,7 +2637,7 @@ function YearEndBattlePhase({
                     {/* VOTING PHASE */}
 {gameState.gamePhase === 'voting' && (
   <div>
-    {gameState.isRevote && (
+    {gameState.isRevote===true && (
       <div style={{
         padding: '16px',
         background: '#fef3c7',
