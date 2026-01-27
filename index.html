@@ -66,7 +66,7 @@
         let militaryData = null;
         let loadAttempts = 0;
         const MAX_ATTEMPTS = 3;
-        const actualRoomId = actualRoomId; // Fixed room ID for single-room mode
+        let actualRoomId = null;  // Will be set when player joins game
         
         function loadGameData() {
           console.log('Loading game data... (attempt ' + (loadAttempts + 1) + ')');
@@ -2082,11 +2082,14 @@ function YearEndBattlePhase({
               }
             });
             
-            socket.on('joinResult', ({ success, message }) => {
-              if (!success) {
-                console.error('Failed to join game:', message);
-              }
-            });
+            socket.on('joinResult', ({ success, message, roomId }) => {
+  if (success) {
+    actualRoomId = roomId;  // ← Store the actual room ID
+    console.log('✓ Joined room:', actualRoomId);
+  } else {
+    console.error('Failed to join game:', message);
+  }
+});
             
             socket.on('rejoinResult', ({ success, message, country }) => {
               if (success) {
