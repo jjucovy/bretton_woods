@@ -1986,6 +1986,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   success: true, 
   gamePlayerId: gamePlayerId,
   roomId: roomId,
+  actualRoomId:actualRoomId,
   gameId: room.gameId  // ✅ This is correct - room.gameId is the numeric ID
 });
   broadcastToRoom(actualRoomId);
