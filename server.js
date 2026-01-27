@@ -677,10 +677,14 @@ function initializePhase2(roomId) {
   room.readyPlayers = [];
   
   // Initialize starting economic conditions for each country
-  room.phase2.yearlyData[1946] = {};
-  Object.values(room.players).forEach(player => {
-    const country = player.country;
-    const initialData = initialEconomicData[country];
+const country = player.country;
+const countryName = COUNTRY_CODE_TO_NAME[country] || country;
+const initialData = initialEconomicData[countryName];  // NOW it finds USSR and China!
+
+// Then use countryName for storing:
+room.phase2.yearlyData[1946][countryName] = {
+  // ... add null checks: initialData?.goldReserves || 0
+}
     
     room.phase2.yearlyData[1946][country] = {
       gdpGrowth: 0,
@@ -2296,7 +2300,8 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
           console.log(`🔄 Triggering revote - clearing votes and waiting for new submissions`);
           room.gamePhase = 'voting';
           room.isRevote = true;  // Add a flag
-          room.revoteMessage = 'Tie detected! Revote between options A and B';room.votes = {}; // Clear votes for revote
+          room.revoteMessage = 'Tie detected! Revote between options A and B';
+          room.votes = {}; // Clear votes for revote
           room.voteTally = voteTally;
           room.roundOutcome = `TIE! Revoting required (attempt ${room.voteAttempts[roundKey]}/3)`;
           
