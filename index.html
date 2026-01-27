@@ -2010,7 +2010,7 @@ function YearEndBattlePhase({
               
               // Auto-join the single room when connected and authenticated
               if (isAuthenticated && playerId) {
-                console.log('Auto-joining single room:', actualRoomId, 'with playerId:', playerId);
+                console.log('Auto-joining single room:', roomId, 'with playerId:', playerId);
                 socket.emit('joinRoom', { roomId: actualRoomId, playerId: playerId });
               }
             });
