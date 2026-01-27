@@ -3501,15 +3501,61 @@ console.log('==============================');
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
+// Initialize game rooms from database on startup
+async function initializeRooms() {
+  try {
+    const result = await db.callAPI('getAllActiveGames', {});
+    
+    if (!result || !Array.isArray(result.games)) {
+      console.log('ℹ️ No active games in database');
+      return;
+    }
+    
+    console.log(`📚 Loading ${result.games.length} active games from database...`);
+    
+    result.games.forEach(game => {
+      const gameCode = game.game_code;
+      
+      // Create room object from database game record
+      globalState.rooms[gameCode] = {
+        gameId: game.game_id,
+        gameCode: gameCode,
+        gameStarted: game.status === 'active',
+        gamePhase: game.current_phase || 'phase1',
+        currentRound: game.current_round || 0,
+        currentYear: game.current_year || 1946,
+        players: {},
+        votes: {},
+        policies: {},
+        phase2: {},
+        deployments: {},
+        crisisData: {},
+        createdAt: game.created_at ? new Date(game.created_at).getTime() : Date.now()
+      };
+      
+      console.log(`  ✓ Loaded room: ${gameCode} (game_id=${game.game_id}, status=${game.status})`);
+    });
+    
+    console.log(`✅ Initialized ${Object.keys(globalState.rooms).length} rooms from database`);
+  } catch (err) {
+    console.warn('⚠️ Could not load active games:', err.message);
+  }
+}
+
 // Start server with database connection
 async function startServer() {
-  // Test database connection
+  const dbConnected = await db.test();
+  
+  if (dbConnected) {
+    await initializeIdCounters();
+    await initializeRooms();  // ← ADD THIS LINE
+  }  // Test database connection
   const dbConnected = await db.test();
    // Initialize ID counters from database FIRST
   if (dbConnected) {
     await initializeIdCounters(); // ← ADD THIS LINE
   }  
-  // Ensure database schema exists
+  //Ensure database schema exists
   if (dbConnected) {
     try {
       await db.setupSchema();
