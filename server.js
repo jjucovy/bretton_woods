@@ -3498,7 +3498,10 @@ console.log('==============================');
 // Initialize game rooms from database on startup
 async function initializeRooms() {
   try {
+    console.log('🔍 Calling getAllActiveGames API...');
     const result = await db.callAPI('getAllActiveGames', {});
+    
+    console.log('🔍 API Response:', JSON.stringify(result, null, 2));  // ← ADD THIS
     
     if (!result || !Array.isArray(result.games)) {
       console.log('ℹ️ No active games in database');
