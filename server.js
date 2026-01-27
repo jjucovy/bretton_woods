@@ -677,14 +677,13 @@ function initializePhase2(roomId) {
   room.readyPlayers = [];
   
   // Initialize starting economic conditions for each country
-const country = player.country;
-const countryName = COUNTRY_CODE_TO_NAME[country] || country;
-const initialData = initialEconomicData[countryName];  // NOW it finds USSR and China!
+  room.phase2.yearlyData[1946] = {};
+  Object.values(room.players).forEach(player => {
+    const country = player.country;
+    const countryName = COUNTRY_CODE_TO_NAME[country] || country;
+    const initialData = initialEconomicData[countryName];  // NOW it finds USSR and China!
 
-// Then use countryName for storing:
-room.phase2.yearlyData[1946][countryName] = {
-  // ... add null checks: initialData?.goldReserves || 0
-    
+    room.phase2.yearlyData[1946][countryName] = {
       gdpGrowth: 0,
       goldReserves: initialData.goldReserves,
       unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
@@ -698,7 +697,7 @@ room.phase2.yearlyData[1946][countryName] = {
         total: initialData.military.total
       }
     };
-  };
+  });
   
   console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)`);
 }
