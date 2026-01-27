@@ -455,6 +455,7 @@ app.get('/api/export-users', (req, res) => {
 // ============================================
 // SINGLE-ROOM MODE: Auto-create main game room
 // ============================================
+/*const SINGLE_ROOM_ID = actualRoomId;
 
 console.log('🔍 Checking for main game room...');
 console.log('   Current rooms:', Object.keys(globalState.rooms));
@@ -538,7 +539,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
           createdBy: null
         });
         
-        console.log(`✅ New game created in LOBBY: game_id=${newGameId}, gameCode=${newGameCode}`);*/
+        console.log(`✅ New game created in LOBBY: game_id=${newGameId}, gameCode=${newGameCode}`);
       }
     } catch (err) {
       console.error('❌ Error loading game on startup:', err.message);
@@ -568,7 +569,7 @@ if (!globalState.rooms[SINGLE_ROOM_ID]) {
     playerCount: Object.keys(globalState.rooms[SINGLE_ROOM_ID].players).length,
     currentRound: globalState.rooms[SINGLE_ROOM_ID].currentRound
   });
-}
+}*/
 // ============================================
 
 // Auto-save every 2 minutes
