@@ -455,7 +455,6 @@ app.get('/api/export-users', (req, res) => {
 // ============================================
 // SINGLE-ROOM MODE: Auto-create main game room
 // ============================================
-const SINGLE_ROOM_ID = 'main-game';
 
 console.log('🔍 Checking for main game room...');
 console.log('   Current rooms:', Object.keys(globalState.rooms));
@@ -1906,9 +1905,8 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   }
   
   // Use the active lobby game's room ID
-  const actualRoomId = 'main-game';  // ✅ Use single-room constant
+  const actualRoomId = activeLobbyGame.gameCode;  // Use actual game code from database
   console.log(`   Using active lobby game: ${actualRoomId} (game_id: ${activeLobbyGame.gameId})`);
-  
   const room = globalState.rooms[actualRoomId];
   
   if (!room) {
