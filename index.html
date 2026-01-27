@@ -2232,13 +2232,14 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
   }
   
   console.log('📤 Emitting joinGame event...');
+  console.log(roomId+"  "+playerID);
   socket.emit('joinGame', { roomId: actualRoomId, playerId, country });
   
   // Listen for result
   socket.once('joinResult', (result) => {
     console.log('📥 joinResult received:', result);
     if (!result.success) {
-      alert(`Failed to join: ${result.message}`);
+      alert(`Failed to join: ${result.message}`+"  "+actualRoomId);
     }
   });
 };
