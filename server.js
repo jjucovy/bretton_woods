@@ -2711,10 +2711,9 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
   });
   
   // PLAYER: Deploy troops
-  socket.on('deployTroops', ({ roomId, playerId, deployment }) => {
-    const room = globalState.rooms[roomId];
-    if (!room) return;
-    
+  socket.on('deployTroops', ({ gameCode, playerId, deployment }) => {
+  const room = globalState.rooms[gameCode];  // ← Use gameCode directly
+  if (!room) return;  
     const player = room.players[playerId];
     if (!player) return;
     
@@ -2786,7 +2785,7 @@ socket.on('joinGame', async ({ roomId, playerId, country }) => {
           deploymentInfluence: 0
         };
         console.log(`🔍 Deployment data:`, JSON.stringify(deploymentData));
-        await db.saveDeployment(room.gameCode, userId, deploymentData).catch(err => {
+        await db.saveDeployment(gameCode, userId, deploymentData) 
           console.error('❌ Failed to save deployment:', err.message);
         });
         console.log(`📊 Deployment synced to MySQL: ${deployment.country} (${deployment.region})`)
@@ -2816,12 +2815,13 @@ Object.values(room.players).forEach(player => {
       // Also trigger database battle detection asynchronously
       (async () => {
         try {
-          const result = await db.callAPI('detectBattles', {
-            gameCode: room.gameCode || roomId,
-            region: latestConflict.region,
-            countries: latestConflict.countries,
-            year: room.phase2.currentYear
-          });
+          // NEW (fixed):
+const result = await db.callAPI('detectBattles', {
+  gameCode: gameCode,  // ← Use the gameCode parameter directly
+  region: latestConflict.region,
+  countries: latestConflict.countries,
+  year: room.phase2.currentYear
+});
           console.log(`✅ Database battle detection completed:`, result);
         } catch (err) {
           console.error(`❌ Database battle detection error: ${err.message}`);
