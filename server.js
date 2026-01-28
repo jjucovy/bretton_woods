@@ -1477,31 +1477,34 @@ io.on('connection', (socket) => {
   });
   
   // Leave game in room
-  socket.on('leaveGame', ({ roomId, playerId }) => {
+  socket.on('leaveGame', ({ roomId, userId, playerId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    delete room.players[playerId];
-    room.readyPlayers = room.readyPlayers.filter(id => id !== playerId);
+    const id = userId || playerId;  // Support both userId (new) and playerId (legacy)
+    delete room.players[id];
+    room.readyPlayers = room.readyPlayers.filter(pid => pid !== id);
     
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
     
-    console.log(`Player ${playerId} left game in room ${roomId}`);
+    console.log(`Player ${id} left game in room ${roomId}`);
   });
   
   // Set ready status
-  socket.on('setReady', ({ roomId, playerId, ready }) => {
+  socket.on('setReady', ({ roomId, userId, playerId, ready }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
+    const id = userId || playerId;  // Support both userId (new) and playerId (legacy)
+    
     if (ready) {
-      if (!room.readyPlayers.includes(playerId)) {
-        room.readyPlayers.push(playerId);
+      if (!room.readyPlayers.includes(id)) {
+        room.readyPlayers.push(id);
       }
     } else {
-      room.readyPlayers = room.readyPlayers.filter(id => id !== playerId);
+      room.readyPlayers = room.readyPlayers.filter(pid => pid !== id);
     }
     
     broadcastToRoom(roomId);
@@ -2252,8 +2255,9 @@ async function initializeFromDatabase() {
       // Load players from database
       if (game.players && Array.isArray(game.players)) {
         for (const player of game.players) {
-          roomState.players[player.player_id] = {
-            id: player.player_id,
+          // Key by userId for consistency (so client can find them by userId)
+          roomState.players[player.user_id] = {
+            id: player.player_id,  // Keep actual player_id for DB operations
             userId: player.user_id,
             country: player.country_code,
             ready: false,
