@@ -2011,7 +2011,7 @@ function YearEndBattlePhase({
               // Auto-join the single room when connected and authenticated
               if (isAuthenticated && playerId) {
                 console.log('Auto-joining single room:', roomId, 'with playerId:', playerId);
-                socket.emit('joinRoom', { roomId: actualRoomId, playerId: playerId });
+                socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: playerId });
               }
             });
 
@@ -2052,7 +2052,7 @@ function YearEndBattlePhase({
                   
                   // Try to rejoin with saved country
                   socket.emit('rejoinGame', { 
-                    roomId: actualRoomId, 
+                    roomId: window.actualRoomId, 
                     playerId, 
                     country: savedCountry 
                   });
@@ -2146,7 +2146,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
                 // Auto-join single room after registration
-                socket.emit('joinRoom', { roomId: actualRoomId, playerId: newPlayerId });
+                socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: newPlayerId });
                 
               } else {
                 console.error('Registration failed:', message);
@@ -2201,11 +2201,11 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                     }, 1000); // Give server time to load game state from DB
                   } else {
                     // Game exists but isn't active anymore - go to lobby for new game
-                    socket.emit('joinRoom', { roomId: actualRoomId, playerId: returnedPlayerId });
+                    socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: returnedPlayerId });
                   }
                 } else {
                   // No active game - join default room to see available games
-                  socket.emit('joinRoom', { roomId: actualRoomId, playerId: returnedPlayerId });
+                  socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: returnedPlayerId });
                 }
                 
 
@@ -2233,24 +2233,24 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
   
   console.log('📤 Emitting joinGame event...');
   console.log(roomId+"  "+playerID);
-  socket.emit('joinGame', { roomId: actualRoomId, playerId, country });
+  socket.emit('joinGame', { roomId: window.actualRoomId, playerId, country });
   
   // Listen for result
   socket.once('joinResult', (result) => {
     console.log('📥 joinResult received:', result);
     if (!result.success) {
-      alert(`Failed to join: ${result.message}`+"  "+actualRoomId);
+      alert(`Failed to join: ${result.message}`+"  "+window.actualRoomId);
     }
   });
 };
           const handleLeaveGame = () => {
-            socket.emit('leaveGame', { roomId: actualRoomId, playerId });
+            socket.emit('leaveGame', { roomId: window.actualRoomId, playerId });
             setPlayerCountry(null);
             setIsReady(false);
           };
 
           const handleReady = () => {
-            socket.emit('setReady', { roomId: actualRoomId, playerId, ready: !isReady });
+            socket.emit('setReady', { roomId: window.actualRoomId, playerId, ready: !isReady });
           };
 
           // Get countries and issues from game data
@@ -2432,7 +2432,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button
                       onClick={() => {
-                        const url = `/api/export-state/${actualRoomId}`;
+                        const url = `/api/export-state/${window.actualRoomId}`;
                         window.location.href = url;
                       }}
                       style={{
@@ -2488,7 +2488,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                 return;
                               }
                               
-                              const response = await fetch(`/api/import-state/${actualRoomId}`, {
+                              const response = await fetch(`/api/import-state/${window.actualRoomId}`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -2517,7 +2517,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                     <button
                       onClick={() => {
                         if (confirm('Reset the game? All progress will be lost.')) {
-                          socket.emit('resetRoom', { roomId: actualRoomId, playerId });
+                          socket.emit('resetRoom', { roomId: window.actualRoomId, playerId });
                         }
                       }}
                       style={{
@@ -2584,7 +2584,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                             onClick={() => {
                               console.log('Start game button clicked, skipPhase1:', skipPhase1);
                               socket.emit('startGame', { 
-                                roomId: actualRoomId, 
+                                roomId: window.actualRoomId, 
                                 playerId,
                                 skipPhase1: skipPhase1 
                               });
@@ -2600,7 +2600,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                         <button
                           onClick={() => {
                             if (window.confirm('Reset the game? All progress will be lost.')) {
-                              socket.emit('resetRoom', { roomId: actualRoomId, playerId });
+                              socket.emit('resetRoom', { roomId: window.actualRoomId, playerId });
                             }
                           }}
                           style={{
@@ -2932,7 +2932,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                         key={idx}
                                         onClick={() => {
                                           socket.emit('vote', {
-                                            roomId: actualRoomId,
+                                            roomId: window.actualRoomId,
                                             playerId,
                                             choice: option.id || optionLetter.toLowerCase()
                                           });
@@ -3177,7 +3177,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                             <button
                               onClick={() => {
                                 socket.emit('advanceRound', {
-                                  roomId: actualRoomId,
+                                  roomId: window.actualRoomId,
                                   playerId
                                 });
                               }}
@@ -3357,7 +3357,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                         key={option.id}
                                         onClick={() => {
                                           socket.emit('submitCrisisResponse', {
-                                            roomId: actualRoomId,
+                                            roomId: window.actualRoomId,
                                             playerId,
                                             choiceId: option.id
                                           });
@@ -3447,7 +3447,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                   <button
                                     onClick={() => {
                                       socket.emit('resolveCrisis', {
-                                        roomId: actualRoomId,
+                                        roomId: window.actualRoomId,
                                         playerId
                                       });
                                     }}
@@ -3674,7 +3674,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                   currentYear={currentYear}
                                   playerId={playerId}
                                   socket={socket}
-                                  roomId={actualRoomId}
+                                  roomId={window.actualRoomId}
                                   country={playerCountry}
                                   myData={myData}
                                 />
@@ -3683,7 +3683,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                   currentYear={currentYear}
                                   playerId={playerId}
                                   socket={socket}
-                                  roomId={actualRoomId}
+                                  roomId={window.actualRoomId}
                                   myData={myData}
                                 />
                               )}
@@ -3692,7 +3692,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                 gameState={gameState}
                                 socket={socket}
                                 playerId={playerId}
-                                roomId={actualRoomId}
+                                roomId={window.actualRoomId}
                               />
                             </>
                           ) : (
@@ -3821,7 +3821,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                               <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#dc2626' }}>🛡️ Administrator Controls</h3>
                               <button
                                 onClick={() => {
-                                  socket.emit('advanceYear', { roomId: actualRoomId, playerId });
+                                  socket.emit('advanceYear', { roomId: window.actualRoomId, playerId });
                                 }}
                                 style={{
                                   padding: '15px 40px',
@@ -4008,7 +4008,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                             <button
                               onClick={() => {
                                 // Export game state
-                                const url = `/api/export-state/${actualRoomId}`;
+                                const url = `/api/export-state/${window.actualRoomId}`;
                                 window.location.href = url;
                               }}
                               style={{
@@ -4029,7 +4029,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                               onClick={() => {
                                 if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
   socket.emit('startNewGame', {
-    roomId: actualRoomId,
+    roomId: window.actualRoomId,
     playerId
   });
 }
@@ -4390,7 +4390,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
               countries: Object.keys(gameData.countries || {}).length,
               issues: (gameData.issues || []).length
             });
-            console.log('Single-room mode: Room ID =', actualRoomId);
+            console.log('Single-room mode: Room ID =', window.actualRoomId);
 
               
             try {
