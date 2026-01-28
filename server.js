@@ -1358,9 +1358,11 @@ io.on('connection', (socket) => {
             game_id: game.game_id,
             gameCode: game.game_code,
             country_id: game.country_id,
+            country_code: game.country_code,  // ADD THIS - the actual country code like 'FRA'
             status: game.status
           };
           console.log(`✓ User has active game: ${activeGame.gameCode}`);
+          console.log(`  Country: ${activeGame.country_code} (ID: ${activeGame.country_id})`);
         }
       }
       

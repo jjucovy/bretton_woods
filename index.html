@@ -1246,7 +1246,6 @@
             </div>
           );
         }
-
         // Error Boundary Component
         class ErrorBoundary extends React.Component {
           constructor(props) {
@@ -1993,6 +1992,8 @@ function YearEndBattlePhase({
           // Battle modal state
           const [showBattleModal, setShowBattleModal] = useState(false);
           const [militaryConflict, setMilitaryConflict] = useState(null);
+
+          // Check for existing session
           useEffect(() => {
             const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
             const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
@@ -2011,9 +2012,6 @@ function YearEndBattlePhase({
             socket.on('connect', () => {
               setConnected(true);
               console.log('Connected to server');
-              
-              // Don't auto-join here - wait for login to complete first
-              // The login handler will emit joinRoom with the correct room ID
             });
 
             socket.on('disconnect', () => {
@@ -2124,6 +2122,7 @@ function YearEndBattlePhase({
             };
           }, [playerId, isAuthenticated]);
 
+          // Authentication handlers
           const handleRegister = (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -2142,8 +2141,8 @@ function YearEndBattlePhase({
                 sessionStorage.setItem('brettonWoodsPlayerId', newPlayerId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
-                // For new players, don't auto-join - let them wait for available games list
-                console.log('Registration successful. Please wait for available games list.');
+                // For new players, show game selection
+                console.log('Registration successful. Showing game selection...');
                 
               } else {
                 console.error('Registration failed:', message);
@@ -2170,6 +2169,9 @@ function YearEndBattlePhase({
                 sessionStorage.setItem('brettonWoodsPlayerId', userId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
+                console.log('Login successful. Role:', role);
+                console.log('Active game:', activeGame);
+                
                 // SUPERADMIN: Show game selection screen (all games, any phase)
                 if (role === 'superadmin') {
                   console.log('Superadmin logged in - fetching all active games');
@@ -2179,6 +2181,7 @@ function YearEndBattlePhase({
                   socket.emit('getActiveGames', { playerId: userId });
                   socket.once('activeGamesResult', ({ success, games, message }) => {
                     setLoadingGames(false);
+                    console.log('Active games result:', { success, games, message });
                     if (success) {
                       setAvailableGames(games || []);
                       console.log('Active games loaded:', games);
@@ -2191,11 +2194,20 @@ function YearEndBattlePhase({
                 }
                 
                 // REGULAR PLAYER WITH ACTIVE GAME: Auto-join their game
-                if (activeGame && activeGame.country_id && activeGame.gameCode) {
+                if (activeGame && activeGame.gameCode) {
                   console.log('Player has active game - rejoining:', activeGame.gameCode);
+                  console.log('Player country from DB:', activeGame.country_code || activeGame.country_id);
+                  
                   window.actualRoomId = activeGame.gameCode;
                   sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
                   SINGLE_ROOM_ID = activeGame.gameCode;
+                  
+                  // If they have a country assignment, save it
+                  if (activeGame.country_code || activeGame.country_id) {
+                    const countryCode = activeGame.country_code || activeGame.country_id;
+                    sessionStorage.setItem('brettonWoodsCountry', countryCode);
+                    console.log('Saved country to session:', countryCode);
+                  }
                   
                   setTimeout(() => {
                     socket.emit('joinRoom', { roomId: activeGame.gameCode, userId: userId });
@@ -2211,6 +2223,7 @@ function YearEndBattlePhase({
                 socket.emit('getAvailableGames', { playerId: userId });
                 socket.once('availableGamesResult', ({ success, games, message }) => {
                   setLoadingGames(false);
+                  console.log('Available games result:', { success, games, message });
                   if (success) {
                     setAvailableGames(games || []);
                     console.log('Available games loaded:', games);
@@ -2241,6 +2254,7 @@ function YearEndBattlePhase({
             // Hide game selection screen
             setShowGameSelection(false);
           };
+
           const handleClearSession = () => {
             sessionStorage.clear();
             localStorage.clear();
@@ -2285,14 +2299,12 @@ function YearEndBattlePhase({
 
           // Helper: Convert country code to name used in voting options
           const getCountryNameForVoting = (countryCode) => {
-            // Map country codes to the short names used in game-data.json options
-            // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
             const codeToName = {
               'USA': 'USA',
               'UK': 'UK',
-              'USS': 'USSR',      // Database code → game-data name
+              'USS': 'USSR',
               'FRA': 'France',
-              'CHN': 'China',     // Database code → game-data name
+              'CHN': 'China',
               'IND': 'India',
               'ARG': 'Argentina'
             };
@@ -2310,6 +2322,11 @@ function YearEndBattlePhase({
                   <h1>🌍 Bretton Woods 1944</h1>
                   <p>{isSuperAdmin ? 'Administrator Game Selection' : 'Select a Game to Join'}</p>
                 </div>
+
+                {/* NEW: User Management Panel for Superadmin */}
+                {isSuperAdmin && (
+                  <UserManagementPanel playerId={playerId} />
+                )}
 
                 <div className="card" style={{ 
                   background: isSuperAdmin 
@@ -2340,9 +2357,11 @@ function YearEndBattlePhase({
                         const eventName = isSuperAdmin ? 'getActiveGames' : 'getAvailableGames';
                         const resultEvent = isSuperAdmin ? 'activeGamesResult' : 'availableGamesResult';
                         
+                        console.log('Refreshing games list...');
                         socket.emit(eventName, { playerId });
                         socket.once(resultEvent, ({ success, games }) => {
                           setLoadingGames(false);
+                          console.log('Refresh result:', { success, gameCount: games?.length });
                           if (success) {
                             setAvailableGames(games || []);
                           }
@@ -2386,7 +2405,7 @@ function YearEndBattlePhase({
                       </h3>
                       <p style={{ color: '#64748b', margin: 0 }}>
                         {isSuperAdmin 
-                          ? 'There are currently no active games to observe.'
+                          ? 'There are currently no active games to observe. Check the database or create a new game.'
                           : 'There are currently no games you can join. Please check back later or ask your teacher to create a new game.'}
                       </p>
                     </div>
