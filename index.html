@@ -1865,7 +1865,7 @@ function YearEndBattlePhase({
       country: currentCountry,
       decision,
       strategy,
-      roomId: currentRoomId 
+      roomId: window.actualRoomId 
     });
     setSelectedBattle(null);
   };
@@ -2232,14 +2232,15 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
   }
   
   console.log('📤 Emitting joinGame event...');
-  console.log(roomId+"  "+playerID);
+  console.log(window.actualRoomId+"  "+playerId);
+
   socket.emit('joinGame', { roomId: window.actualRoomId, playerId, country });
   
   // Listen for result
   socket.once('joinResult', (result) => {
     console.log('📥 joinResult received:', result);
     if (!result.success) {
-      alert(`Failed to join: ${result.message}`+"  "+window.actualRoomId);
+      console.log(`Failed to join: ${result.message}`+"  "+window.actualRoomId);
     }
   });
 };
