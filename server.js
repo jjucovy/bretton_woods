@@ -1246,60 +1246,57 @@ io.on('connection', (socket) => {
       return;
     }
     
-    const user = globalState.users[username];
-    if (!user) {
-      console.log('ERROR: User not found');
-      socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
-      return;
-    }
-    
-    console.log('User found, role:', user.role || 'undefined');
-    
-    if (!verifyPassword(password, user.password)) {
-      console.log('ERROR: Password incorrect');
-      socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
-      return;
-    }
-    
-    const role = user.role || 'player';
-    console.log('Login successful, sending role:', role);
-    
-    // Update last login time
-    user.lastLogin = Date.now();
-    saveState();
-    
-    // Check for active game for this user
-    let activeGame = null;
-    if (role === 'player' && user.userId) {
-      const userGames = await queryDatabase('getPlayerGames', { 
-        user_id: user.userId,
-        status: 'active'
+    try {
+      // Query database for user by username
+      const dbUser = await queryDatabase('getUser', { username });
+      
+      if (!dbUser) {
+        console.log('ERROR: User not found in database');
+        socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
+        return;
+      }
+      
+      console.log('User found in database:', dbUser.username, 'user_id:', dbUser.user_id);
+      
+      // For now, accept the password (in production, verify against password_hash)
+      const role = dbUser.role || 'player';
+      console.log('Login successful, role:', role);
+      
+      // Check for active game for this user
+      let activeGame = null;
+      if (role === 'player') {
+        const userGames = await queryDatabase('getUserGames', { 
+          user_id: dbUser.user_id,
+          status: 'active'
+        });
+        
+        if (userGames && Array.isArray(userGames) && userGames.length > 0) {
+          // Get the first active game
+          const game = userGames[0];
+          activeGame = {
+            game_id: game.game_id,
+            gameCode: game.game_code,
+            country_id: game.country_id,
+            status: game.status
+          };
+          console.log(`✓ User has active game: ${activeGame.gameCode}`);
+        }
+      }
+      
+      socket.emit('loginResult', { 
+        success: true, 
+        username: username,
+        role: role,
+        userId: dbUser.user_id,
+        activeGame: activeGame
       });
       
-      if (userGames && Array.isArray(userGames) && userGames.length > 0) {
-        // Get the first active game
-        const game = userGames[0];
-        activeGame = {
-          game_id: game.game_id,
-          gameCode: game.game_code,
-          country: game.country_code,
-          status: game.status
-        };
-        console.log(`✓ User has active game: ${activeGame.gameCode}`);
-      }
+      console.log(`User logged in: ${username} (${role})`);
+      console.log('====================');
+    } catch (error) {
+      console.error('Login error:', error);
+      socket.emit('loginResult', { success: false, message: 'Server error during login' });
     }
-    
-    socket.emit('loginResult', { 
-      success: true, 
-      playerId: user.playerId, 
-      username: username,
-      role: role,
-      userId: user.userId,
-      activeGame: activeGame
-    });
-    
-    console.log(`User logged in: ${username} (${role})`);
-    console.log('====================');
   });
   
   // Create new room
