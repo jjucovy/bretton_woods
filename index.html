@@ -2008,11 +2008,8 @@ function YearEndBattlePhase({
               setConnected(true);
               console.log('Connected to server');
               
-              // Auto-join the single room when connected and authenticated
-              if (isAuthenticated && playerId) {
-                console.log('Auto-joining single room:', SINGLE_ROOM_ID, 'with playerId:', playerId);
-                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: playerId });
-              }
+              // Don't auto-join here - wait for login to complete first
+              // The login handler will emit joinRoom with the correct room ID
             });
 
             socket.on('disconnect', () => {
@@ -2142,8 +2139,8 @@ function YearEndBattlePhase({
                 sessionStorage.setItem('brettonWoodsPlayerId', newPlayerId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
-                // Auto-join single room after registration
-                socket.emit('joinRoom', { roomId: SINGLE_ROOM_ID, playerId: newPlayerId });
+                // For new players, don't auto-join - let them wait for available games list
+                console.log('Registration successful. Please wait for available games list.');
                 
               } else {
                 console.error('Registration failed:', message);
@@ -2176,6 +2173,7 @@ function YearEndBattlePhase({
                   // Store the game room for later reference
                   window.actualRoomId = activeGame.gameCode;
                   sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
+                  SINGLE_ROOM_ID = activeGame.gameCode;  // Update global SINGLE_ROOM_ID
                   
                   // Delay to let server fully load game state from database
                   setTimeout(() => {
@@ -2209,11 +2207,20 @@ function YearEndBattlePhase({
               return;
             }
             
-            socket.emit('joinGame', { roomId: SINGLE_ROOM_ID, playerId, country });
+            if (!window.actualRoomId) {
+              console.error('No room ID available. Please log in first.');
+              return;
+            }
+            
+            socket.emit('joinGame', { roomId: window.actualRoomId, userId: playerId, country });
           };
 
           const handleLeaveGame = () => {
-            socket.emit('leaveGame', { roomId: SINGLE_ROOM_ID, playerId });
+            if (!window.actualRoomId) {
+              console.error('No room ID available.');
+              return;
+            }
+            socket.emit('leaveGame', { roomId: window.actualRoomId, userId: playerId });
             setPlayerCountry(null);
             setIsReady(false);
           };
