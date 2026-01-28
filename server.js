@@ -349,9 +349,24 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res
   const { roomId } = req.params;
   const { roomData, playerId } = req.body;
   
-  // Verify admin permissions
-  const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-  if (!user || user.role !== 'superadmin') {
+  // Verify admin permissions by checking database
+  let isSuperAdmin = false;
+  
+  try {
+    const dbUsers = await queryDatabase('getAllUsers', {});
+    
+    if (dbUsers && Array.isArray(dbUsers)) {
+      const dbUser = dbUsers.find(u => u.user_id === playerId);
+      
+      if (dbUser) {
+        isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+      }
+    }
+  } catch (err) {
+    console.error('Error checking user role:', err);
+  }
+  
+  if (!isSuperAdmin) {
     return res.status(403).json({ error: 'Only administrators can import game states' });
   }
   
@@ -2565,12 +2580,33 @@ io.on('connection', (socket) => {
   });
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
-  socket.on('resolveCrisis', ({ roomId, playerId }) => {
+  socket.on('resolveCrisis', async ({ roomId, playerId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    const isSuperAdmin = user && user.role === 'superadmin';
+    // Check if user is superadmin by querying database
+    let isSuperAdmin = false;
+    
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === playerId);
+        
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+          console.log('User checking crisis resolution permission:', {
+            username: dbUser.username,
+            user_id: dbUser.user_id,
+            is_teacher: dbUser.is_teacher,
+            isSuperAdmin
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
+    }
+    
     const isRoomHost = room.hostId === playerId;
     
     if (!isSuperAdmin && !isRoomHost) {
@@ -2591,6 +2627,7 @@ io.on('connection', (socket) => {
     const success = resolveCrisisEffects(roomId);
     if (success) {
       broadcastToRoom(roomId);
+      saveState();
     }
   });
 
@@ -2741,12 +2778,27 @@ io.on('connection', (socket) => {
   });
   
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', ({ roomId, playerId }) => {
+  socket.on('resetRoom', async ({ roomId, playerId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    const isSuperAdmin = user && user.role === 'superadmin';
+    // Check if user is superadmin by querying database
+    let isSuperAdmin = false;
+    
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === playerId);
+        
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
+    }
+    
     const isRoomHost = room.hostId === playerId;
     
     if (!isSuperAdmin && !isRoomHost) {
@@ -2780,20 +2832,34 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Clear all data
-  socket.on('clearAllData', ({ playerId, confirmCode }) => {
+  socket.on('clearAllData', async ({ playerId, confirmCode }) => {
     console.log('clearAllData called:', { playerId, confirmCode });
     
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    console.log('User found:', user ? `${user.role}` : 'not found');
-    console.log('All users:', Object.keys(globalState.users));
+    // Check if user is superadmin by querying database
+    let isSuperAdmin = false;
+    let dbUser = null;
     
-    if (!user) {
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      
+      if (dbUsers && Array.isArray(dbUsers)) {
+        dbUser = dbUsers.find(u => u.user_id === playerId);
+        
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
+    }
+    
+    if (!dbUser) {
       socket.emit('clearDataResult', { success: false, message: 'User not found. Please try logging out and back in.' });
       return;
     }
     
-    if (user.role !== 'superadmin') {
-      socket.emit('clearDataResult', { success: false, message: `Access denied. Your role is: ${user.role}. Only superadmin can clear data.` });
+    if (!isSuperAdmin) {
+      socket.emit('clearDataResult', { success: false, message: `Access denied. Only superadmin can clear data.` });
       return;
     }
     
@@ -2806,27 +2872,42 @@ io.on('connection', (socket) => {
     globalState.rooms = {};
     globalState.roomList = [];
     
-    // Keep only superadmin user
-    const superAdminUser = {};
+    // Keep only superadmin users
+    const superAdminUsers = {};
     Object.entries(globalState.users).forEach(([username, userData]) => {
       if (userData.role === 'superadmin') {
-        superAdminUser[username] = userData;
+        superAdminUsers[username] = userData;
       }
     });
-    globalState.users = superAdminUser;
+    globalState.users = superAdminUsers;
     
     broadcastRoomList();
     saveState();
     
     socket.emit('clearDataResult', { success: true, message: 'All data cleared except administrator account' });
-    console.log(`All data cleared by superadmin: ${user.playerId}`);
+    console.log(`All data cleared by superadmin: ${playerId}`);
   });
   
   // SUPERADMIN ONLY: Delete any room
-  socket.on('adminDeleteRoom', ({ roomId, playerId }) => {
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+  socket.on('adminDeleteRoom', async ({ roomId, playerId }) => {
+    // Check if user is superadmin by querying database
+    let isSuperAdmin = false;
     
-    if (!user || user.role !== 'superadmin') {
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === playerId);
+        
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
+    }
+    
+    if (!isSuperAdmin) {
       socket.emit('deleteRoomResult', { success: false, message: 'Administrator access required' });
       return;
     }
