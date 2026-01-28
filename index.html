@@ -1975,7 +1975,18 @@ function YearEndBattlePhase({
           const [username, setUsername] = useState('');
           const [playerId, setPlayerId] = useState('');
           const [userRole, setUserRole] = useState('player');
+        const BrettonWoodsSingleRoom = () => {
+          // Authentication state
+          const [isAuthenticated, setIsAuthenticated] = useState(false);
+          const [username, setUsername] = useState('');
+          const [playerId, setPlayerId] = useState('');
+          const [userRole, setUserRole] = useState('player');
           const [showRegister, setShowRegister] = useState(false);
+          
+          // NEW: Game selection state
+          const [showGameSelection, setShowGameSelection] = useState(false);
+          const [availableGames, setAvailableGames] = useState([]);
+          const [loadingGames, setLoadingGames] = useState(false);
           
           // Game state
           const [playerCountry, setPlayerCountry] = useState(null);
@@ -1988,7 +1999,6 @@ function YearEndBattlePhase({
           const [showBattleModal, setShowBattleModal] = useState(false);
           const [militaryConflict, setMilitaryConflict] = useState(null);
 
-          // Check for existing session
           useEffect(() => {
             const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
             const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
@@ -2160,38 +2170,83 @@ function YearEndBattlePhase({
               
               if (success) {
                 setUsername(username);
-                setPlayerId(userId);  // Server sends userId, store as playerId for game context
+                setPlayerId(userId);
                 setUserRole(role || 'player');
                 setIsAuthenticated(true);
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', userId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
-                // If user has an active game, auto-rejoin them
-                if (activeGame && activeGame.country_id && activeGame.gameCode) {
-                  // Game is active - auto-rejoin their previous game
-                  // Store the game room for later reference
-                  window.actualRoomId = activeGame.gameCode;
-                  sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
-                  SINGLE_ROOM_ID = activeGame.gameCode;  // Update global SINGLE_ROOM_ID
+                // SUPERADMIN: Show game selection screen (all games, any phase)
+                if (role === 'superadmin') {
+                  console.log('Superadmin logged in - fetching all active games');
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
                   
-                  // Delay to let server fully load game state from database
-                  setTimeout(() => {
-                    // Rejoin their active game with userId
-                    socket.emit('joinRoom', { roomId: activeGame.gameCode, userId: userId });
-                  }, 500);
-                } else {
-                  // No active game - wait for server to provide available games
-                  // Don't emit joinRoom yet - wait for server to send available rooms
-                  console.log('No active game found, waiting for available games from server');
+                  socket.emit('getActiveGames', { playerId: userId });
+                  socket.once('activeGamesResult', ({ success, games, message }) => {
+                    setLoadingGames(false);
+                    if (success) {
+                      setAvailableGames(games || []);
+                      console.log('Active games loaded:', games);
+                    } else {
+                      console.error('Failed to load games:', message);
+                      setAvailableGames([]);
+                    }
+                  });
+                  return;
                 }
                 
+                // REGULAR PLAYER WITH ACTIVE GAME: Auto-join their game
+                if (activeGame && activeGame.country_id && activeGame.gameCode) {
+                  console.log('Player has active game - rejoining:', activeGame.gameCode);
+                  window.actualRoomId = activeGame.gameCode;
+                  sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
+                  SINGLE_ROOM_ID = activeGame.gameCode;
+                  
+                  setTimeout(() => {
+                    socket.emit('joinRoom', { roomId: activeGame.gameCode, userId: userId });
+                  }, 500);
+                  return;
+                }
+                
+                // REGULAR PLAYER WITHOUT ACTIVE GAME: Show available games
+                console.log('Player has no active game - showing available games');
+                setShowGameSelection(true);
+                setLoadingGames(true);
+                
+                socket.emit('getAvailableGames', { playerId: userId });
+                socket.once('availableGamesResult', ({ success, games, message }) => {
+                  setLoadingGames(false);
+                  if (success) {
+                    setAvailableGames(games || []);
+                    console.log('Available games loaded:', games);
+                  } else {
+                    console.error('Failed to load games:', message);
+                    setAvailableGames([]);
+                  }
+                });
 
               } else {
                 console.log('Login failed:', message);
-
               }
             });
+          };
+          
+          // NEW: Handler to select and join a game
+          const handleSelectGame = (gameCode) => {
+            console.log('User selected game:', gameCode);
+            
+            // Set the room ID
+            window.actualRoomId = gameCode;
+            sessionStorage.setItem('brettonWoodsGameRoom', gameCode);
+            SINGLE_ROOM_ID = gameCode;
+            
+            // Join the selected room
+            socket.emit('joinRoom', { roomId: gameCode, userId: playerId });
+            
+            // Hide game selection screen
+            setShowGameSelection(false);
           };
 
           const handleClearSession = () => {
@@ -2252,7 +2307,281 @@ function YearEndBattlePhase({
             return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
           };
 
-          // Login screen
+
+          // NEW: Game selection screen (for both superadmin and regular users)
+          if (isAuthenticated && showGameSelection) {
+            const isSuperAdmin = userRole === 'superadmin';
+            
+            return (
+              <div className="container">
+                <div className="header">
+                  <h1>🌍 Bretton Woods 1944</h1>
+                  <p>{isSuperAdmin ? 'Administrator Game Selection' : 'Select a Game to Join'}</p>
+                </div>
+
+                <div className="card" style={{ 
+                  background: isSuperAdmin 
+                    ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
+                    : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                  border: isSuperAdmin ? '3px solid #f59e0b' : '3px solid #3b82f6'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div>
+                      <h2 style={{ 
+                        margin: 0, 
+                        color: isSuperAdmin ? '#92400e' : '#1e40af' 
+                      }}>
+                        {isSuperAdmin ? '🛡️ Select a Game to Observe' : '🎮 Join a Game'}
+                      </h2>
+                      <p style={{ 
+                        margin: '8px 0 0 0', 
+                        color: isSuperAdmin ? '#78350f' : '#1e40af' 
+                      }}>
+                        Welcome, {username}! {isSuperAdmin 
+                          ? 'Choose which active game to monitor.' 
+                          : 'Choose a game and select your country.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setLoadingGames(true);
+                        const eventName = isSuperAdmin ? 'getActiveGames' : 'getAvailableGames';
+                        const resultEvent = isSuperAdmin ? 'activeGamesResult' : 'availableGamesResult';
+                        
+                        socket.emit(eventName, { playerId });
+                        socket.once(resultEvent, ({ success, games }) => {
+                          setLoadingGames(false);
+                          if (success) {
+                            setAvailableGames(games || []);
+                          }
+                        });
+                      }}
+                      style={{
+                        padding: '10px 16px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      🔄 Refresh
+                    </button>
+                  </div>
+
+                  {loadingGames ? (
+                    <div style={{ 
+                      padding: '40px', 
+                      textAlign: 'center',
+                      background: 'white',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '16px' }}>⏳</div>
+                      <p style={{ color: '#64748b', margin: 0 }}>Loading games...</p>
+                    </div>
+                  ) : availableGames.length === 0 ? (
+                    <div style={{ 
+                      padding: '40px', 
+                      textAlign: 'center',
+                      background: 'white',
+                      borderRadius: '8px',
+                      border: '2px dashed #cbd5e1'
+                    }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '16px' }}>📭</div>
+                      <h3 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>
+                        {isSuperAdmin ? 'No Active Games' : 'No Available Games'}
+                      </h3>
+                      <p style={{ color: '#64748b', margin: 0 }}>
+                        {isSuperAdmin 
+                          ? 'There are currently no active games to observe.'
+                          : 'There are currently no games you can join. Please check back later or ask your teacher to create a new game.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '16px' }}>
+                      {availableGames.map((game) => (
+                        <div 
+                          key={game.gameCode}
+                          onClick={() => handleSelectGame(game.gameCode)}
+                          style={{
+                            padding: '20px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            border: '2px solid #e2e8f0',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.borderColor = '#3b82f6';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.2)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.borderColor = '#e2e8f0';
+                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                            <div>
+                              <h3 style={{ margin: '0 0 8px 0', fontSize: '1.3rem', color: '#1e293b' }}>
+                                🎮 {game.gameCode}
+                              </h3>
+                              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                <span style={{
+                                  padding: '4px 10px',
+                                  background: '#dcfce7',
+                                  color: '#166534',
+                                  borderRadius: '4px',
+                                  fontSize: '0.85rem',
+                                  fontWeight: 'bold'
+                                }}>
+                                  ✓ {game.status === 'active' ? 'Active' : game.status}
+                                </span>
+                                <span style={{
+                                  padding: '4px 10px',
+                                  background: '#eff6ff',
+                                  color: '#1e40af',
+                                  borderRadius: '4px',
+                                  fontSize: '0.85rem',
+                                  fontWeight: 'bold'
+                                }}>
+                                  👥 {game.playerCount}/7 players
+                                </span>
+                                {!isSuperAdmin && game.availableSlots && (
+                                  <span style={{
+                                    padding: '4px 10px',
+                                    background: '#fef3c7',
+                                    color: '#92400e',
+                                    borderRadius: '4px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 'bold'
+                                  }}>
+                                    🎯 {game.availableSlots} slot{game.availableSlots !== 1 ? 's' : ''} available
+                                  </span>
+                                )}
+                                {isSuperAdmin && game.phase2Active && (
+                                  <span style={{
+                                    padding: '4px 10px',
+                                    background: '#fef3c7',
+                                    color: '#92400e',
+                                    borderRadius: '4px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 'bold'
+                                  }}>
+                                    📅 Phase 2: {game.currentYear || '1946'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectGame(game.gameCode);
+                              }}
+                              style={{
+                                padding: '10px 20px',
+                                background: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '0.95rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
+                              onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
+                            >
+                              {isSuperAdmin ? '👁️ Observe' : '🎯 Join Game'}
+                            </button>
+                          </div>
+                          
+                          {isSuperAdmin && (
+                            <div style={{ 
+                              display: 'grid', 
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                              gap: '12px',
+                              marginTop: '16px',
+                              paddingTop: '16px',
+                              borderTop: '1px solid #e2e8f0'
+                            }}>
+                              <div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Game Phase</div>
+                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>
+                                  {game.gamePhase === 'lobby' ? '🏠 Lobby' :
+                                   game.gamePhase === 'voting' ? '🗳️ Voting' :
+                                   game.gamePhase === 'results' ? '📊 Results' :
+                                   game.gamePhase === 'phase2' ? '🌍 Phase 2' :
+                                   game.gamePhase === 'complete' ? '🏆 Complete' :
+                                   game.gamePhase}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Round</div>
+                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>
+                                  {game.currentRound || 0} / 8
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Created</div>
+                                <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.85rem' }}>
+                                  {new Date(game.createdAt).toLocaleDateString()}
+                                </div>
+                              </div>
+                              {game.startedAt && (
+                                <div>
+                                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Started</div>
+                                  <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.85rem' }}>
+                                    {new Date(game.startedAt).toLocaleDateString()}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {isSuperAdmin && !game.inMemory && (
+                            <div style={{
+                              marginTop: '12px',
+                              padding: '8px 12px',
+                              background: '#fef3c7',
+                              borderRadius: '6px',
+                              fontSize: '0.8rem',
+                              color: '#78350f',
+                              borderLeft: '3px solid #f59e0b'
+                            }}>
+                              ⚠️ Not loaded in memory - will load on selection
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: `2px solid ${isSuperAdmin ? '#f59e0b' : '#3b82f6'}` }}>
+                    <button
+                      onClick={() => {
+                        sessionStorage.clear();
+                        window.location.reload();
+                      }}
+                      style={{
+                        padding: '10px 16px',
+                        background: '#64748b',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      🚪 Logout
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
           if (!isAuthenticated) {
             return (
               <div className="container">

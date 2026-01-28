@@ -70,6 +70,105 @@ app.get('/debug/users', (req, res) => {
 });
 
 // Serve static files (after the specific route)
+
+// NEW: API endpoint to get available games for regular users (lobby games only)
+app.get('/api/available-games', async (req, res) => {
+  const { playerId } = req.query;
+  
+  // Verify user is authenticated
+  const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+  if (!user) {
+    return res.status(403).json({ error: 'Authentication required' });
+  }
+  
+  const availableGames = [];
+  
+  // Get active games from database
+  const dbGames = await queryDatabase('getGames', { status: 'active' });
+  
+  if (dbGames && Array.isArray(dbGames)) {
+    for (const game of dbGames) {
+      const roomState = globalState.rooms[game.game_code];
+      
+      // Only show games that are in lobby phase and have room for more players
+      if (roomState && roomState.gamePhase === 'lobby') {
+        const playerCount = Object.keys(roomState.players).length;
+        if (playerCount < 7) {
+          availableGames.push({
+            gameCode: game.game_code,
+            gameId: game.game_id,
+            status: game.status,
+            playerCount: playerCount,
+            availableSlots: 7 - playerCount,
+            createdAt: game.created_at,
+            hostUserId: game.host_user_id
+          });
+        }
+      }
+    }
+  }
+  
+  res.json({ games: availableGames });
+});
+
+// NEW: API endpoint to get all active games (for superadmin only)
+app.get('/api/active-games', async (req, res) => {
+  const { adminPlayerId } = req.query;
+  
+  // Verify admin
+  const admin = Object.values(globalState.users).find(u => u.playerId === adminPlayerId);
+  if (!admin || admin.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  // Get all games (including in-progress ones)
+  const activeGames = [];
+  
+  // Get games from database
+  const dbGames = await queryDatabase('getGames', { status: 'active' });
+  
+  if (dbGames && Array.isArray(dbGames)) {
+    for (const game of dbGames) {
+      const roomState = globalState.rooms[game.game_code];
+      activeGames.push({
+        gameCode: game.game_code,
+        gameId: game.game_id,
+        status: game.status,
+        currentRound: game.current_round,
+        hostUserId: game.host_user_id,
+        playerCount: roomState ? Object.keys(roomState.players).length : 0,
+        gamePhase: roomState ? roomState.gamePhase : 'unknown',
+        phase2Active: roomState ? roomState.phase2?.active : false,
+        currentYear: roomState ? roomState.phase2?.currentYear : null,
+        createdAt: game.created_at,
+        startedAt: game.started_at,
+        inMemory: !!roomState
+      });
+    }
+  }
+  
+  // Also check for rooms in memory that might not be in database
+  for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
+    if (!activeGames.find(g => g.gameCode === roomId)) {
+      activeGames.push({
+        gameCode: roomId,
+        gameId: roomState.gameId,
+        status: 'memory-only',
+        currentRound: roomState.currentRound,
+        hostUserId: roomState.hostId,
+        playerCount: Object.keys(roomState.players).length,
+        gamePhase: roomState.gamePhase,
+        phase2Active: roomState.phase2?.active,
+        currentYear: roomState.phase2?.currentYear,
+        createdAt: new Date(roomState.createdAt).toISOString(),
+        inMemory: true
+      });
+    }
+  }
+  
+  res.json({ games: activeGames });
+});
+
 app.use(express.static(__dirname));
 
 // Multi-room game state
@@ -2210,6 +2309,113 @@ io.on('connection', (socket) => {
   // Remove promote function - no one can be promoted
   
   // Disconnect
+  
+  // NEW: Get available games (for regular users without active game)
+  socket.on('getAvailableGames', async ({ playerId }) => {
+    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+    
+    if (!user) {
+      socket.emit('availableGamesResult', { 
+        success: false, 
+        message: 'Authentication required' 
+      });
+      return;
+    }
+    
+    const availableGames = [];
+    
+    // Get active games from database
+    const dbGames = await queryDatabase('getGames', { status: 'active' });
+    
+    if (dbGames && Array.isArray(dbGames)) {
+      for (const game of dbGames) {
+        const roomState = globalState.rooms[game.game_code];
+        
+        // Only show lobby games with available slots
+        if (roomState && roomState.gamePhase === 'lobby') {
+          const playerCount = Object.keys(roomState.players).length;
+          if (playerCount < 7) {
+            availableGames.push({
+              gameCode: game.game_code,
+              gameId: game.game_id,
+              status: game.status,
+              playerCount: playerCount,
+              availableSlots: 7 - playerCount,
+              createdAt: game.created_at,
+              hostUserId: game.host_user_id
+            });
+          }
+        }
+      }
+    }
+    
+    socket.emit('availableGamesResult', { 
+      success: true, 
+      games: availableGames 
+    });
+  });
+
+  // NEW: Superadmin request for active games list (all games, any phase)
+  socket.on('getActiveGames', async ({ playerId }) => {
+    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+    
+    if (!user || user.role !== 'superadmin') {
+      socket.emit('activeGamesResult', { 
+        success: false, 
+        message: 'Admin access required' 
+      });
+      return;
+    }
+    
+    // Get ALL games from database
+    const dbGames = await queryDatabase('getGames', { status: 'active' });
+    const activeGames = [];
+    
+    if (dbGames && Array.isArray(dbGames)) {
+      for (const game of dbGames) {
+        const roomState = globalState.rooms[game.game_code];
+        activeGames.push({
+          gameCode: game.game_code,
+          gameId: game.game_id,
+          status: game.status,
+          currentRound: game.current_round,
+          hostUserId: game.host_user_id,
+          playerCount: roomState ? Object.keys(roomState.players).length : 0,
+          gamePhase: roomState ? roomState.gamePhase : 'unknown',
+          phase2Active: roomState ? roomState.phase2?.active : false,
+          currentYear: roomState ? roomState.phase2?.currentYear : null,
+          createdAt: game.created_at,
+          startedAt: game.started_at,
+          inMemory: !!roomState
+        });
+      }
+    }
+    
+    // Also check for rooms in memory only
+    for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
+      if (!activeGames.find(g => g.gameCode === roomId)) {
+        activeGames.push({
+          gameCode: roomId,
+          gameId: roomState.gameId,
+          status: 'memory-only',
+          currentRound: roomState.currentRound,
+          hostUserId: roomState.hostId,
+          playerCount: Object.keys(roomState.players).length,
+          gamePhase: roomState.gamePhase,
+          phase2Active: roomState.phase2?.active,
+          currentYear: roomState.phase2?.currentYear,
+          createdAt: new Date(roomState.createdAt).toISOString(),
+          inMemory: true
+        });
+      }
+    }
+    
+    socket.emit('activeGamesResult', { 
+      success: true, 
+      games: activeGames 
+    });
+  });
+  
   socket.on('disconnect', () => {
     // Find rooms where this socket is a player
     Object.keys(globalState.rooms).forEach(roomId => {
