@@ -2036,6 +2036,12 @@ function YearEndBattlePhase({
               
               setGameState(state);
               
+              // If game started, always hide game selection screen
+              if (state.gameStarted) {
+                console.log('✅ Game started - hiding game selection screen');
+                setShowGameSelection(false);
+              }
+              
               // Check if we're in this room
               if (state.players[playerId]) {
                 const myPlayer = state.players[playerId];
