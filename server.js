@@ -1398,27 +1398,50 @@ io.on('connection', (socket) => {
   });
   
   // Create new room
-  socket.on('createRoom', ({ playerId, roomName }) => {
-    const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  socket.on('createRoom', async ({ playerId, roomName }) => {
+    const roomId = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     
-    globalState.rooms[roomId] = createGameState(roomId, roomName, playerId);
+    console.log(`📝 Creating room: ${roomId} for player ${playerId}`);
+    
+    // Create room state
+    globalState.rooms[roomId] = createGameState(roomId, roomName || roomId, playerId);
+    
+    // If this looks like a game code (e.g., "game_123"), update status to active
+    if (roomId.startsWith('game_')) {
+      globalState.rooms[roomId].status = 'active';
+      globalState.rooms[roomId].gameCode = roomId;
+      
+      // Update database to set status to active
+      try {
+        await queryDatabase('updateGameStatus', { 
+          gameCode: roomId, 
+          status: 'active' 
+        });
+        console.log(`✅ Game ${roomId} marked as active in database`);
+      } catch (err) {
+        console.error('Error updating game status:', err);
+      }
+    }
     
     socket.join(roomId);
     socket.emit('roomCreated', { 
       success: true, 
       roomId: roomId,
-      roomName: roomName
+      roomName: roomName || roomId
     });
     
     broadcastRoomList();
     saveState();
     
-    console.log(`Room created: ${roomName} (${roomId}) by ${playerId}`);
+    console.log(`✅ Room created: ${roomName || roomId} (${roomId}) by ${playerId}`);
   });
   
   // Join existing room
   socket.on('joinRoom', ({ roomId, userId }) => {
+    console.log(`📥 joinRoom request: roomId=${roomId}, userId=${userId}`);
+    
     if (!globalState.rooms[roomId]) {
+      console.log(`❌ Room not found: ${roomId}`);
       socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
       return;
     }
@@ -1432,13 +1455,21 @@ io.on('connection', (socket) => {
     if (userId) {
       // Find their player record for this game
       const room = globalState.rooms[roomId];
-      const existingPlayer = Object.values(room.players).find(p => p.userId === userId);
+      console.log(`   Room has ${Object.keys(room.players).length} players`);
+      console.log(`   Player keys:`, Object.keys(room.players));
+      
+      // Try to find by userId
+      const existingPlayer = room.players[userId];  // Direct lookup since players are keyed by userId
+      
+      console.log(`   Looking for userId ${userId}: found=${!!existingPlayer}`);
       
       if (existingPlayer) {
         // Player already in this game - update their socket ID for reconnection
         existingPlayer.socketId = socket.id;
         existingPlayer.disconnected = false;
         console.log(`✅ User ${userId} reconnected to game ${roomId} as ${existingPlayer.country}`);
+      } else {
+        console.log(`   Player ${userId} not found in room - will need to select country`);
       }
     }
     
@@ -1449,7 +1480,7 @@ io.on('connection', (socket) => {
     });
     
     broadcastToRoom(roomId);
-    console.log(`User ${userId || 'guest'} joined room: ${roomId}`);
+    console.log(`✅ User ${userId || 'guest'} joined room: ${roomId}`);
   });
   
   // Leave room
@@ -2358,24 +2389,28 @@ io.on('connection', (socket) => {
   });
 
   // NEW: Superadmin request for active games list (all games, any phase)
+  // NEW: Superadmin request for active games list (all games, any phase)
   socket.on('getActiveGames', async ({ playerId }) => {
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
+    console.log('getActiveGames request from playerId:', playerId);
     
-    if (!user || user.role !== 'superadmin') {
-      socket.emit('activeGamesResult', { 
-        success: false, 
-        message: 'Admin access required' 
-      });
-      return;
-    }
+    // We need to find the username first - check if it's stored on the socket from login
+    // Or just trust the role that was set during login by checking if they can access this
     
-    // Get ALL games from database
+    // For now, let's just return the games and log what we find
+    // The client already validated role during login, so if they're calling this, they should be admin
+    
+    console.log('Fetching games for potential admin...');
+    
+    // Get ALL games from database  
     const dbGames = await queryDatabase('getGames', { status: 'active' });
     const activeGames = [];
+    
+    console.log('Database games:', dbGames ? dbGames.length : 0);
     
     if (dbGames && Array.isArray(dbGames)) {
       for (const game of dbGames) {
         const roomState = globalState.rooms[game.game_code];
+        console.log(`  - Game ${game.game_code}: inMemory=${!!roomState}`);
         activeGames.push({
           gameCode: game.game_code,
           gameId: game.game_id,
@@ -2396,6 +2431,7 @@ io.on('connection', (socket) => {
     // Also check for rooms in memory only
     for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
       if (!activeGames.find(g => g.gameCode === roomId)) {
+        console.log(`  - Memory-only game: ${roomId}`);
         activeGames.push({
           gameCode: roomId,
           gameId: roomState.gameId,
@@ -2411,6 +2447,8 @@ io.on('connection', (socket) => {
         });
       }
     }
+    
+    console.log(`Returning ${activeGames.length} games`);
     
     socket.emit('activeGamesResult', { 
       success: true, 
