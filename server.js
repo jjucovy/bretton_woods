@@ -345,7 +345,7 @@ app.get('/api/export-state/:roomId', (req, res) => {
 });
 
 // Import game state (restore from JSON)
-app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res) => {
+app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), async (req, res) => {
   const { roomId } = req.params;
   const { roomData, playerId } = req.body;
   
@@ -353,7 +353,7 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res
   let isSuperAdmin = false;
   
   try {
-     const dbUsers =async await queryDatabase('getAllUsers', {});
+    const dbUsers = await queryDatabase('getAllUsers', {});
     
     if (dbUsers && Array.isArray(dbUsers)) {
       const dbUser = dbUsers.find(u => u.user_id === playerId);
