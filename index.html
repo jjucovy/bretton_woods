@@ -2439,7 +2439,8 @@ function YearEndBattlePhase({
                         }}
                       >
                         🔄 Refresh
-                    </button>
+                      </button>
+                    </div>
                   </div>
 
                   {loadingGames ? (
@@ -2748,9 +2749,8 @@ function YearEndBattlePhase({
                   )}
                 </div>
               </div>
-                  }
-                  });
-          
+            );
+          }
 
           // Main Game View
           const playerList = gameState?.players ? Object.values(gameState.players) : [];
