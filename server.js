@@ -353,7 +353,7 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), (req, res
   let isSuperAdmin = false;
   
   try {
-    async const dbUsers = await queryDatabase('getAllUsers', {});
+     const dbUsers =async await queryDatabase('getAllUsers', {});
     
     if (dbUsers && Array.isArray(dbUsers)) {
       const dbUser = dbUsers.find(u => u.user_id === playerId);
