@@ -2034,7 +2034,6 @@ io.on('connection', (socket) => {
         room.gamePhase = 'results';
         
         // Save to round history for Phase 2 calculations
-        const gameDataPath = path.join(__dirname, 'game-data.json');
         let issueTitle = '';
         try {
           const gameDataContent = fs.readFileSync(gameDataPath, 'utf8');
