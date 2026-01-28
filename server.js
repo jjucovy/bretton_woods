@@ -319,25 +319,7 @@ const SINGLE_ROOM_ID = 'main-game';
 console.log('🔍 Checking for main game room...');
 console.log('   Current rooms:', Object.keys(globalState.rooms));
 
-if (!globalState.rooms[SINGLE_ROOM_ID]) {
-  console.log('📝 Creating main game room...');
-  globalState.rooms[SINGLE_ROOM_ID] = createGameState(
-    SINGLE_ROOM_ID,
-    'Bretton Woods 1944',
-    null // No specific host in single-room mode
-  );
-  updateRoomList();
-  saveState();
-  console.log('✅ Main game room auto-created:', SINGLE_ROOM_ID);
-} else {
-  console.log('✅ Main game room already exists:', SINGLE_ROOM_ID);
-  console.log('   Room details:', {
-    roomId: globalState.rooms[SINGLE_ROOM_ID].roomId,
-    gameStarted: globalState.rooms[SINGLE_ROOM_ID].gameStarted,
-    playerCount: Object.keys(globalState.rooms[SINGLE_ROOM_ID].players).length,
-    currentRound: globalState.rooms[SINGLE_ROOM_ID].currentRound
-  });
-}
+
 // ============================================
 
 // Auto-save every 2 minutes
@@ -1259,7 +1241,7 @@ io.on('connection', (socket) => {
       console.log('User found in database:', dbUser.username, 'user_id:', dbUser.user_id);
       
       // For now, accept the password (in production, verify against password_hash)
-      const role = dbUser.role || 'player';
+      const role = dbUser.is_teacher ? 'superadmin' : 'player';
       console.log('Login successful, role:', role);
       
       // Check for active game for this user
