@@ -2493,27 +2493,37 @@ async function initializeFromDatabase() {
     for (const game of games) {
       const gameCode = game.game_code; // e.g., "game_39"
       
+      console.log(`📋 Loading game: ${gameCode}`);
+      
       // Create room state from database game
       const roomState = createGameState(gameCode, `Game ${gameCode}`, game.host_user_id);
       roomState.gameId = game.game_id;
       roomState.status = game.status;
       
-      // Load players from database
-      if (game.players && Array.isArray(game.players)) {
-        for (const player of game.players) {
+      // Load players for this game from database
+      const players = await queryDatabase('getPlayers', { gameCode: gameCode });
+      
+      if (players && Array.isArray(players) && players.length > 0) {
+        console.log(`   Found ${players.length} player(s) in database`);
+        for (const player of players) {
           // Key by userId for consistency (so client can find them by userId)
           roomState.players[player.user_id] = {
             id: player.player_id,  // Keep actual player_id for DB operations
             userId: player.user_id,
             country: player.country_code,
             ready: false,
-            score: 0
+            score: (player.phase1_score || 0) + (player.phase2_score || 0),
+            phase1_score: player.phase1_score || 0,
+            phase2_score: player.phase2_score || 0
           };
+          console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}`);
         }
+      } else {
+        console.log(`   No players found for game ${gameCode}`);
       }
       
       globalState.rooms[gameCode] = roomState;
-      console.log(`  - Loaded game: ${gameCode} with ${Object.keys(roomState.players).length} player(s)`);
+      console.log(`  ✅ Loaded game: ${gameCode} with ${Object.keys(roomState.players).length} player(s)`);
     }
   } else {
     console.log('ℹ️  No active games found in database');
