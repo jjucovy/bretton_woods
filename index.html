@@ -2287,7 +2287,7 @@ function YearEndBattlePhase({
           };
 
           const handleReady = () => {
-            socket.emit('setReady', { roomId: SINGLE_ROOM_ID, playerId, ready: !isReady });
+            socket.emit('setReady', { roomId: SINGLE_ROOM_ID, userId: playerId, ready: !isReady });
           };
 
           // Get countries and issues from game data

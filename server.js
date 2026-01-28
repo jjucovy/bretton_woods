@@ -1644,13 +1644,11 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', ({ roomId, playerId, skipPhase1 }) => {
+  socket.on('startGame', async ({ roomId, playerId, skipPhase1 }) => {
     console.log('=== START GAME REQUEST ===');
     console.log('Room ID:', roomId);
     console.log('Player ID:', playerId);
     console.log('Skip Phase 1:', skipPhase1 || false);
-    console.log('Total users in system:', Object.keys(globalState.users).length);
-    console.log('All users:', Object.keys(globalState.users));
     
     const room = globalState.rooms[roomId];
     if (!room) {
@@ -1659,25 +1657,33 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check if user is superadmin - search by playerId
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    console.log('User search by playerId:', playerId);
-    console.log('User found:', user ? 'YES' : 'NO');
+    // Check if user is superadmin by querying database
+    // We need to find the user by their user_id (which is playerId in our case)
+    let isSuperAdmin = false;
     
-    if (user) {
-      console.log('User details:', {
-        playerId: user.playerId,
-        role: user.role,
-        createdAt: user.createdAt
-      });
-    } else {
-      console.log('DEBUG: Searching all users for this playerId...');
-      Object.entries(globalState.users).forEach(([username, userData]) => {
-        console.log(`  - ${username}: playerId=${userData.playerId}, role=${userData.role}`);
-      });
+    try {
+      // Query database to get user info
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === playerId);
+        
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+          console.log('User found in DB:', {
+            username: dbUser.username,
+            user_id: dbUser.user_id,
+            is_teacher: dbUser.is_teacher,
+            isSuperAdmin
+          });
+        } else {
+          console.log('User not found in database with user_id:', playerId);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
     }
     
-    const isSuperAdmin = user && user.role === 'superadmin';
     const isRoomHost = room.hostId === playerId;
     console.log('Is superadmin:', isSuperAdmin);
     console.log('Is room host:', isRoomHost);
@@ -1686,7 +1692,7 @@ io.on('connection', (socket) => {
       console.log('ERROR: Not superadmin or room host');
       socket.emit('startGameResult', { 
         success: false, 
-        message: `Only the game admin can start games. Your role: ${user ? user.role : 'not found'}` 
+        message: 'Only the game admin can start games.' 
       });
       return;
     }
