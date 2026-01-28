@@ -2239,18 +2239,187 @@ io.on('connection', (socket) => {
           room.phase2.conflicts = [];
         }
         
-        room.phase2.conflicts.push({
+        const conflict = {
           region: deployment.region,
           countries: [deployment.country, ...otherDeployments.map(d => d.country)],
           year: room.phase2.currentYear,
-          timestamp: Date.now()
-        });
+          timestamp: Date.now(),
+          battleId: `${deployment.region}-${room.phase2.currentYear}-${Date.now()}`
+        };
+        
+        room.phase2.conflicts.push(conflict);
         
         console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
+        
+        // Emit battle modal to all involved countries
+        const involvedCountries = conflict.countries;
+        involvedCountries.forEach(country => {
+          // Find the player with this country
+          const playerEntry = Object.entries(room.players).find(([id, p]) => p.country === country);
+          if (playerEntry) {
+            const [userId] = playerEntry;
+            
+            // Emit to this specific player
+            io.to(roomId).emit('militaryConflict', {
+              message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
+              region: deployment.region,
+              countries: involvedCountries,
+              year: room.phase2.currentYear,
+              battleId: conflict.battleId,
+              yourCountry: country
+            });
+            
+            console.log(`📨 Sent battle modal to ${country} (user ${userId})`);
+          }
+        });
       }
     }
     
     console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
+    
+    broadcastToRoom(roomId);
+    saveState();
+  });
+  
+  // Handle battle decisions
+  socket.on('submitBattleDecision', ({ roomId, playerId, battleId, decision, region, year }) => {
+    const room = globalState.rooms[roomId];
+    if (!room || !room.phase2.active) return;
+    
+    const player = room.players[playerId];
+    if (!player) return;
+    
+    const country = player.country;
+    
+    console.log(`🎖️ Battle decision from ${country}: ${decision} in ${region}`);
+    
+    // Store battle decision
+    if (!room.phase2.battleDecisions) {
+      room.phase2.battleDecisions = {};
+    }
+    
+    if (!room.phase2.battleDecisions[battleId]) {
+      room.phase2.battleDecisions[battleId] = {};
+    }
+    
+    room.phase2.battleDecisions[battleId][country] = {
+      decision,
+      timestamp: Date.now()
+    };
+    
+    // Find the conflict
+    const conflict = room.phase2.conflicts?.find(c => c.battleId === battleId);
+    if (!conflict) {
+      console.log('Conflict not found for battleId:', battleId);
+      return;
+    }
+    
+    // Check if all countries have decided
+    const allDecided = conflict.countries.every(c => 
+      room.phase2.battleDecisions[battleId]?.[c]
+    );
+    
+    if (allDecided) {
+      console.log(`✅ All countries decided for battle ${battleId} - resolving...`);
+      
+      // Resolve battle
+      const decisions = room.phase2.battleDecisions[battleId];
+      const yearData = room.phase2.yearlyData[year];
+      
+      // Calculate battle outcome
+      const battleResult = {
+        region,
+        year,
+        participants: []
+      };
+      
+      conflict.countries.forEach(country => {
+        const countryData = yearData?.[country];
+        const countryDecision = decisions[country].decision;
+        
+        if (!countryData) return;
+        
+        // Calculate combat power based on decision and military strength
+        let combatPower = 0;
+        const militaryStrength = countryData.military?.total || 0;
+        const militarySpending = countryData.militarySpending || 5;
+        
+        if (countryDecision === 'fight') {
+          combatPower = militaryStrength * (militarySpending / 10) * 1.0; // Full power
+        } else if (countryDecision === 'withdraw') {
+          combatPower = 0; // No combat
+        } else if (countryDecision === 'negotiate') {
+          combatPower = militaryStrength * (militarySpending / 10) * 0.3; // Reduced power
+        }
+        
+        battleResult.participants.push({
+          country,
+          decision: countryDecision,
+          combatPower,
+          militaryStrength
+        });
+      });
+      
+      // Determine winner (highest combat power)
+      const winner = battleResult.participants.reduce((max, p) => 
+        p.combatPower > (max?.combatPower || 0) ? p : max
+      , null);
+      
+      // Calculate casualties and effects
+      battleResult.participants.forEach(p => {
+        const isWinner = p.country === winner?.country;
+        
+        if (p.decision === 'withdraw') {
+          p.casualties = Math.floor(p.militaryStrength * 0.05); // 5% casualties from retreat
+          p.outcome = 'withdrew';
+        } else if (p.decision === 'negotiate') {
+          p.casualties = Math.floor(p.militaryStrength * 0.10); // 10% casualties
+          p.outcome = isWinner ? 'diplomatic victory' : 'diplomatic defeat';
+        } else { // fight
+          if (isWinner) {
+            p.casualties = Math.floor(p.militaryStrength * 0.15); // 15% casualties for winner
+            p.outcome = 'military victory';
+            p.territoryGained = region;
+          } else {
+            p.casualties = Math.floor(p.militaryStrength * 0.30); // 30% casualties for loser
+            p.outcome = 'military defeat';
+          }
+        }
+        
+        // Apply casualties to year data
+        if (yearData[p.country]?.military) {
+          const casualties = p.casualties;
+          yearData[p.country].military.army -= Math.floor(casualties * 0.6);
+          yearData[p.country].military.navy -= Math.floor(casualties * 0.2);
+          yearData[p.country].military.airForce -= Math.floor(casualties * 0.2);
+          yearData[p.country].military.total = 
+            yearData[p.country].military.army +
+            yearData[p.country].military.navy +
+            yearData[p.country].military.airForce;
+          
+          // Ensure no negative values
+          yearData[p.country].military.army = Math.max(0, yearData[p.country].military.army);
+          yearData[p.country].military.navy = Math.max(0, yearData[p.country].military.navy);
+          yearData[p.country].military.airForce = Math.max(0, yearData[p.country].military.airForce);
+        }
+      });
+      
+      battleResult.winner = winner?.country;
+      
+      // Store battle result
+      if (!room.phase2.battleResults) {
+        room.phase2.battleResults = [];
+      }
+      room.phase2.battleResults.push(battleResult);
+      
+      console.log('Battle resolved:', battleResult);
+      
+      // Broadcast results to all players in the battle
+      io.to(roomId).emit('battleResolved', {
+        battleId,
+        result: battleResult
+      });
+    }
     
     broadcastToRoom(roomId);
     saveState();
@@ -2369,7 +2538,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('advanceYear', ({ roomId, playerId }) => {
+  socket.on('advanceYear', async ({ roomId, playerId }) => {
     console.log('=== ADVANCE YEAR REQUEST ===');
     console.log('Room ID:', roomId);
     console.log('Player ID:', playerId);
@@ -2385,10 +2554,29 @@ io.on('connection', (socket) => {
     console.log('Phase 2 active:', room.phase2.active);
     console.log('Current year:', room.phase2.currentYear);
     
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    console.log('User found:', user ? 'YES' : 'NO');
-    if (user) {
-      console.log('User details:', { playerId: user.playerId, role: user.role });
+    // Check if user is superadmin by querying database
+    let isSuperAdmin = false;
+    
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === playerId);
+        
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+          console.log('User found in DB:', {
+            username: dbUser.username,
+            user_id: dbUser.user_id,
+            is_teacher: dbUser.is_teacher,
+            isSuperAdmin
+          });
+        } else {
+          console.log('User not found in database with user_id:', playerId);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
     }
     
     // AUTO-FIX: If room has no host, set to current user (if they're in the game)
@@ -2409,16 +2597,12 @@ io.on('connection', (socket) => {
       }
     }
     
-    const isSuperAdmin = user && user.role === 'superadmin';
     const isRoomHost = room.hostId === playerId;
     
     console.log('=== DETAILED PERMISSION CHECK ===');
     console.log('Player ID from request:', playerId);
     console.log('Room host ID:', room.hostId);
     console.log('IDs match:', room.hostId === playerId);
-    console.log('Player ID type:', typeof playerId);
-    console.log('Room host ID type:', typeof room.hostId);
-    console.log('User object:', user);
     console.log('Is superadmin:', isSuperAdmin);
     console.log('Is room host:', isRoomHost);
     console.log('Permission check result:', { isSuperAdmin, isRoomHost });
@@ -2427,8 +2611,6 @@ io.on('connection', (socket) => {
     if (!isSuperAdmin && !isRoomHost) {
       console.log('❌ Advance year rejected:', {
         playerId,
-        username: user?.username || 'unknown',
-        role: user?.role || 'none',
         isSuperAdmin,
         isRoomHost,
         roomHost: room.hostId,

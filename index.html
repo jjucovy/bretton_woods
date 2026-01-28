@@ -2116,6 +2116,20 @@ function YearEndBattlePhase({
               setMilitaryConflict(conflictData);
               setShowBattleModal(true);
             });
+            
+            socket.on('battleResolved', (data) => {
+              console.log('⚔️ Battle resolved:', data);
+              // Close the battle modal
+              setShowBattleModal(false);
+              setMilitaryConflict(null);
+              
+              // Show results in console for now (could add a results modal later)
+              const result = data.result;
+              console.log(`Battle winner: ${result.winner}`);
+              result.participants.forEach(p => {
+                console.log(`${p.country}: ${p.outcome} - ${p.casualties} casualties`);
+              });
+            });
 
             return () => {
               socket.off('connect');
@@ -2128,6 +2142,7 @@ function YearEndBattlePhase({
               socket.off('rejoinResult');
               socket.off('advanceYearError');
               socket.off('militaryConflict');
+              socket.off('battleResolved');
             };
           }, [playerId, isAuthenticated]);
 
