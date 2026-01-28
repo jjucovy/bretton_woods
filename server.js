@@ -257,6 +257,60 @@ function saveState() {
   }
 }
 
+// Save game state to database
+async function saveGameToDatabase(roomId) {
+  try {
+    const room = globalState.rooms[roomId];
+    if (!room) return;
+    
+    // Map game phase to status
+    let gameStatus = 'lobby';
+    if (room.gamePhase === 'complete') {
+      gameStatus = 'completed';
+    } else if (room.gameStarted) {
+      gameStatus = 'active';
+    }
+    
+    // Prepare update data matching API's expected field names
+    const updateData = {
+      gameCode: roomId,
+      game_status: gameStatus,
+      currentRound: room.currentRound || 0
+    };
+    
+    // Add Phase 2 year if in Phase 2
+    if (room.phase2?.active && room.phase2.currentYear) {
+      updateData.currentYear = room.phase2.currentYear;
+    }
+    
+    // Mark as ended if complete
+    if (room.gamePhase === 'complete') {
+      updateData.endedAt = true; // API will set to NOW()
+    }
+    
+    // Update game in database
+    const result = await queryDatabase('updateGame', updateData);
+    
+    if (result) {
+      console.log(`💾 Game ${roomId} saved to database:`, {
+        status: gameStatus,
+        round: room.currentRound,
+        year: room.phase2?.currentYear || 'N/A'
+      });
+    }
+  } catch (err) {
+    console.error('❌ Error saving game to database:', err);
+  }
+}
+
+// Enhanced saveState that also saves to database
+function saveStateWithDB(roomId) {
+  saveState(); // Save to JSON file
+  if (roomId) {
+    saveGameToDatabase(roomId); // Save to database
+  }
+}
+
 // Load state on startup
 loadState();
 
@@ -1877,6 +1931,7 @@ io.on('connection', (socket) => {
     broadcastToRoom(roomId);
     broadcastRoomList();
     saveState();
+    saveGameToDatabase(roomId); // Save game state to database
     
     console.log(`Game started in room ${roomId} by admin`);
     console.log('=========================');
@@ -2147,6 +2202,7 @@ io.on('connection', (socket) => {
     
     broadcastToRoom(roomId);
     saveState();
+    saveGameToDatabase(roomId); // Save game state to database
   });
   
   // PHASE 2: Submit economic policy
@@ -2651,7 +2707,17 @@ io.on('connection', (socket) => {
     }
     
     // Calculate this year's economics (this creates data for next year)
-    calculateYearEconomics(roomId);
+    try {
+      console.log('Calculating year economics...');
+      calculateYearEconomics(roomId);
+      console.log('✓ Economics calculated');
+    } catch (err) {
+      console.error('❌ Error calculating year economics:', err);
+      socket.emit('advanceYearError', {
+        message: `Failed to calculate economics: ${err.message}`
+      });
+      return;
+    }
     
     // Advance year
     room.phase2.currentYear++;
@@ -2670,6 +2736,7 @@ io.on('connection', (socket) => {
     console.log('Broadcasting updated game state...');
     broadcastToRoom(roomId);
     saveState();
+    saveGameToDatabase(roomId); // Save game state to database
     console.log('✅ Year advancement complete');
   });
   
@@ -2942,6 +3009,32 @@ async function initializeFromDatabase() {
       const roomState = createGameState(gameCode, `Game ${gameCode}`, game.host_user_id);
       roomState.gameId = game.game_id;
       roomState.status = game.status;
+      
+      // Restore game state from database
+      if (game.current_round) {
+        roomState.currentRound = game.current_round;
+      }
+      
+      // Determine game phase from database
+      if (game.game_status === 'completed') {
+        roomState.gamePhase = 'complete';
+        roomState.gameStarted = true;
+      } else if (game.current_round && game.current_round > 0) {
+        roomState.gameStarted = true;
+        if (game.current_round > 10) {
+          // Phase 2
+          roomState.gamePhase = 'phase2';
+          roomState.phase2.active = true;
+          if (game.current_year) {
+            roomState.phase2.currentYear = game.current_year;
+          }
+        } else {
+          // Phase 1 - assume voting phase by default
+          roomState.gamePhase = 'voting';
+        }
+      }
+      
+      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
       
       // Load players for this game from database
       const players = await queryDatabase('getPlayers', { gameCode: gameCode });
