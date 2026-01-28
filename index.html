@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bretton Woods 1944</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="deployment-styles.css">
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -59,14 +58,14 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
     
     <script type="text/babel">
         let gameData = null;
         let militaryData = null;
         let loadAttempts = 0;
         const MAX_ATTEMPTS = 3;
-        let actualRoomId = null;  // Will be set when player joins game
+        // Room ID will be set dynamically when user joins a game
+        let actualRoomId = null;
         
         function loadGameData() {
           console.log('Loading game data... (attempt ' + (loadAttempts + 1) + ')');
@@ -330,20 +329,18 @@
         // Troop Deployment Interface Component
         function TroopDeploymentInterface({ playerCountry, gameState, socket, playerId, roomId }) {
           const [selectedRegion, setSelectedRegion] = useState('');
-          const [selectedBranch, setSelectedBranch] = useState('Army');
           const [troopCount, setTroopCount] = useState(50000);
           const [deploymentLog, setDeploymentLog] = useState([]);
 
           const handleDeploy = () => {
             if (!selectedRegion) {
-              // Validation: must select a region
+              console.error('Please select a region');
               return;
             }
 
             const deployment = {
               country: playerCountry,
               region: selectedRegion,
-              branch: selectedBranch,
               troops: troopCount,
               timestamp: Date.now()
             };
@@ -361,7 +358,6 @@
 
             // Reset
             setSelectedRegion('');
-            setSelectedBranch('Army');
             setTroopCount(50000);
           };
 
@@ -404,33 +400,6 @@
                     <option key={region} value={region}>{region}</option>
                   ))}
                 </select>
-              </div>
-
-              {/* Military Branch Selection */}
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '12px' }}>
-                  Military Branch
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                  {['Army', 'Navy', 'Air Force'].map(branch => (
-                    <button
-                      key={branch}
-                      onClick={() => setSelectedBranch(branch)}
-                      style={{
-                        padding: '12px',
-                        borderRadius: '6px',
-                        border: selectedBranch === branch ? '2px solid #0ea5e9' : '2px solid #e2e8f0',
-                        background: selectedBranch === branch ? '#e0f2fe' : 'white',
-                        fontSize: '0.9rem',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      {branch === 'Army' && '🪖'} {branch === 'Navy' && '⚓'} {branch === 'Air Force' && '✈️'} {branch}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Troop Count Slider */}
@@ -492,7 +461,7 @@
                           fontSize: '0.9rem'
                         }}
                       >
-                        Deployed <strong>{(log.troops / 1000).toFixed(0)}K</strong> {log.branch} troops
+                        Deployed <strong>{(log.troops / 1000).toFixed(0)}K</strong> troops
                         to <strong>{log.region}</strong>
                         <div style={{ fontSize: '0.8rem', color: '#1e40af', marginTop: '4px' }}>
                           {log.time}
@@ -842,7 +811,6 @@
           const totalMilitary = armySize + navySize + airForceSize;
 
           const handleSubmit = () => {
-            console.log('📤 Submitting policy for player:', playerId);
             socket.emit('submitPolicy', {
               roomId,
               playerId,
@@ -853,8 +821,7 @@
                 militarySpending,
                 armySize,
                 navySize,
-                airForceSize,
-                isCommandEconomy: false
+                airForceSize
               }
             });
           };
@@ -1026,10 +993,7 @@
               </div>
 
               <button
-                onClick={(e) => {
-                  console.log('🔵 Button click fired!', e);
-                  handleSubmit();
-                }}
+                onClick={handleSubmit}
                 style={{
                   width: '100%',
                   padding: '18px',
@@ -1040,9 +1004,7 @@
                   fontSize: '1.1rem',
                   fontWeight: 'bold',
                   cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  zIndex: 100,
-                  position: 'relative'
+                  transition: 'all 0.2s'
                 }}
                 onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
                 onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
@@ -1083,13 +1045,13 @@
               
               const result = await response.json();
               if (result.success) {
-                // User deleted successfully
+                console.log('✅ User deleted');
                 loadUsers(); // Refresh list
               } else {
-                console.error('Delete user error:', result.error);
+                console.error('❌ ' + result.error);
               }
             } catch (err) {
-              console.error('Error deleting user:', err.message);
+              console.error('❌ Error: ' + err.message);
             }
           };
           
@@ -1298,677 +1260,6 @@
           }
         }
 
-function BattleDecisionModal({ battle, country, onSubmit, onCancel }) {
-  const [decision, setDecision] = React.useState(null);
-  const [strategy, setStrategy] = React.useState('BALANCED');
-  
-  const decisions = [
-    { 
-      value: 'FIGHT', 
-      label: '⚔️ FIGHT', 
-      description: 'Engage in combat. Higher casualties but territorial control possible.' 
-    },
-    { 
-      value: 'NEGOTIATE', 
-      label: '🤝 NEGOTIATE', 
-      description: 'Propose peaceful settlement. 50/50 split, light casualties.' 
-    },
-    { 
-      value: 'RETREAT', 
-      label: '🏃 RETREAT', 
-      description: 'Withdraw from region. Avoid casualties but lose territory.' 
-    }
-  ];
-  
-  const strategies = [
-    { value: 'AGGRESSIVE', label: '💪 Aggressive', bonus: '+50% Damage' },
-    { value: 'DEFENSIVE', label: '🛡️ Defensive', bonus: '-40% Damage Taken' },
-    { value: 'BALANCED', label: '⚖️ Balanced', bonus: 'Moderate Stats' }
-  ];
-  
-  const handleSubmit = () => {
-    if (!decision) {
-      console.error('Please select a decision');
-      return;
-    }
-    onSubmit({ decision, strategy });
-  };
-  
-  return (
-    <div style={styles.modal}>
-      <div style={styles.modalContent}>
-        <h2>⚔️ Battle Decision - {battle.region}</h2>
-        
-        <div style={styles.battleInfo}>
-          <div style={styles.side}>
-            <h3>{battle.country1}</h3>
-            <p>Troops: {battle.country1_troops.toLocaleString()}</p>
-          </div>
-          <div style={styles.vs}>VS</div>
-          <div style={styles.side}>
-            <h3>{battle.country2}</h3>
-            <p>Troops: {battle.country2_troops.toLocaleString()}</p>
-          </div>
-        </div>
-        
-        <div style={styles.section}>
-          <h3>Your Decision</h3>
-          <div style={styles.decisionGrid}>
-            {decisions.map(d => (
-              <button
-                key={d.value}
-                onClick={() => setDecision(d.value)}
-                style={{
-                  ...styles.decisionButton,
-                  ...(decision === d.value ? styles.decisionButtonActive : {})
-                }}
-              >
-                <div>{d.label}</div>
-                <small>{d.description}</small>
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        {decision === 'FIGHT' && (
-          <div style={styles.section}>
-            <h3>Battle Strategy (If Fighting)</h3>
-            <div style={styles.strategyGrid}>
-              {strategies.map(s => (
-                <button
-                  key={s.value}
-                  onClick={() => setStrategy(s.value)}
-                  style={{
-                    ...styles.strategyButton,
-                    ...(strategy === s.value ? styles.strategyButtonActive : {})
-                  }}
-                >
-                  <div>{s.label}</div>
-                  <small>{s.bonus}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        <div style={styles.actions}>
-          <button 
-            onClick={handleSubmit}
-            style={styles.submitButton}
-          >
-            Submit Decision
-          </button>
-          <button 
-            onClick={onCancel}
-            style={styles.cancelButton}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-        
-        
-function BattleResultsCard({ battle }) {
-  const getResultIcon = () => {
-    if (battle.winner === battle.country1) return '🥇';
-    if (battle.winner === battle.country2) return '🥇';
-    return '🤝';
-  };
-  
-  const getResultText = () => {
-    if (battle.outcome === 'NEGOTIATE') return 'NEGOTIATED SETTLEMENT';
-    if (battle.outcome === 'DRAW') return 'STALEMATE';
-    return `${battle.winner} VICTORY`;
-  };
-  
-  return (
-    <div style={styles.resultCard}>
-      <div style={styles.resultHeader}>
-        <h3>{battle.region} - {getResultIcon()} {getResultText()}</h3>
-      </div>
-      
-      <div style={styles.resultGrid}>
-        <div style={styles.resultColumn}>
-          <h4>{battle.country1}</h4>
-          <div style={styles.resultStat}>
-            <label>Casualties:</label>
-            <span style={styles.casualty}>{battle.country1_casualties.toLocaleString()}</span>
-          </div>
-          <div style={styles.resultStat}>
-            <label>Economic Damage:</label>
-            <span style={styles.damage}>${(battle.economic_damage_country1 / 1000000000).toFixed(1)}B</span>
-          </div>
-          {battle.winner === battle.country1 && (
-            <div style={styles.resultStat}>
-              <span style={styles.victory}>✓ Territory Secured</span>
-            </div>
-          )}
-        </div>
-        
-        <div style={styles.divider}></div>
-        
-        <div style={styles.resultColumn}>
-          <h4>{battle.country2}</h4>
-          <div style={styles.resultStat}>
-            <label>Casualties:</label>
-            <span style={styles.casualty}>{battle.country2_casualties.toLocaleString()}</span>
-          </div>
-          <div style={styles.resultStat}>
-            <label>Economic Damage:</label>
-            <span style={styles.damage}>${(battle.economic_damage_country2 / 1000000000).toFixed(1)}B</span>
-          </div>
-          {battle.winner === battle.country2 && (
-            <div style={styles.resultStat}>
-              <span style={styles.victory}>✓ Territory Secured</span>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      <div style={styles.resultPoints}>
-        <strong>Points Awarded: +{battle.pointsAwarded}</strong>
-      </div>
-    </div>
-  );
-}
-        
-function AllianceProposalModal({ proposal, country, onAccept, onReject, onCancel }) {
-  const otherCountry = proposal.country1 === country ? proposal.country2 : proposal.country1;
-  
-  return (
-    <div style={styles.modal}>
-      <div style={styles.modalContent}>
-        <h2>🤝 Alliance Proposal</h2>
-        
-        <div style={styles.proposalContent}>
-          <p><strong>{otherCountry}</strong> proposes an alliance with you!</p>
-          
-          <div style={styles.allianceTerms}>
-            <h4>Alliance Benefits:</h4>
-            <ul>
-              <li>✅ +15% military strength when allied</li>
-              <li>✅ +5 bonus points per year</li>
-              <li>✅ Mutual defense support</li>
-              <li>✅ Shared diplomatic influence</li>
-            </ul>
-          </div>
-          
-          <p style={styles.warning}>
-            ⚠️ If you reject, diplomatic relations may suffer.
-          </p>
-        </div>
-        
-        <div style={styles.actions}>
-          <button 
-            onClick={() => onAccept(proposal.alliance_id)}
-            style={styles.acceptButton}
-          >
-            ✅ Accept Alliance
-          </button>
-          <button 
-            onClick={() => onReject(proposal.alliance_id)}
-            style={styles.rejectButton}
-          >
-            ❌ Reject
-          </button>
-          <button 
-            onClick={onCancel}
-            style={styles.cancelButton}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-        
-function BattleHistoryPanel({ battles, gameYear }) {
-  return (
-    <div style={styles.historyPanel}>
-      <h3>⚔️ Battle History - Year {gameYear}</h3>
-      
-      {battles.length === 0 ? (
-        <p style={styles.noBattles}>No battles this year. Peaceful times...</p>
-      ) : (
-        <div style={styles.battlesList}>
-          {battles.map((battle, idx) => (
-            <div key={idx} style={styles.battleHistoryItem}>
-              <div style={styles.battleRegion}>
-                <strong>{battle.region}</strong>
-                <span style={styles.battleOutcome}>
-                  {battle.winner ? `${battle.winner} Victory` : 'Pending'}
-                </span>
-              </div>
-              <div style={styles.battleDetails}>
-                <span>{battle.country1} ({battle.country1_troops.toLocaleString()}) vs </span>
-                <span>{battle.country2} ({battle.country2_troops.toLocaleString()})</span>
-              </div>
-              {battle.winner && (
-                <div style={styles.battleOutcomeDetail}>
-                  Casualties: {battle.country1_casualties} vs {battle.country2_casualties}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-const styles = {
-  modal: {
-    position: 'fixed',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    padding: '30px',
-    borderRadius: '10px',
-    maxWidth: '700px',
-    width: '90%',
-    maxHeight: '90vh',
-    overflow: 'auto',
-    boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-  },
-  battleInfo: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    margin: '20px 0',
-    padding: '15px',
-    backgroundColor: '#f5f5f5',
-    borderRadius: '5px'
-  },
-  side: {
-    flex: 1,
-    textAlign: 'center'
-  },
-  vs: {
-    fontWeight: 'bold',
-    margin: '0 20px',
-    fontSize: '18px'
-  },
-  section: {
-    marginTop: '20px'
-  },
-  decisionGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '10px',
-    marginTop: '10px'
-  },
-  decisionButton: {
-    padding: '15px 10px',
-    border: '2px solid #ddd',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    backgroundColor: '#f9f9f9',
-    transition: 'all 0.2s'
-  },
-  decisionButtonActive: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#e8f5e9'
-  },
-  strategyGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '10px',
-    marginTop: '10px'
-  },
-  strategyButton: {
-    padding: '10px',
-    border: '2px solid #ddd',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    backgroundColor: '#f9f9f9'
-  },
-  strategyButtonActive: {
-    borderColor: '#2196F3',
-    backgroundColor: '#e3f2fd'
-  },
-  actions: {
-    display: 'flex',
-    gap: '10px',
-    marginTop: '20px',
-    justifyContent: 'flex-end'
-  },
-  submitButton: {
-    padding: '10px 20px',
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer'
-  },
-  cancelButton: {
-    padding: '10px 20px',
-    backgroundColor: '#999',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer'
-  },
-  acceptButton: {
-    padding: '10px 20px',
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer'
-  },
-  rejectButton: {
-    padding: '10px 20px',
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer'
-  },
-  proposalContent: {
-    margin: '15px 0'
-  },
-  allianceTerms: {
-    backgroundColor: '#e8f5e9',
-    padding: '15px',
-    borderRadius: '5px',
-    marginTop: '10px'
-  },
-  warning: {
-    color: '#d32f2f',
-    fontWeight: 'bold',
-    marginTop: '15px'
-  },
-  resultCard: {
-    backgroundColor: '#f0f8ff',
-    border: '2px solid #1976d2',
-    borderRadius: '8px',
-    padding: '15px',
-    marginTop: '15px'
-  },
-  resultHeader: {
-    borderBottom: '2px solid #1976d2',
-    paddingBottom: '10px',
-    marginBottom: '15px'
-  },
-  resultGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr auto 1fr',
-    gap: '15px'
-  },
-  resultColumn: {
-    textAlign: 'center'
-  },
-  divider: {
-    borderLeft: '2px solid #ddd',
-    width: '1px'
-  },
-  resultStat: {
-    marginTop: '10px',
-    padding: '5px'
-  },
-  casualty: {
-    color: '#d32f2f',
-    fontWeight: 'bold'
-  },
-  damage: {
-    color: '#f57c00',
-    fontWeight: 'bold'
-  },
-  victory: {
-    color: '#388e3c',
-    fontWeight: 'bold'
-  },
-  resultPoints: {
-    marginTop: '15px',
-    padding: '10px',
-    backgroundColor: '#fff9c4',
-    borderRadius: '5px',
-    textAlign: 'center'
-  },
-  historyPanel: {
-    marginTop: '20px',
-    padding: '15px',
-    backgroundColor: '#f5f5f5',
-    borderRadius: '5px'
-  },
-  noBattles: {
-    color: '#888',
-    fontStyle: 'italic'
-  },
-  battlesList: {
-    marginTop: '10px'
-  },
-  battleHistoryItem: {
-    padding: '10px',
-    marginTop: '10px',
-    backgroundColor: '#fff',
-    borderLeft: '4px solid #2196F3',
-    borderRadius: '3px'
-  },
-  battleRegion: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    marginBottom: '5px'
-  },
-  battleOutcome: {
-    fontSize: '12px',
-    color: '#388e3c'
-  },
-  battleDetails: {
-    fontSize: '13px',
-    color: '#666'
-  },
-  battleOutcomeDetail: {
-    fontSize: '12px',
-    color: '#d32f2f',
-    marginTop: '5px'
-  },
-  battlePhaseContainer: {
-    padding: '20px'
-  },
-  pendingBattleCard: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '15px',
-    backgroundColor: '#fff3e0',
-    border: '2px solid #f57c00',
-    borderRadius: '5px',
-    marginTop: '10px'
-  },
-  pendingBattleInfo: {
-    flex: 1
-  },
-  decideButton: {
-    padding: '8px 16px',
-    backgroundColor: '#ff6f00',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer'
-  },
-  submitted: {
-    color: '#388e3c',
-    fontWeight: 'bold'
-  },
-  continueButton: {
-    marginTop: '20px',
-    padding: '12px 30px',
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontSize: '16px'
-  }
-};
-        
-function YearEndBattlePhase({ 
-  gameCode, 
-  gameYear, 
-  currentCountry, 
-  allPlayers, 
-  onPhaseProgress, 
-  socket 
-}) {
-  const [pendingBattles, setPendingBattles] = React.useState([]);
-  const [battleResults, setBattleResults] = React.useState([]);
-  const [submittedDecisions, setSubmittedDecisions] = React.useState(new Set());
-  const [selectedBattle, setSelectedBattle] = React.useState(null);
-  const [proposals, setProposals] = React.useState([]);
-  
-  React.useEffect(() => {
-    // Load pending battles for this year
-    socket.emit('getPendingBattles', { gameCode, year: gameYear });
-  }, [gameYear]);
-  
-  React.useEffect(() => {
-    // Listen for battle events
-    socket.on('battlesDetected', (data) => {
-      setPendingBattles(data.battles);
-    });
-    
-    socket.on('battleDecisionSubmitted', (data) => {
-      setSubmittedDecisions(prev => new Set([...prev, data.battleId]));
-    });
-    
-    socket.on('battleResolved', (data) => {
-      setBattleResults(prev => [...prev, data]);
-      setPendingBattles(prev => prev.filter(b => b.battle_id !== data.battleId));
-    });
-    
-    socket.on('allianceProposed', (data) => {
-      setProposals(prev => [...prev, data]);
-    });
-    
-    return () => {
-      socket.off('battlesDetected');
-      socket.off('battleDecisionSubmitted');
-      socket.off('battleResolved');
-      socket.off('allianceProposed');
-    };
-  }, [socket]);
-  
-  const handleBattleDecision = (battle, decision, strategy) => {
-    socket.emit('submitBattleDecision', {
-      battleId: battle.battle_id,
-      gameCode,
-      country: currentCountry,
-      decision,
-      strategy,
-      roomId: window.actualRoomId 
-    });
-    setSelectedBattle(null);
-  };
-  
-  const handleAllianceAccept = (allianceId) => {
-    socket.emit('respondToAlliance', {
-      allianceId,
-      gameCode,
-      response: 'ACCEPTED'
-    });
-  };
-  
-  const handleAllianceReject = (allianceId) => {
-    socket.emit('respondToAlliance', {
-      allianceId,
-      gameCode,
-      response: 'REJECTED'
-    });
-  };
-  
-  return (
-    <div style={styles.battlePhaseContainer}>
-      <h2>⚔️ Year {gameYear} - Military Phase</h2>
-      
-      {proposals.length > 0 && (
-        <div style={styles.section}>
-          <h3>Alliance Proposals</h3>
-          {proposals.map(p => (
-            <AllianceProposalModal
-              key={p.allianceId}
-              proposal={p}
-              country={currentCountry}
-              onAccept={handleAllianceAccept}
-              onReject={handleAllianceReject}
-              onCancel={() => setProposals(prev => prev.filter(x => x.allianceId !== p.allianceId))}
-            />
-          ))}
-        </div>
-      )}
-      
-      {pendingBattles.length > 0 && (
-        <div style={styles.section}>
-          <h3>⚔️ Pending Battles ({pendingBattles.length})</h3>
-          <p>Make your battle decisions:</p>
-          {pendingBattles.map(battle => {
-            const isYourBattle = 
-              (battle.country1 === currentCountry || battle.country2 === currentCountry);
-            
-            return (
-              <div key={battle.battle_id} style={styles.pendingBattleCard}>
-                <div style={styles.pendingBattleInfo}>
-                  <strong>{battle.region}</strong>
-                  <p>{battle.country1} vs {battle.country2}</p>
-                </div>
-                {isYourBattle && !submittedDecisions.has(battle.battle_id) && (
-                  <button
-                    onClick={() => setSelectedBattle(battle)}
-                    style={styles.decideButton}
-                  >
-                    Make Decision
-                  </button>
-                )}
-                {submittedDecisions.has(battle.battle_id) && (
-                  <span style={styles.submitted}>✓ Decision Submitted</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      
-      {selectedBattle && (
-        <BattleDecisionModal
-          battle={selectedBattle}
-          country={currentCountry}
-          onSubmit={(data) => handleBattleDecision(selectedBattle, data.decision, data.strategy)}
-          onCancel={() => setSelectedBattle(null)}
-        />
-      )}
-      
-      {battleResults.length > 0 && (
-        <div style={styles.section}>
-          <h3>✓ Battle Results</h3>
-          {battleResults.map((result, idx) => (
-            <BattleResultsCard key={idx} battle={result} />
-          ))}
-        </div>
-      )}
-      
-      <BattleHistoryPanel battles={[...pendingBattles, ...battleResults]} gameYear={gameYear} />
-      
-      {pendingBattles.every(b => submittedDecisions.has(b.battle_id)) && pendingBattles.length > 0 && (
-        <button 
-          onClick={onPhaseProgress}
-          style={styles.continueButton}
-        >
-          Continue to Next Phase
-        </button>
-      )}
-    </div>
-  );
-}
-        
         const BrettonWoodsSingleRoom = () => {
           // Authentication state
           const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1983,10 +1274,6 @@ function YearEndBattlePhase({
           const [isReady, setIsReady] = useState(false);
           const [connected, setConnected] = useState(false);
           const [skipPhase1, setSkipPhase1] = useState(false);
-          
-          // Battle modal state
-          const [showBattleModal, setShowBattleModal] = useState(false);
-          const [militaryConflict, setMilitaryConflict] = useState(null);
 
           // Check for existing session
           useEffect(() => {
@@ -2008,10 +1295,12 @@ function YearEndBattlePhase({
               setConnected(true);
               console.log('Connected to server');
               
-              // Auto-join the single room when connected and authenticated
-              if (isAuthenticated && playerId) {
-                console.log('Auto-joining single room:', roomId, 'with playerId:', playerId);
-                socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: playerId });
+              // Only try to join room if we have one set (from active game or manual selection)
+              if (isAuthenticated && playerId && window.actualRoomId) {
+                console.log('Rejoining room:', window.actualRoomId);
+                socket.emit('joinRoom', { roomId: window.actualRoomId });
+              } else if (isAuthenticated && playerId) {
+                console.log('Connected but no active game - awaiting user selection');
               }
             });
 
@@ -2026,11 +1315,6 @@ function YearEndBattlePhase({
               console.log('Game phase:', state.gamePhase);
               console.log('Current round:', state.currentRound);
               console.log('Players:', Object.keys(state.players).length);
-              console.log('Phase 2 active:', state.phase2?.active);
-              console.log('Phase 2 year:', state.phase2?.currentYear);
-              console.log('Ready players:', state.readyPlayers?.length);
-              console.log('📊 Scores received:', state.scores);
-              console.log('📊 Round scores received:', state.roundScores);
               
               setGameState(state);
               
@@ -2072,24 +1356,25 @@ function YearEndBattlePhase({
             
             socket.on('startGameResult', ({ success, message }) => {
               if (!success) {
-                console.error('Failed to start game:', message);
+                console.error(message || 'Failed to start game');
+              } else {
+                console.log('Game started successfully');
               }
             });
             
             socket.on('resetRoomResult', ({ success, message }) => {
               if (!success) {
-                console.error('Failed to reset room:', message);
+                console.error(message || 'Failed to reset room');
+              } else {
+                console.log('Room reset successfully');
               }
             });
             
-socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
-  if (success) {
-    window.actualRoomId = actualRoomId || roomId;  // Store globally
-    console.log('✓ Joined room:', window.actualRoomId);
-  } else {
-    console.error('Failed to join game:', message);
-  }
-});
+            socket.on('joinResult', ({ success, message }) => {
+              if (!success) {
+                console.error(message || 'Failed to join game');
+              }
+            });
             
             socket.on('rejoinResult', ({ success, message, country }) => {
               if (success) {
@@ -2103,13 +1388,8 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
             });
 
             socket.on('advanceYearError', ({ message }) => {
+              console.error('❌ ' + message);
               console.error('Advance year error:', message);
-            });
-
-            socket.on('militaryConflict', (conflictData) => {
-              console.log('🎖️ Battle Modal Trigger: Military conflict detected', conflictData);
-              setMilitaryConflict(conflictData);
-              setShowBattleModal(true);
             });
 
             return () => {
@@ -2122,7 +1402,6 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
               socket.off('joinResult');
               socket.off('rejoinResult');
               socket.off('advanceYearError');
-              socket.off('militaryConflict');
             };
           }, [playerId, isAuthenticated]);
 
@@ -2146,10 +1425,13 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
                 // Auto-join single room after registration
-                socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: newPlayerId });
+                socket.emit('joinRoom', { roomId: window.actualRoomId });
                 
+                if (role === 'superadmin') {
+                  console.log('🎉 Welcome, Administrator! You have full control over the game.');
+                }
               } else {
-                console.error('Registration failed:', message);
+                console.log(message);
               }
             });
           };
@@ -2162,7 +1444,13 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
 
             socket.emit('login', { username, password });
             
-            socket.once('loginResult', ({ success, playerId: returnedPlayerId, role, message, activeGame }) => {
+            socket.once('loginResult', ({ success, playerId: returnedPlayerId, role, message, userId, activeGame }) => {
+              console.log('=== LOGIN RESULT ===');
+              console.log('Success:', success);
+              console.log('Role received:', role);
+              console.log('Player ID:', returnedPlayerId);
+              console.log('User ID:', userId);
+              console.log('Active game:', activeGame);
               
               if (success) {
                 setUsername(username);
@@ -2172,46 +1460,32 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', returnedPlayerId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
+                if (userId) sessionStorage.setItem('brettonWoodsUserId', userId);
                 
-                // If user has an active game, restore them immediately
-                if (activeGame && activeGame.country && activeGame.gameCode) {
-                  const gameStatus = activeGame.game_status || activeGame.status;
-                  const isGameActive = gameStatus === 'phase1_active' || gameStatus === 'phase2_active';
+                // If user has an active game, join it immediately
+                if (activeGame && activeGame.gameCode) {
+                  window.actualRoomId = activeGame.gameCode;
+                  setGameRoom(activeGame.gameCode);
+                  setPlayerCountry(activeGame.country);
+                  sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
+                  if (activeGame.country) sessionStorage.setItem('brettonWoodsCountry', activeGame.country);
                   
-                  if (isGameActive) {
-                    setPlayerCountry(activeGame.country);
-                    setGameRoom(activeGame.gameCode);
-                    setCurrentPhase('game');
-                    sessionStorage.setItem('brettonWoodsCountry', activeGame.country);
-                    sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
-                    
-                    // Wait for server to fully load game state before joining
-                    setTimeout(() => {
-                      // Join their active game room
-                      socket.emit('joinRoom', { roomId: activeGame.gameCode, playerId: returnedPlayerId });
-                      
-                      // Restore their country selection in the game
-                      setTimeout(() => {
-                        socket.emit('select-country', { 
-                          playerId: returnedPlayerId, 
-                          roomId: activeGame.gameCode, 
-                          country: activeGame.country 
-                        });
-                      }, 300);
-                    }, 1000); // Give server time to load game state from DB
-                  } else {
-                    // Game exists but isn't active anymore - go to lobby for new game
-                    socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: returnedPlayerId });
-                  }
+                  console.log('✓ Rejoining active game:', activeGame.gameCode);
+                  socket.emit('joinRoom', { roomId: activeGame.gameCode });
                 } else {
-                  // No active game - join default room to see available games
-                  socket.emit('joinRoom', { roomId: window.actualRoomId, playerId: returnedPlayerId });
+                  console.log('ℹ️  No active game found, awaiting game selection');
                 }
                 
-
+                console.log('Stored in session:', {
+                  username: sessionStorage.getItem('brettonWoodsUsername'),
+                  playerId: sessionStorage.getItem('brettonWoodsPlayerId'),
+                  role: sessionStorage.getItem('brettonWoodsUserRole'),
+                  userId: sessionStorage.getItem('brettonWoodsUserId'),
+                  gameRoom: sessionStorage.getItem('brettonWoodsGameRoom')
+                });
+                console.log('===================');
               } else {
-                console.log('Login failed:', message);
-
+                console.error('Login failed:', message);
               }
             });
           };
@@ -2224,26 +1498,14 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
 
           // Game handlers
           const handleJoinGame = (country) => {
-  console.log('🎮 handleJoinGame called:', { country, userRole, playerId });
-  
-  if (userRole === 'superadmin') {
-    console.log('❌ Admin blocked from joining');
-    return;
-  }
-  
-  console.log('📤 Emitting joinGame event...');
-  console.log(window.actualRoomId+"  "+playerId);
+            if (userRole === 'superadmin') {
+              console.error('As administrator, you are an observer and cannot select a country.');
+              return;
+            }
+            
+            socket.emit('joinGame', { roomId: window.actualRoomId, playerId, country });
+          };
 
-  socket.emit('joinGame', { roomId: window.actualRoomId, playerId, country });
-  
-  // Listen for result
-  socket.once('joinResult', (result) => {
-    console.log('📥 joinResult received:', result);
-    if (!result.success) {
-      console.log(`Failed to join: ${result.message}`+"  "+window.actualRoomId);
-    }
-  });
-};
           const handleLeaveGame = () => {
             socket.emit('leaveGame', { roomId: window.actualRoomId, playerId });
             setPlayerCountry(null);
@@ -2260,22 +1522,6 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
           const economicData = gameData?.economicData || {};
           const historicalEvents = gameData?.historicalEvents || {};
           const currentIssue = gameState?.currentRound ? issues[gameState.currentRound - 1] : null;
-
-          // Helper: Convert country code to name used in voting options
-          const getCountryNameForVoting = (countryCode) => {
-            // Map country codes to the short names used in game-data.json options
-            // Note: Database uses 'USS' for Soviet Union, but game-data.json uses 'USSR'
-            const codeToName = {
-              'USA': 'USA',
-              'UK': 'UK',
-              'USS': 'USSR',      // Database code → game-data name
-              'FRA': 'France',
-              'CHN': 'China',     // Database code → game-data name
-              'IND': 'India',
-              'ARG': 'Argentina'
-            };
-            return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
-          };
 
           // Login screen
           if (!isAuthenticated) {
@@ -2481,7 +1727,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                               const importData = JSON.parse(event.target.result);
                               
                               if (!importData.roomData) {
-                                console.error('Invalid game state file');
+                                console.error('Invalid game state file!');
                                 return;
                               }
                               
@@ -2501,13 +1747,13 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                               const result = await response.json();
                               
                               if (result.success) {
-                                console.log('Game state imported successfully');
+                                console.log('✅ Game state imported successfully!');
                                 window.location.reload();
                               } else {
-                                console.error('Failed to import:', result.error);
+                                console.error('❌ Failed to import: ' + result.error);
                               }
                             } catch (err) {
-                              console.error('Error reading file:', err.message);
+                              console.error('❌ Error reading file: ' + err.message);
                             }
                           };
                           reader.readAsText(file);
@@ -2641,28 +1887,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                     </div>
 
                     {/* VOTING PHASE */}
-{gameState.gamePhase === 'voting' && (
-  <div>
-    {gameState.isRevote===true && (
-      <div style={{
-        padding: '16px',
-        background: '#fef3c7',
-        borderRadius: '8px',
-        marginBottom: '20px',
-        border: '2px solid #f59e0b'
-      }}>
-        <h3 style={{ color: '#92400e', margin: 0 }}>
-          ⚠️ Revote Required!
-        </h3>
-        <p style={{ color: '#78350f', margin: '8px 0 0 0' }}>
-          {gameState.revoteMessage || 'There was a tie. Please vote again.'}
-        </p>
-      </div>
-    )}
-    
-    {/* Rest of voting UI */}
-  
-      {gameState.gamePhase === 'voting' && (
+                    {gameState.gamePhase === 'voting' && (
                       <div>
                         {/* Round Header */}
                         <div style={{
@@ -2681,17 +1906,14 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                 Phase 1: Conference Voting
                               </p>
                             </div>
-                            {userRole !== 'superadmin' && (() => {
-                              const countryNameForScoring = getCountryNameForVoting(playerCountry);
-                              return (
+                            {userRole !== 'superadmin' && (
                               <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
                                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
-                                  {gameState.scores?.[countryNameForScoring] || 0} pts
+                                  {gameState.scores?.[playerCountry] || 0} pts
                                 </div>
                               </div>
-                              );
-                            })()}
+                            )}
                           </div>
                         </div>
 
@@ -2803,9 +2025,8 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                     Your Country's Interest:
                                   </h4>
                                   {currentIssue.options.map((option, idx) => {
-                                    const countryNameForVoting = getCountryNameForVoting(playerCountry);
-                                    const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
-                                    const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
+                                    const favorsYou = option.favors && option.favors.includes(playerCountry);
+                                    const opposesYou = option.opposes && option.opposes.includes(playerCountry);
                                     
                                     if (favorsYou) {
                                       return (
@@ -2814,7 +2035,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                           fontSize: '0.875rem',
                                           color: '#1e3a8a'
                                         }}>
-                                          ✓ Option {String.fromCharCode(65 + idx)} favors {countryNameForVoting}
+                                          ✓ Option {String.fromCharCode(65 + idx)} favors {countries[playerCountry]?.name || playerCountry}
                                         </p>
                                       );
                                     } else if (opposesYou) {
@@ -2824,7 +2045,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                           fontSize: '0.875rem',
                                           color: '#991b1b'
                                         }}>
-                                          ✗ Option {String.fromCharCode(65 + idx)} opposes {countryNameForVoting}
+                                          ✗ Option {String.fromCharCode(65 + idx)} opposes {countries[playerCountry]?.name || playerCountry}
                                         </p>
                                       );
                                     }
@@ -2924,9 +2145,8 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                 }}>
                                   {currentIssue.options && currentIssue.options.map((option, idx) => {
                                     const optionLetter = String.fromCharCode(65 + idx); // A, B, C
-                                    const countryNameForVoting = getCountryNameForVoting(playerCountry);
-                                    const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
-                                    const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
+                                    const favorsYou = option.favors && option.favors.includes(playerCountry);
+                                    const opposesYou = option.opposes && option.opposes.includes(playerCountry);
                                     
                                     return (
                                       <button
@@ -3044,15 +2264,10 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                               </div>
                             )}
                           </div>
-                      
-                      )}
+                        )}
                       </div>
-      
-    )} 
-                      </div>
-      
-    )} 
-      
+                    )}
+
                     {/* RESULTS PHASE */}
                     {gameState.gamePhase === 'results' && (
                       <div>
@@ -3151,9 +2366,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                           </div>
 
                           {/* Your score this round */}
-                          {userRole !== 'superadmin' && (() => {
-                            const countryNameForScoring = getCountryNameForVoting(playerCountry);
-                            return (
+                          {userRole !== 'superadmin' && (
                             <div style={{
                               padding: '20px',
                               background: 'white',
@@ -3164,14 +2377,13 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                                 Your Score This Round
                               </div>
                               <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
-                                +{gameState.roundScores?.[countryNameForScoring] || 0} pts
+                                +{gameState.roundScores?.[playerCountry] || 0} pts
                               </div>
                               <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
-                                Total: {gameState.scores?.[countryNameForScoring] || 0} pts
+                                Total: {gameState.scores?.[playerCountry] || 0} pts
                               </div>
                             </div>
-                            );
-                          })()}
+                          )}
 
                           {/* Continue button - only admin can advance */}
                           {userRole === 'superadmin' && (
@@ -3252,16 +2464,6 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                       const crisisResponses = gameState.phase2?.crises?.responses || {};
                       const myCountryOptions = activeCrisis?.options?.[playerCountry] || [];
                       const hasRespondedToCrisis = crisisResponses[playerCountry];
-                      
-                      // Debug crisis options
-                      if (activeCrisis) {
-                        console.log('🔍 Crisis Debug:');
-                        console.log('  Title:', activeCrisis.title);
-                        console.log('  Affected countries:', activeCrisis.affectedCountries);
-                        console.log('  My country:', playerCountry);
-                        console.log('  Options keys:', Object.keys(activeCrisis.options || {}));
-                        console.log('  My options:', myCountryOptions);
-                      }
                       
                       return (
                         <div>
@@ -4028,12 +3230,12 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                             
                             <button
                               onClick={() => {
-                                if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
-  socket.emit('startNewGame', {
-    roomId: window.actualRoomId,
-    playerId
-  });
-}
+                                if (window.confirm('Reset this game? All progress will be lost.')) {
+                                  socket.emit('resetRoom', {
+                                    roomId: window.actualRoomId,
+                                    playerId
+                                  });
+                                }
                               }}
                               style={{
                                 padding: '15px 30px',
@@ -4112,8 +3314,7 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                     {userRole === 'superadmin' && (
                       <div style={{
                         padding: '20px',
-         
-                          background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+                        background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
                         borderRadius: '8px',
                         border: '2px solid #dc2626',
                         textAlign: 'center'
@@ -4223,165 +3424,10 @@ socket.on('joinResult', ({ success, message, roomId, actualRoomId }) => {
                     </button>
                   </div>
                 </div>
-             )}
-  
-                {/* BATTLE MODAL */}
-                {showBattleModal && militaryConflict && (
-                  <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 1000
-                  }}>
-                    <div style={{
-                      background: 'white',
-                      borderRadius: '16px',
-                      padding: '32px',
-                      maxWidth: '600px',
-                      width: '90%',
-                      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
-                    }}>
-                      <h2 style={{ marginTop: 0, marginBottom: '20px', color: '#dc2626', fontSize: '1.8rem' }}>
-                        🎖️ Military Conflict Detected!
-                      </h2>
-                      
-                      <div style={{
-                        background: '#fef2f2',
-                        borderLeft: '4px solid #dc2626',
-                        padding: '16px',
-                        borderRadius: '8px',
-                        marginBottom: '24px'
-                      }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '1.1rem', fontWeight: 'bold' }}>
-                          {militaryConflict.message}
-                        </p>
-                        <p style={{ margin: '8px 0', fontSize: '0.95rem' }}>
-                          <strong>Region:</strong> {militaryConflict.region}
-                        </p>
-                        <p style={{ margin: '8px 0', fontSize: '0.95rem' }}>
-                          <strong>Countries Involved:</strong> {militaryConflict.countries?.join(', ') || 'Unknown'}
-                        </p>
-                        <p style={{ margin: '8px 0', fontSize: '0.95rem' }}>
-                          <strong>Year:</strong> {militaryConflict.year}
-                        </p>
-                      </div>
-  
-                      <div style={{
-                        background: '#f0fdf4',
-                        padding: '16px',
-                        borderRadius: '8px',
-                        marginBottom: '24px',
-                        borderLeft: '4px solid #16a34a'
-                      }}>
-                        <p style={{ margin: '0 0 16px 0', fontSize: '0.95rem', fontWeight: 'bold' }}>
-                          ⚔️ Choose Your Battle Strategy:
-                        </p>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                          <button
-                            onClick={() => {
-                              console.log('⚔️ Player chose FIGHT');
-                              socket.emit('submitBattleDecision', {
-                                battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
-                                region: militaryConflict.region,
-                                decision: 'FIGHT',
-                                country: playerCountry,
-                                year: militaryConflict.year
-                              });
-                              setShowBattleModal(false);
-                            }}
-                            style={{
-                              padding: '12px 16px',
-                              background: '#dc2626',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '8px',
-                              fontSize: '0.95rem',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseOver={(e) => e.target.style.background = '#b91c1c'}
-                            onMouseOut={(e) => e.target.style.background = '#dc2626'}
-                          >
-                            ⚔️ Fight
-                          </button>
-                          
-                          <button
-                            onClick={() => {
-                              console.log('🤝 Player chose NEGOTIATE');
-                              socket.emit('submitBattleDecision', {
-                                battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
-                                region: militaryConflict.region,
-                                decision: 'NEGOTIATE',
-                                country: playerCountry,
-                                year: militaryConflict.year
-                              });
-                              setShowBattleModal(false);
-                            }}
-                            style={{
-                              padding: '12px 16px',
-                              background: '#2563eb',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '8px',
-                              fontSize: '0.95rem',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseOver={(e) => e.target.style.background = '#1d4ed8'}
-                            onMouseOut={(e) => e.target.style.background = '#2563eb'}
-                          >
-                            🤝 Negotiate
-                          </button>
-                          
-                          <button
-                            onClick={() => {
-                              console.log('🏃 Player chose RETREAT');
-                              socket.emit('submitBattleDecision', {
-                                battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
-                                region: militaryConflict.region,
-                                decision: 'RETREAT',
-                                country: playerCountry,
-                                year: militaryConflict.year
-                              });
-                              setShowBattleModal(false);
-                            }}
-                            style={{
-                              padding: '12px 16px',
-                              background: '#f59e0b',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '8px',
-                              fontSize: '0.95rem',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseOver={(e) => e.target.style.background = '#d97706'}
-                            onMouseOut={(e) => e.target.style.background = '#f59e0b'}
-                          >
-                            🏃 Retreat
-                          </button>
-                        </div>
-                        
-                        <p style={{ margin: '12px 0 0 0', fontSize: '0.75rem', color: '#6b7280', textAlign: 'center' }}>
-                          💡 Fight: Maximize military advantage | Negotiate: Minimize casualties | Retreat: Preserve forces
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          };
+              )}
+            </div>
+          );
+        };
 
         // Initialize app when game data is loaded
         function initializeApp() {
@@ -4447,4 +3493,4 @@ ${err.stack}
         }
     </script>
 </body>
-</html>.  
+</html>
