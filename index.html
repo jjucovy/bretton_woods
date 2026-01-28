@@ -1969,12 +1969,7 @@ function YearEndBattlePhase({
   );
 }
         
-        const BrettonWoodsSingleRoom = () => {
-          // Authentication state
-          const [isAuthenticated, setIsAuthenticated] = useState(false);
-          const [username, setUsername] = useState('');
-          const [playerId, setPlayerId] = useState('');
-          const [userRole, setUserRole] = useState('player');
+
         const BrettonWoodsSingleRoom = () => {
           // Authentication state
           const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1998,7 +1993,6 @@ function YearEndBattlePhase({
           // Battle modal state
           const [showBattleModal, setShowBattleModal] = useState(false);
           const [militaryConflict, setMilitaryConflict] = useState(null);
-
           useEffect(() => {
             const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
             const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
@@ -2130,7 +2124,6 @@ function YearEndBattlePhase({
             };
           }, [playerId, isAuthenticated]);
 
-          // Authentication handlers
           const handleRegister = (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -2248,7 +2241,6 @@ function YearEndBattlePhase({
             // Hide game selection screen
             setShowGameSelection(false);
           };
-
           const handleClearSession = () => {
             sessionStorage.clear();
             localStorage.clear();
@@ -4724,4 +4716,4 @@ ${err.stack}
         }
     </script>
 </body>
-</html>.  
+</html>
