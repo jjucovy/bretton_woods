@@ -1241,9 +1241,8 @@ io.on('connection', (socket) => {
       console.log('User found in database:', dbUser.username, 'user_id:', dbUser.user_id);
       
       // For now, accept the password (in production, verify against password_hash)
-      const role = dbUser.is_teacher ? 'superadmin' : 'player';
-      console.log('Login successful, role:', role);
-      
+      const role = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1) ? 'superadmin' : 'player';
+      console.log('Login successful, role:', role); 
       // Check for active game for this user
       let activeGame = null;
       if (role === 'player') {
