@@ -524,22 +524,34 @@ function initializePhase2(roomId) {
   room.phase2.yearlyData[1946] = {};
   Object.values(room.players).forEach(player => {
     const country = player.country;
-    const initialData = initialEconomicData[country];
+    
+    // Map country codes (database might have USS instead of USSR)
+    const countryKey = country === 'USS' ? 'USSR' : 
+                       country === 'United States' ? 'USA' :
+                       country === 'United Kingdom' ? 'UK' : country;
+    
+    const initialData = initialEconomicData[countryKey] || initialEconomicData[country];
+    
+    if (!initialData) {
+      console.error(`⚠️ No economic data found for country: ${country} (tried ${countryKey})`);
+      console.log('Available countries in economicData:', Object.keys(initialEconomicData));
+      return; // Skip this country
+    }
     
     room.phase2.yearlyData[1946][country] = {
       gdpGrowth: 0,
-      goldReserves: initialData.goldReserves,
-      unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
-      tradeBalance: initialData.tradeBalance,
-      inflation: country === 'USA' ? 8.3 : country === 'UK' ? 3.1 : country === 'USSR' ? 0 : country === 'France' ? 50.0 : country === 'China' ? 300.0 : 20.0,
-      industrialOutput: initialData.industrialOutput,
-      exchangeRate: initialExchangeRates[country] || 1.0,
+      goldReserves: initialData.goldReserves || 1000,
+      unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' || country === 'USS' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
+      tradeBalance: initialData.tradeBalance || 0,
+      inflation: country === 'USA' ? 8.3 : country === 'UK' ? 3.1 : country === 'USSR' || country === 'USS' ? 0 : country === 'France' ? 50.0 : country === 'China' ? 300.0 : 20.0,
+      industrialOutput: initialData.industrialOutput || 100,
+      exchangeRate: initialExchangeRates[country] || initialExchangeRates[countryKey] || 1.0,
       exchangeRateChange: 0,
       military: {
-        army: initialData.military.army,
-        navy: initialData.military.navy,
-        airForce: initialData.military.airForce,
-        total: initialData.military.total
+        army: initialData.military?.army || 1000000,
+        navy: initialData.military?.navy || 100000,
+        airForce: initialData.military?.airForce || 50000,
+        total: initialData.military?.total || 1150000
       }
     };
   });
@@ -1935,7 +1947,8 @@ io.on('connection', (socket) => {
           room.votes = {}; // Clear votes for revote
           room.gamePhase = 'voting'; // Stay in voting phase
           
-          console.log(`Revote initiated. Players must vote again.`);
+          console.log(`Revote initiated. Votes cleared:`, Object.keys(room.votes).length === 0);
+          console.log(`Room state: gamePhase=${room.gamePhase}, revoteCount=${room.revoteCount}`);
         } else {
           // Max revotes reached, no decision adopted
           console.log(`⚠️  Still tied after 2 revotes. No decision adopted for this issue.`);
@@ -2025,7 +2038,13 @@ io.on('connection', (socket) => {
           }
           
           roundScores[country] = points;
-          room.scores[country] = (room.scores[country] || 0) + points;
+          // Handle USS/USSR naming inconsistency
+          const scoreKey = country === 'USS' ? 'USSR' : country;
+          room.scores[scoreKey] = (room.scores[scoreKey] || 0) + points;
+          // Also store under original country code for display
+          if (country !== scoreKey) {
+            room.scores[country] = room.scores[scoreKey];
+          }
         });
         
         // Store results

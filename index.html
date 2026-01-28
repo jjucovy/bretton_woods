@@ -2030,6 +2030,9 @@ function YearEndBattlePhase({
               console.log('Ready players:', state.readyPlayers?.length);
               console.log('📊 Scores received:', state.scores);
               console.log('📊 Round scores received:', state.roundScores);
+              console.log('🗳️ Votes:', state.votes);
+              console.log('🗳️ My vote:', state.votes?.[playerId]);
+              console.log('🗳️ Is tie:', state.isTie, 'Revote count:', state.revoteCount);
               
               setGameState(state);
               
