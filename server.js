@@ -1242,7 +1242,8 @@ io.on('connection', (socket) => {
       
       // For now, accept the password (in production, verify against password_hash)
       const role = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1) ? 'superadmin' : 'player';
-      console.log('Login successful, role:', role); 
+      console.log('Login successful, role:', role);
+      
       // Check for active game for this user
       let activeGame = null;
       if (role === 'player') {
@@ -1264,15 +1265,30 @@ io.on('connection', (socket) => {
         }
       }
       
+      // Get available lobby games if user is a player and doesn't have active game
+      let availableGames = [];
+      if (role === 'player' && !activeGame) {
+        const lobbyGames = Object.values(globalState.rooms).filter(room => !room.gameStarted);
+        availableGames = lobbyGames.map(room => ({
+          roomId: room.roomId,
+          gameCode: room.gameCode || room.roomId,
+          playerCount: Object.keys(room.players).length,
+          maxPlayers: 7
+        }));
+      }
+      
       socket.emit('loginResult', { 
         success: true, 
         username: username,
         role: role,
         userId: dbUser.user_id,
-        activeGame: activeGame
+        activeGame: activeGame,
+        availableGames: availableGames
       });
       
       console.log(`User logged in: ${username} (${role})`);
+      if (activeGame) console.log(`  Active game: ${activeGame.gameCode}`);
+      if (availableGames.length > 0) console.log(`  Available games: ${availableGames.length}`);
       console.log('====================');
     } catch (error) {
       console.error('Login error:', error);
@@ -1300,20 +1316,39 @@ io.on('connection', (socket) => {
   });
   
   // Join existing room
-  socket.on('joinRoom', ({ roomId }) => {
+  socket.on('joinRoom', ({ roomId, userId }) => {
     if (!globalState.rooms[roomId]) {
       socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
       return;
     }
     
+    // Store userId on socket for later reference
+    socket.userId = userId;
+    
     socket.join(roomId);
+    
+    // If userId provided, check if they have an active player assignment in this game
+    if (userId) {
+      // Find their player record for this game
+      const room = globalState.rooms[roomId];
+      const existingPlayer = Object.values(room.players).find(p => p.userId === userId);
+      
+      if (existingPlayer) {
+        // Player already in this game - update their socket ID for reconnection
+        existingPlayer.socketId = socket.id;
+        existingPlayer.disconnected = false;
+        console.log(`✅ User ${userId} reconnected to game ${roomId} as ${existingPlayer.country}`);
+      }
+    }
+    
     socket.emit('joinRoomResult', { 
       success: true, 
-      roomId: roomId 
+      roomId: roomId,
+      actualRoomId: roomId
     });
     
     broadcastToRoom(roomId);
-    console.log(`Player joined room: ${roomId}`);
+    console.log(`User ${userId || 'guest'} joined room: ${roomId}`);
   });
   
   // Leave room
@@ -1351,8 +1386,10 @@ io.on('connection', (socket) => {
   });
   
   // Join game in room
-  socket.on('joinGame', ({ roomId, playerId, country }) => {
-    console.log(`🎮 Join game request: roomId=${roomId}, playerId=${playerId}, country=${country}`);
+  socket.on('joinGame', ({ roomId, userId, playerId, country }) => {
+    // Support both userId (new) and playerId (legacy)
+    const id = userId || playerId;
+    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerId=${playerId}, country=${country}`);
     console.log(`   Available rooms:`, Object.keys(globalState.rooms));
     
     const room = globalState.rooms[roomId];
@@ -1367,9 +1404,10 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Prevent superadmin from joining as player
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    if (user && user.role === 'superadmin') {
+    // Prevent superadmin from joining as player (check socket.userId first, then passed userId)
+    const checkUserId = socket.userId || userId;
+    const isAdminInRoom = Object.values(room.players).some(p => p.userId === checkUserId && p.role === 'superadmin');
+    if (isAdminInRoom) {
       socket.emit('joinResult', { success: false, message: 'Administrator cannot join as a player. You are an observer.' });
       return;
     }
@@ -1379,8 +1417,10 @@ io.on('connection', (socket) => {
     if (taken) {
       socket.emit('joinResult', { success: false, message: 'Country already taken' });
     } else {
-      room.players[playerId] = {
-        id: playerId,
+      // Store player with both id and userId for flexibility
+      room.players[id] = {
+        id: id,
+        userId: userId || id,
         country: country,
         socketId: socket.id,
         joinedAt: Date.now()
@@ -1391,7 +1431,7 @@ io.on('connection', (socket) => {
       broadcastRoomList();
       saveState();
       
-      console.log(`Player ${playerId} joined as ${country} in room ${roomId}`);
+      console.log(`Player ${id} (userId: ${userId}) joined as ${country} in room ${roomId}`);
     }
   });
   
