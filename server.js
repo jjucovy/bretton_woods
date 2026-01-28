@@ -507,6 +507,19 @@ function initializePhase2(roomId) {
   room.gamePhase = 'phase2';
   room.readyPlayers = [];
   
+  // Initialize starting exchange rates (Bretton Woods fixed rates)
+  const initialExchangeRates = {
+    'USA': 1.00,  // USD is the anchor
+    'United States': 1.00,
+    'UK': 4.03,   // $4.03 per pound (from 1940)
+    'USSR': null, // Not convertible - didn't join Bretton Woods
+    'Soviet Union': null,
+    'France': 119.11, // Francs per dollar (post-war rate)
+    'China': 3.35,    // Yuan per dollar (pre-hyperinflation)
+    'India': 3.31,    // Rupees per dollar (₹13.33 per pound / 4.03)
+    'Argentina': 3.50 // Pesos per dollar (approximate)
+  };
+  
   // Initialize starting economic conditions for each country
   room.phase2.yearlyData[1946] = {};
   Object.values(room.players).forEach(player => {
@@ -520,6 +533,8 @@ function initializePhase2(roomId) {
       tradeBalance: initialData.tradeBalance,
       inflation: country === 'USA' ? 8.3 : country === 'UK' ? 3.1 : country === 'USSR' ? 0 : country === 'France' ? 50.0 : country === 'China' ? 300.0 : 20.0,
       industrialOutput: initialData.industrialOutput,
+      exchangeRate: initialExchangeRates[country] || 1.0,
+      exchangeRateChange: 0,
       military: {
         army: initialData.military.army,
         navy: initialData.military.navy,
@@ -547,7 +562,7 @@ function calculateAgreementBonus(roomId) {
     let cooperationBonus = 0;
     
     roundHistory.forEach((round, idx) => {
-      const playerVote = room.votes[player.playerId];
+      const playerVote = round.votes[player.userId]; // Get vote from saved history
       const winningOption = round.winningOption;
       
       if (!playerVote || !winningOption) return;
@@ -595,6 +610,109 @@ function calculateAgreementBonus(roomId) {
   });
   
   return bonus;
+}
+
+// Calculate exchange rate changes based on economic policies
+function calculateExchangeRate(country, currentYear, policy, previousData, room) {
+  // USSR doesn't participate in Bretton Woods
+  if (country === 'USSR' || country === 'Soviet Union') {
+    return { rate: null, change: 0, defendable: true };
+  }
+  
+  // USA is the anchor currency
+  if (country === 'USA' || country === 'United States') {
+    return { rate: 1.00, change: 0, defendable: true };
+  }
+  
+  const previousRate = previousData.exchangeRate;
+  let rateChange = 0;
+  
+  // 1. Inflation differential (vs USA)
+  const usData = room.phase2.yearlyData[currentYear]?.['USA'] || room.phase2.yearlyData[currentYear]?.['United States'];
+  const usInflation = usData ? usData.inflation : 3.0;
+  const countryInflation = previousData.inflation || 5.0;
+  const inflationDiff = countryInflation - usInflation;
+  rateChange += inflationDiff * 0.4; // Purchasing power parity effect
+  
+  // 2. Trade balance impact  
+  const tradeBalance = previousData.tradeBalance || 0;
+  if (tradeBalance < -300) {
+    rateChange += Math.abs(tradeBalance) * 0.01; // Deficit weakens currency
+  } else if (tradeBalance > 300) {
+    rateChange -= tradeBalance * 0.005; // Surplus strengthens currency
+  }
+  
+  // 3. Interest rate differential (if policy has interest rate)
+  if (policy && policy.interestRate) {
+    const usInterestRate = 2.5; // Fed rate
+    const rateDiff = policy.interestRate - usInterestRate;
+    rateChange -= rateDiff * 0.3; // Higher rates strengthen currency
+  }
+  
+  // 4. Gold reserves (confidence factor)
+  const goldReserves = previousData.goldReserves || 1000;
+  if (goldReserves < 500) {
+    rateChange += 4.0; // Low reserves = crisis risk
+  } else if (goldReserves > 15000) {
+    rateChange -= 1.0; // High reserves = confidence
+  }
+  
+  // 5. Government deficit (if policy data available)
+  if (policy && policy.governmentSpending) {
+    const gdp = policy.gdp || 100000;
+    const deficit = (policy.governmentSpending - (policy.taxRevenue || 0)) / gdp * 100;
+    if (deficit > 5) {
+      rateChange += deficit * 0.3; // Deficit spending weakens currency
+    }
+  }
+  
+  // Historical event triggers
+  if (country === 'UK' && currentYear === 1949) {
+    // September 1949: Sterling crisis - forced devaluation
+    rateChange -= 30.5; // $4.03 → $2.80 (for GBP, negative = devaluation)
+    console.log(`🚨 HISTORICAL EVENT: UK Sterling Crisis 1949 - Forced 30% devaluation`);
+  }
+  
+  if ((country === 'France' || country === 'French') && currentYear === 1948) {
+    // January 1948: Major franc devaluation
+    rateChange += 79.9; // 119.11 → 214.39 francs per dollar
+    console.log(`🚨 HISTORICAL EVENT: France 1948 Devaluation - 80% currency collapse`);
+  }
+  
+  if ((country === 'France' || country === 'French') && currentYear === 1949) {
+    // 1949: Two more devaluations
+    rateChange += 63.3; // 214 → 350 francs per dollar (combined)
+    console.log(`🚨 HISTORICAL EVENT: France 1949 Devaluations - Currency crisis continues`);
+  }
+  
+  if (country === 'India' && currentYear === 1949) {
+    // Adjust to sterling devaluation
+    rateChange += 18.0; // ₹3.31 → ₹4.76 (follows pound)
+    console.log(`📊 India adjusts to sterling devaluation`);
+  }
+  
+  // Calculate new rate
+  let newRate;
+  if (country === 'UK' || country === 'United Kingdom') {
+    // GBP quoted as $/£ - devaluation means lower number
+    newRate = previousRate * (1 + rateChange / 100);
+  } else {
+    // Most currencies quoted as local/$ - devaluation means higher number
+    newRate = previousRate * (1 + rateChange / 100);
+  }
+  
+  // Bretton Woods constraint: ±1% band (unless crisis)
+  const defendable = Math.abs(rateChange) < 10;
+  
+  if (Math.abs(rateChange) > 1 && Math.abs(rateChange) < 10) {
+    console.log(`⚠️  ${country}: Exchange rate pressure (${rateChange.toFixed(1)}%) - intervention required`);
+  }
+  
+  return {
+    rate: Math.max(0.01, newRate), // Ensure positive
+    change: rateChange,
+    defendable: defendable
+  };
 }
 
 // Trigger crisis events if appropriate for current year
@@ -1054,6 +1172,25 @@ function calculateYearEconomics(roomId) {
     }
     goldReserves = Math.max(0, goldReserves);
     
+    // Calculate exchange rate changes
+    const exchangeRateResult = calculateExchangeRate(country, currentYear, policy, prevData, room);
+    
+    // Exchange rate affects trade competitiveness
+    if (exchangeRateResult.change > 5) {
+      // Weaker currency = better exports (already incorporated above, but add small additional effect)
+      tradeBalance += exchangeRateResult.change * 5;
+      gdpGrowth += exchangeRateResult.change * 0.05;
+    } else if (exchangeRateResult.change < -5) {
+      // Stronger currency = worse exports but lower inflation
+      tradeBalance += exchangeRateResult.change * 5;
+      inflation += exchangeRateResult.change * 0.1; // Negative change reduces inflation
+    }
+    
+    // Devaluation increases import costs (inflation)
+    if (exchangeRateResult.change > 10) {
+      inflation += exchangeRateResult.change * 0.15;
+    }
+    
     // Store results
     tempResults[country] = {
       gdpGrowth: Math.round(gdpGrowth * 10) / 10,
@@ -1062,6 +1199,8 @@ function calculateYearEconomics(roomId) {
       tradeBalance: Math.round(tradeBalance),
       inflation: Math.round(inflation * 10) / 10,
       industrialOutput: Math.round(industrialOutput),
+      exchangeRate: Math.round(exchangeRateResult.rate * 100) / 100,
+      exchangeRateChange: Math.round(exchangeRateResult.change * 10) / 10,
       militarySpending: milSpending,
       military: {
         army: armySize,
@@ -1765,87 +1904,168 @@ io.on('connection', (socket) => {
         }
       });
       
-      // Determine winning option (most votes)
-      let winningOption = 'a';
-      let maxVotes = voteTally.a;
-      if (voteTally.b > maxVotes) {
-        winningOption = 'b';
-        maxVotes = voteTally.b;
-      }
-      if (voteTally.c > maxVotes) {
-        winningOption = 'c';
-        maxVotes = voteTally.c;
+      console.log('Vote tally:', voteTally);
+      
+      // Check for ties
+      const voteValues = [voteTally.a, voteTally.b, voteTally.c];
+      const maxVotes = Math.max(...voteValues);
+      const optionsWithMaxVotes = ['a', 'b', 'c'].filter((opt, idx) => voteValues[idx] === maxVotes);
+      
+      const isTie = optionsWithMaxVotes.length > 1;
+      
+      // Initialize revote count if not exists
+      if (!room.revoteCount) {
+        room.revoteCount = 0;
       }
       
-      room.voteTally = voteTally;
-      room.roundOutcome = `Option ${winningOption.toUpperCase()} wins (${maxVotes} votes)`;
-      room.winningOption = winningOption;
-      
-      // Get current issue from game data
-      const gameDataPath = path.join(__dirname, 'game-data.json');
-      let currentIssueOptions = [];
-      try {
-        const gameDataContent = fs.readFileSync(gameDataPath, 'utf8');
-        const gameData = JSON.parse(gameDataContent);
-        const currentIssue = gameData.issues[room.currentRound - 1];
-        if (currentIssue && currentIssue.options) {
-          currentIssueOptions = currentIssue.options;
+      // Handle tie situation
+      if (isTie) {
+        console.log(`🔄 TIE detected! Options ${optionsWithMaxVotes.join(', ')} all have ${maxVotes} votes`);
+        
+        if (room.revoteCount < 2) {
+          // Allow revote (max 2 revotes = 3 total votes)
+          room.revoteCount++;
+          console.log(`Initiating revote ${room.revoteCount} of 2`);
+          
+          room.voteTally = voteTally;
+          room.roundOutcome = `TIE! Revote ${room.revoteCount} of 2 required`;
+          room.winningOption = null;
+          room.isTie = true;
+          room.tiedOptions = optionsWithMaxVotes;
+          room.votes = {}; // Clear votes for revote
+          room.gamePhase = 'voting'; // Stay in voting phase
+          
+          console.log(`Revote initiated. Players must vote again.`);
+        } else {
+          // Max revotes reached, no decision adopted
+          console.log(`⚠️  Still tied after 2 revotes. No decision adopted for this issue.`);
+          
+          room.voteTally = voteTally;
+          room.roundOutcome = `TIE after 3 votes - No decision adopted`;
+          room.winningOption = null;
+          room.isTie = true;
+          room.noDecision = true;
+          room.revoteCount = 0; // Reset for next round
+          
+          // Award base participation points only (no winner bonus)
+          const roundScores = {};
+          Object.entries(room.players).forEach(([id, player]) => {
+            const country = player.country;
+            const points = 10; // Only participation points
+            roundScores[country] = points;
+            room.scores[country] = (room.scores[country] || 0) + points;
+          });
+          
+          room.roundScores = roundScores;
+          room.gamePhase = 'results';
         }
-      } catch (err) {
-        console.error('Error loading game data for scoring:', err);
-      }
-      
-      // Calculate scores for this round
-      const roundScores = {};
-      Object.entries(room.players).forEach(([id, player]) => {
-        const country = player.country;
-        const vote = room.votes[id].toLowerCase();
+      } else {
+        // Clear winner - no tie
+        const winningOption = optionsWithMaxVotes[0];
+        room.revoteCount = 0; // Reset revote count
+        room.isTie = false;
+        room.noDecision = false;
         
-        let points = 0;
+        console.log(`✅ Clear winner: Option ${winningOption.toUpperCase()} with ${maxVotes} votes`);
         
-        // Base points for participation
-        points += 10;
+        room.voteTally = voteTally;
+        room.roundOutcome = `Option ${winningOption.toUpperCase()} wins (${maxVotes} votes)`;
+        room.winningOption = winningOption;
         
-        // Find the option they voted for
-        const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : 2;
-        const votedOption = currentIssueOptions[optionIndex];
-        
-        if (votedOption) {
-          // Bonus for voting for winning option
-          if (vote === winningOption) {
-            points += 20; // Voted with winning side
+        // Get current issue from game data
+        const gameDataPath = path.join(__dirname, 'game-data.json');
+        let currentIssueOptions = [];
+        try {
+          const gameDataContent = fs.readFileSync(gameDataPath, 'utf8');
+          const gameData = JSON.parse(gameDataContent);
+          const currentIssue = gameData.issues[room.currentRound - 1];
+          if (currentIssue && currentIssue.options) {
+            currentIssueOptions = currentIssue.options;
           }
-          
-          // Major bonus if the winning option favors your country
-          const winningOptionData = currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2];
-          if (winningOptionData && winningOptionData.favors && winningOptionData.favors.includes(country)) {
-            points += 40; // Your country benefits from winning option
-          }
-          
-          // Penalty if winning option opposes your country
-          if (winningOptionData && winningOptionData.opposes && winningOptionData.opposes.includes(country)) {
-            points -= 10; // Your country hurt by winning option
-          }
-          
-          // Bonus for voting for option that favors you
-          if (votedOption.favors && votedOption.favors.includes(country)) {
-            points += 15; // Strategic vote for your interests
-          }
+        } catch (err) {
+          console.error('Error loading game data for scoring:', err);
         }
         
-        roundScores[country] = points;
-        room.scores[country] = (room.scores[country] || 0) + points;
-      });
-      
-      // Store results
-      room.voteTally = voteTally;
-      room.roundScores = roundScores;
-      room.gamePhase = 'results';
-      
-      console.log(`Round ${room.currentRound} results:`, { 
-        voteTally, 
-        winningOption: room.roundOutcome 
-      });
+        // Calculate scores for this round
+        const roundScores = {};
+        Object.entries(room.players).forEach(([id, player]) => {
+          const country = player.country;
+          const vote = room.votes[id].toLowerCase();
+          
+          let points = 0;
+          
+          // Base points for participation
+          points += 10;
+          
+          // Find the option they voted for
+          const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : 2;
+          const votedOption = currentIssueOptions[optionIndex];
+          
+          if (votedOption) {
+            // Bonus for voting for winning option
+            if (vote === winningOption) {
+              points += 20; // Voted with winning side
+            }
+            
+            // Major bonus if the winning option favors your country
+            const winningOptionData = currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2];
+            if (winningOptionData && winningOptionData.favors && winningOptionData.favors.includes(country)) {
+              points += 40; // Your country benefits from winning option
+            }
+            
+            // Penalty if winning option opposes your country
+            if (winningOptionData && winningOptionData.opposes && winningOptionData.opposes.includes(country)) {
+              points -= 10; // Your country hurt by winning option
+            }
+            
+            // Bonus for voting for option that favors you
+            if (votedOption.favors && votedOption.favors.includes(country)) {
+              points += 15; // Strategic vote for your interests
+            }
+          }
+          
+          roundScores[country] = points;
+          room.scores[country] = (room.scores[country] || 0) + points;
+        });
+        
+        // Store results
+        room.voteTally = voteTally;
+        room.roundScores = roundScores;
+        room.gamePhase = 'results';
+        
+        // Save to round history for Phase 2 calculations
+        const gameDataPath = path.join(__dirname, 'game-data.json');
+        let issueTitle = '';
+        try {
+          const gameDataContent = fs.readFileSync(gameDataPath, 'utf8');
+          const gameData = JSON.parse(gameDataContent);
+          const currentIssue = gameData.issues[room.currentRound - 1];
+          if (currentIssue) {
+            issueTitle = currentIssue.title;
+          }
+        } catch (err) {
+          console.error('Error loading issue title:', err);
+        }
+        
+        if (!room.roundHistory) {
+          room.roundHistory = [];
+        }
+        
+        room.roundHistory.push({
+          round: room.currentRound,
+          winningOption: winningOption,
+          issueTitle: issueTitle,
+          votes: { ...room.votes }, // Copy of all votes
+          voteTally: { ...voteTally },
+          timestamp: Date.now()
+        });
+        
+        console.log(`Round ${room.currentRound} results:`, { 
+          voteTally, 
+          winningOption: room.roundOutcome 
+        });
+        console.log(`✅ Saved to round history for Phase 2 calculations`);
+      }
     }
     
     broadcastToRoom(roomId);
@@ -1853,24 +2073,41 @@ io.on('connection', (socket) => {
   });
   
   // Advance to next round (admin only)
-  socket.on('advanceRound', ({ roomId, playerId }) => {
+  socket.on('advanceRound', async ({ roomId, playerId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    const user = Object.values(globalState.users).find(u => u.playerId === playerId);
-    const isSuperAdmin = user && user.role === 'superadmin';
+    console.log('🔄 Advance round request:', { roomId, playerId, roomHost: room.hostId });
+    
+    // Check if user is superadmin by querying database
+    let isSuperAdmin = false;
+    
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === playerId);
+        
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+          console.log('User found in DB:', {
+            username: dbUser.username,
+            user_id: dbUser.user_id,
+            is_teacher: dbUser.is_teacher,
+            isSuperAdmin
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
+    }
+    
     const isRoomHost = room.hostId === playerId;
+    console.log('Permission check:', { isSuperAdmin, isRoomHost });
     
     // Allow either superadmin OR room host to advance round
     if (!isSuperAdmin && !isRoomHost) {
-      console.log('Advance round rejected:', {
-        playerId,
-        username: user?.username || 'unknown',
-        role: user?.role || 'none',
-        isSuperAdmin,
-        isRoomHost,
-        roomHost: room.hostId
-      });
+      console.log('❌ Advance round rejected - not admin or host');
       socket.emit('advanceRoundError', { 
         message: 'Only the game admin can advance the round.' 
       });
@@ -1879,7 +2116,7 @@ io.on('connection', (socket) => {
     
     // Advance round
     room.currentRound++;
-    console.log(`Advancing to round ${room.currentRound}`);
+    console.log(`✅ Advancing to round ${room.currentRound}`);
     
     // Check if Phase 1 is complete - start Phase 2
     if (room.currentRound > 10) {
