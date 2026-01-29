@@ -31,7 +31,7 @@ function normalizeCountryName(country) {
     'Great Britain': 'UK',
     'United Kingdom': 'UK',
     'PRC': 'China',
-    'People's Republic of China': 'China',
+    "People's Republic of China": 'China',
     'French': 'France'
   };
   return normalizations[country] || country;
