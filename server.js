@@ -31,7 +31,7 @@ function normalizeCountryName(country) {
     'Great Britain': 'UK',
     'United Kingdom': 'UK',
     'PRC': 'China',
-    "People's Republic of China": 'China',
+    'People's Republic of China': 'China',
     'French': 'France'
   };
   return normalizations[country] || country;
@@ -567,6 +567,14 @@ function updateRoomList() {
 function broadcastToRoom(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
+  
+  // Log what we're about to broadcast
+  if (room.phase2?.active) {
+    console.log(`📡 Broadcasting room ${roomId}:`);
+    console.log(`   phase2.yearlyData keys:`, Object.keys(room.phase2.yearlyData));
+    console.log(`   phase2.yearlyData[1946] keys:`, Object.keys(room.phase2.yearlyData[1946] || {}));
+    console.log(`   Full yearlyData:`, JSON.stringify(room.phase2.yearlyData, null, 2).substring(0, 500));
+  }
   
   io.to(roomId).emit('stateUpdate', room);
 }

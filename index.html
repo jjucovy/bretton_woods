@@ -3656,8 +3656,15 @@ function YearEndBattlePhase({
                       const currentYear = gameState.phase2?.currentYear || 1946;
                       const normalizedCountry = normalizeCountryName(playerCountry);
                       const myData = gameState.phase2?.yearlyData?.[currentYear]?.[normalizedCountry];
-                      console.log(`🔍 Statistics lookup: playerCountry="${playerCountry}", normalized="${normalizedCountry}", year=${currentYear}, myData=`, myData);
-                      console.log(`   yearlyData keys:`, Object.keys(gameState.phase2?.yearlyData?.[currentYear] || {}));
+                      console.log(`🔍 Statistics lookup:`);
+                      console.log(`   playerCountry="${playerCountry}"`);
+                      console.log(`   normalized="${normalizedCountry}"`);
+                      console.log(`   year=${currentYear}`);
+                      console.log(`   phase2=`, gameState.phase2);
+                      console.log(`   yearlyData=`, gameState.phase2?.yearlyData);
+                      console.log(`   yearlyData keys:`, Object.keys(gameState.phase2?.yearlyData || {}));
+                      console.log(`   yearlyData[${currentYear}]=`, gameState.phase2?.yearlyData?.[currentYear]);
+                      console.log(`   myData=`, myData);
                       const hasSubmitted = gameState.readyPlayers?.includes(playerId);
                       const activeCrisis = gameState.phase2?.crises?.active;
                       const crisisResponses = gameState.phase2?.crises?.responses || {};
