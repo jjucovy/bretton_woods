@@ -550,6 +550,7 @@
                 foreignTradeOrientation,
                 planFulfillmentPriority,
                 militarySpending,
+                militarySize: totalMilitary,
                 armySize,
                 navySize,
                 airForceSize,
@@ -4157,7 +4158,7 @@ function YearEndBattlePhase({
                           ) : !hasSubmitted ? (
                             <>
                               {/* Show Command Economy form for USSR and Communist China */}
-                              {(playerCountry === 'USSR' || (playerCountry === 'China' && currentYear >= 1949)) ? (
+                              {(playerCountry === 'USSR' || playerCountry === 'Soviet Union' || (playerCountry === 'China' && currentYear >= 1949)) ? (
                                 <CommandEconomyPolicyForm 
                                   currentYear={currentYear}
                                   playerId={playerId}
