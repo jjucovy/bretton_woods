@@ -69,17 +69,32 @@
         // Dynamic room ID - set by server or from window.actualRoomId
         let SINGLE_ROOM_ID = window.actualRoomId || 'game_0';
         
-        // Normalize country names to match server storage
-        function normalizeCountryName(country) {
-          if (!country) return '';
-          const mapping = {
-            'Soviet Union': 'USSR',
-            'United Kingdom': 'UK',
-            'United States': 'USA',
-            'India (British Raj)': 'India'
-          };
-          return mapping[country] || country;
-        }
+// FIXED: Match server normalization exactly
+function normalizeCountryName(country) {
+  if (!country) return '';
+  const mapping = {
+    'Soviet Union': 'USSR',
+    'USS': 'USSR',  // Added
+    'United Kingdom': 'UK',
+    'Great Britain': 'UK',  // Added
+    'GB': 'UK',  // Added
+    'United States': 'USA',
+    'US': 'USA',  // Added
+    'India (British Raj)': 'India',
+    'PRC': 'China',  // Added
+    "People's Republic of China": 'China',  // Added
+    'French': 'France'  // Added
+  };
+  return mapping[country] || country;
+}
+
+        // FIXED: Helper to check command economy countries
+function isCommandEconomy(country, year) {
+  const normalized = normalizeCountryName(country);
+  if (normalized === 'USSR') return true;
+  if (normalized === 'China' && year >= 1949) return true;
+  return false;
+}
         
         function loadGameData() {
           console.log('Loading game data... (attempt ' + (loadAttempts + 1) + ')');
@@ -4179,17 +4194,17 @@ function YearEndBattlePhase({
                           ) : !hasSubmitted ? (
                             <>
                               {/* Show Command Economy form for USSR and Communist China */}
-                              {(playerCountry === 'USSR' || (playerCountry === 'China' && currentYear >= 1949)) ? (
-                                <CommandEconomyPolicyForm 
-                                  currentYear={currentYear}
-                                  playerId={playerId}
-                                  socket={socket}
-                                  roomId={SINGLE_ROOM_ID}
-                                  country={playerCountry}
-                                  myData={myData}
-                                />
-                              ) : (
-                                <PolicySubmissionForm 
+                              {isCommandEconomy(playerCountry, currentYear) ? (
+                              <CommandEconomyPolicyForm 
+                                currentYear={currentYear}
+                                playerId={playerId}
+                                socket={socket}
+                                roomId={SINGLE_ROOM_ID}
+                                country={playerCountry}
+                                myData={myData}
+                              />
+                            ) : (
+                              <PolicySubmissionForm
                                   currentYear={currentYear}
                                   playerId={playerId}
                                   socket={socket}
