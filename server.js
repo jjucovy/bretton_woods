@@ -3023,8 +3023,8 @@ try {
 
   // NEW: Superadmin request for active games list (all games, any phase)
   // NEW: Superadmin request for active games list (all games, any phase)
-  socket.on('getActiveGames', async ({ playerid }) => {
-    console.log('getActiveGames request from playerid:', playerid);
+  socket.on('getActiveGames', async ({ userid }) => {
+    console.log('getActiveGames request from userid:', userid);
     
     // We need to find the username first - check if it's stored on the socket from login
     // Or just trust the role that was set during login by checking if they can access this
