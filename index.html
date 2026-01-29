@@ -69,6 +69,18 @@
         // Dynamic room ID - set by server or from window.actualRoomId
         let SINGLE_ROOM_ID = window.actualRoomId || 'game_0';
         
+        // Normalize country names to match server storage
+        function normalizeCountryName(country) {
+          if (!country) return '';
+          const mapping = {
+            'Soviet Union': 'USSR',
+            'United Kingdom': 'UK',
+            'United States': 'USA',
+            'India (British Raj)': 'India'
+          };
+          return mapping[country] || country;
+        }
+        
         function loadGameData() {
           console.log('Loading game data... (attempt ' + (loadAttempts + 1) + ')');
           
@@ -550,7 +562,6 @@
                 foreignTradeOrientation,
                 planFulfillmentPriority,
                 militarySpending,
-                militarySize: totalMilitary,
                 armySize,
                 navySize,
                 airForceSize,
@@ -3643,7 +3654,7 @@ function YearEndBattlePhase({
                     {/* PHASE 2: POST-WAR ECONOMIC MANAGEMENT */}
                     {gameState.gamePhase === 'phase2' && (() => {
                       const currentYear = gameState.phase2?.currentYear || 1946;
-                      const myData = gameState.phase2?.yearlyData?.[currentYear]?.[playerCountry];
+                      const myData = gameState.phase2?.yearlyData?.[currentYear]?.[normalizeCountryName(playerCountry)];
                       const hasSubmitted = gameState.readyPlayers?.includes(playerId);
                       const activeCrisis = gameState.phase2?.crises?.active;
                       const crisisResponses = gameState.phase2?.crises?.responses || {};
@@ -4158,7 +4169,7 @@ function YearEndBattlePhase({
                           ) : !hasSubmitted ? (
                             <>
                               {/* Show Command Economy form for USSR and Communist China */}
-                              {(playerCountry === 'USSR' || playerCountry === 'Soviet Union' || (playerCountry === 'China' && currentYear >= 1949)) ? (
+                              {(playerCountry === 'USSR' || (playerCountry === 'China' && currentYear >= 1949)) ? (
                                 <CommandEconomyPolicyForm 
                                   currentYear={currentYear}
                                   playerId={playerId}
