@@ -19,6 +19,25 @@ const DB_API = {
   apiKey: 'bretton-woods-secret-key-2024'
 };
 
+
+// Normalize country names to ensure consistent keys
+function normalizeCountryName(country) {
+  const normalizations = {
+    'USS': 'USSR',
+    'Soviet Union': 'USSR',
+    'US': 'USA',
+    'United States': 'USA',
+    'GB': 'UK',
+    'Great Britain': 'UK',
+    'United Kingdom': 'UK',
+    'PRC': 'China',
+    'People's Republic of China': 'China',
+    'French': 'France'
+  };
+  return normalizations[country] || country;
+}
+
+
 // Function to query database via PHP API
 async function queryDatabase(action, data = {}) {
   try {
@@ -592,7 +611,7 @@ function initializePhase2(roomId) {
   // Initialize starting economic conditions for each country
   room.phase2.yearlyData[1946] = {};
   Object.values(room.players).forEach(player => {
-    const country = player.country;
+    const country = normalizeCountryName(player.country);
     
     // Map country codes (database might have USS instead of USSR)
     const countryKey = country === 'USS' ? 'USSR' : 
@@ -607,7 +626,7 @@ function initializePhase2(roomId) {
       return; // Skip this country
     }
     
-    room.phase2.yearlyData[1946][country] = {
+    room.phase2.yearlyData[1946][normalizeCountryName(country)] = {
       gdpGrowth: 0,
       goldReserves: initialData.goldReserves || 1000,
       unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' || country === 'USS' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
@@ -637,7 +656,7 @@ function calculateAgreementBonus(roomId) {
   
   // Analyze each country's Bretton Woods positions
   Object.values(room.players).forEach(player => {
-    const country = player.country;
+    const country = normalizeCountryName(player.country);
     let gdpBonus = 0;
     let tradeBonus = 0;
     let cooperationBonus = 0;
@@ -871,7 +890,7 @@ function calculateYearEconomics(roomId) {
   const tempResults = {}; // Store intermediate results
   
   Object.values(room.players).forEach(player => {
-    const country = player.country;
+    const country = normalizeCountryName(player.country);
     const policy = policies[country];
     const prevData = prevYearData[country];
     
@@ -1308,7 +1327,7 @@ function calculatePhase2Scores(roomId) {
   const scoreBreakdowns = {};
   
   Object.values(room.players).forEach(player => {
-    const country = player.country;
+    const country = normalizeCountryName(player.country);
     let score = 0;
     const breakdown = {
       gdp: 0,
@@ -2233,7 +2252,7 @@ io.on('connection', (socket) => {
       room.phase2.policies[currentYear] = {};
     }
     
-    room.phase2.policies[currentYear][player.country] = policy.isCommandEconomy ? {
+    room.phase2.policies[currentYear][normalizeCountryName(player.country)] = policy.isCommandEconomy ? {
       // Command economy policy
       fiveYearPlanTarget: policy.fiveYearPlanTarget || 8,
       heavyIndustryAllocation: policy.heavyIndustryAllocation || 60,
