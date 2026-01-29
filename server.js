@@ -75,7 +75,7 @@ app.get('/', (req, res) => {
 app.get('/debug/users', (req, res) => {
   const userList = Object.entries(globalState.users).map(([username, data]) => ({
     username,
-    player.id: data.player.id,
+    playerid: data.player.id,
     role: data.role,
     createdAt: new Date(data.createdAt).toLocaleString()
   }));
@@ -92,7 +92,7 @@ app.get('/debug/users', (req, res) => {
 
 // NEW: API endpoint to get available games for regular users (lobby games only)
 app.get('/api/available-games', async (req, res) => {
-  const { player.id } = req.query;
+  const { playerid } = req.query;
   
   // Verify user is authenticated
   const user = Object.values(globalState.users).find(u => u.player.id === player.id);
@@ -132,10 +132,10 @@ app.get('/api/available-games', async (req, res) => {
 
 // NEW: API endpoint to get all active games (for superadmin only)
 app.get('/api/active-games', async (req, res) => {
-  const { adminplayer.id } = req.query;
+  const { adminplayerid } = req.query;
   
   // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayer.id);
+  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid);
   if (!admin || admin.role !== 'superadmin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
@@ -192,7 +192,7 @@ app.use(express.static(__dirname));
 
 // Multi-room game state
 let globalState = {
-  users: {}, // username -> { password: hashedPassword, player.id: string, createdAt: timestamp }
+  users: {}, // username -> { password: hashedPassword, playerid: string, createdAt: timestamp }
   rooms: {}, // roomId -> gameState
   roomList: [] // { id, name, host, playerCount, maxPlayers, status, createdAt }
 };
@@ -366,7 +366,7 @@ app.get('/api/export-state/:roomId', (req, res) => {
 // Import game state (restore from JSON)
 app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), async (req, res) => {
   const { roomId } = req.params;
-  const { roomData, player.id } = req.body;
+  const { roomData, playerid } = req.body;
   
   // Verify admin permissions by checking database
   let isSuperAdmin = false;
@@ -421,10 +421,10 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), async (re
 
 // Get all users (admin only)
 app.get('/api/users', (req, res) => {
-  const { adminplayer.id } = req.query;
+  const { adminplayerid  } = req.query;
   
   // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayer.id);
+  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid );
   if (!admin || admin.role !== 'superadmin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
@@ -432,7 +432,7 @@ app.get('/api/users', (req, res) => {
   // Return users without passwords
   const users = Object.entries(globalState.users).map(([username, data]) => ({
     username,
-    player.id: data.player.id,
+    playerid: data.player.id,
     role: data.role,
     createdAt: data.createdAt,
     lastLogin: data.lastLogin
@@ -444,16 +444,16 @@ app.get('/api/users', (req, res) => {
 // Delete user (admin only)
 app.delete('/api/users/:username', express.json(), (req, res) => {
   const { username } = req.params;
-  const { adminplayer.id } = req.body;
+  const { adminplayerid  } = req.body;
   
   // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayer.id);
+  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid );
   if (!admin || admin.role !== 'superadmin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
   // Don't allow deleting self
-  const adminUsername = Object.keys(globalState.users).find(u => globalState.users[u].player.id === adminplayer.id);
+  const adminUsername = Object.keys(globalState.users).find(u => globalState.users[u].player.id === adminplayerid );
   if (username === adminUsername) {
     return res.status(400).json({ error: 'Cannot delete your own account' });
   }
@@ -471,10 +471,10 @@ app.delete('/api/users/:username', express.json(), (req, res) => {
 
 // Export user database (admin only)
 app.get('/api/export-users', (req, res) => {
-  const { adminplayer.id } = req.query;
+  const { adminplayerid  } = req.query;
   
   // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayer.id);
+  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid );
   if (!admin || admin.role !== 'superadmin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
@@ -1539,7 +1539,7 @@ io.on('connection', (socket) => {
       return;
     }
     
-    const player.id = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const playerid = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const userId = Math.floor(Math.random() * 1000000) + 1; // Simple numeric ID for now
     
     // Only jjucovy@gmail.com is the super admin
@@ -1547,7 +1547,7 @@ io.on('connection', (socket) => {
     
     globalState.users[username] = {
       password: hashPassword(password),
-      player.id: player.id,
+      playerid: player.id,
       userId: userId,
       createdAt: Date.now(),
       role: isSuperAdmin ? 'superadmin' : 'player'
@@ -1555,7 +1555,7 @@ io.on('connection', (socket) => {
     
     socket.emit('registerResult', { 
       success: true, 
-      player.id: player.id,
+      playerid: player.id,
       username: username,
       role: isSuperAdmin ? 'superadmin' : 'player'
     });
@@ -1645,13 +1645,13 @@ io.on('connection', (socket) => {
   });
   
   // Create new room
-  socket.on('createRoom', async ({ player.id, roomName }) => {
+  socket.on('createRoom', async ({ playerid, roomName }) => {
     const roomId = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     
-    console.log(`📝 Creating room: ${roomId} for player ${player.id}`);
+    console.log(`📝 Creating room: ${roomId} for player ${playerid}`);
     
     // Create room state
-    globalState.rooms[roomId] = createGameState(roomId, roomName || roomId, player.id);
+    globalState.rooms[roomId] = createGameState(roomId, roomName || roomId, playerid);
     
     // If this looks like a game code (e.g., "game_123"), update status to active
     if (roomId.startsWith('game_')) {
@@ -1680,7 +1680,7 @@ io.on('connection', (socket) => {
     broadcastRoomList();
     saveState();
     
-    console.log(`✅ Room created: ${roomName || roomId} (${roomId}) by ${player.id}`);
+    console.log(`✅ Room created: ${roomName || roomId} (${roomId}) by ${playerid}`);
   });
   
   // Join existing room
@@ -1738,7 +1738,7 @@ io.on('connection', (socket) => {
   });
   
   // Delete room (host only)
-  socket.on('deleteRoom', ({ roomId, player.id }) => {
+  socket.on('deleteRoom', ({ roomId, playerid }) => {
     const room = globalState.rooms[roomId];
     
     if (!room) {
@@ -1746,7 +1746,7 @@ io.on('connection', (socket) => {
       return;
     }
     
-    if (room.hostId !== player.id) {
+    if (room.hostId !== playerid) {
       socket.emit('deleteRoomResult', { success: false, message: 'Only host can delete room' });
       return;
     }
@@ -1765,10 +1765,10 @@ io.on('connection', (socket) => {
   });
   
   // Join game in room
-  socket.on('joinGame', ({ roomId, userId, player.id, country }) => {
-    // Support both userId (new) and player.id (legacy)
-    const id = userId || player.id;
-    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, player.id=${player.id}, country=${country}`);
+  socket.on('joinGame', ({ roomId, userId, playerid, country }) => {
+    // Support both userId (new) and playerid (legacy)
+    const id = userId || playerid;
+    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerid=${playerid}, country=${country}`);
     console.log(`   Available rooms:`, Object.keys(globalState.rooms));
     
     const room = globalState.rooms[roomId];
@@ -1815,7 +1815,7 @@ io.on('connection', (socket) => {
   });
   
   // Rejoin game after disconnect/reconnect
-  socket.on('rejoinGame', ({ roomId, player.id, country }) => {
+  socket.on('rejoinGame', ({ roomId, playerid, country }) => {
     const room = globalState.rooms[roomId];
     
     if (!room) {
@@ -1824,11 +1824,11 @@ io.on('connection', (socket) => {
     }
     
     // Check if player was in this game with this country
-    const existingPlayer = room.players[player.id];
+    const existingPlayer = room.players[playerid];
     
     if (existingPlayer && existingPlayer.country === country) {
       // Player is rejoining their previous slot
-      console.log(`✅ Player ${player.id} rejoining as ${country} in room ${roomId}`);
+      console.log(`✅ Player ${playerid} rejoining as ${country} in room ${roomId}`);
       
       // Update socket ID and clear disconnected flag
       existingPlayer.socketId = socket.id;
@@ -1839,7 +1839,7 @@ io.on('connection', (socket) => {
       broadcastToRoom(roomId);
       saveState();
       
-      console.log(`Player ${player.id} reconnected to room ${roomId} as ${country}`);
+      console.log(`Player ${playerid} reconnected to room ${roomId} as ${country}`);
     } else if (existingPlayer && existingPlayer.country !== country) {
       // Player trying to rejoin as different country
       socket.emit('rejoinResult', { 
@@ -1856,11 +1856,11 @@ io.on('connection', (socket) => {
   });
   
   // Leave game in room
-  socket.on('leaveGame', ({ roomId, userId, player.id }) => {
+  socket.on('leaveGame', ({ roomId, userId, playerid }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    const id = userId || player.id;  // Support both userId (new) and player.id (legacy)
+    const id = userId || playerid;  // Support both userId (new) and playerid (legacy)
     delete room.players[id];
     room.readyPlayers = room.readyPlayers.filter(pid => pid !== id);
     
@@ -1872,11 +1872,11 @@ io.on('connection', (socket) => {
   });
   
   // Set ready status
-  socket.on('setReady', ({ roomId, userId, player.id, ready }) => {
+  socket.on('setReady', ({ roomId, userId, playerid, ready }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    const id = userId || player.id;  // Support both userId (new) and player.id (legacy)
+    const id = userId || playerid;  // Support both userId (new) and playerid (legacy)
     
     if (ready) {
       if (!room.readyPlayers.includes(id)) {
@@ -1891,10 +1891,10 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', async ({ roomId, player.id, skipPhase1 }) => {
+  socket.on('startGame', async ({ roomId, playerid, skipPhase1 }) => {
     console.log('=== START GAME REQUEST ===');
     console.log('Room ID:', roomId);
-    console.log('Player ID:', player.id);
+    console.log('Player ID:', playerid);
     console.log('Skip Phase 1:', skipPhase1 || false);
     
     const room = globalState.rooms[roomId];
@@ -1905,7 +1905,7 @@ io.on('connection', (socket) => {
     }
     
     // Check if user is superadmin by querying database
-    // We need to find the user by their user_id (which is player.id in our case)
+    // We need to find the user by their user_id (which is playerid in our case)
     let isSuperAdmin = false;
     
     try {
@@ -1913,7 +1913,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === player.id);
+        const dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -1924,14 +1924,14 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', player.id);
+          console.log('User not found in database with user_id:', playerid);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
     
-    const isRoomHost = room.hostId === player.id;
+    const isRoomHost = room.hostId === playerid;
     console.log('Is superadmin:', isSuperAdmin);
     console.log('Is room host:', isRoomHost);
     
@@ -1980,7 +1980,7 @@ io.on('connection', (socket) => {
   });
   
   // Vote on current issue
-  socket.on('vote', ({ roomId, player.id, choice }) => {
+  socket.on('vote', ({ roomId, playerid, choice }) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.gameStarted) {
       console.log('Vote rejected: room not found or game not started');
@@ -1988,18 +1988,18 @@ io.on('connection', (socket) => {
     }
     
     // Check player is in game
-    if (!room.players[player.id]) {
+    if (!room.players[playerid]) {
       console.log('Vote rejected: player not in game');
       return;
     }
     
     // Store vote
-    room.votes[player.id] = choice;
-    console.log(`Vote received: ${player.id} voted ${choice} in room ${roomId}`);
+    room.votes[playerid] = choice;
+    console.log(`Vote received: ${playerid} voted ${choice} in room ${roomId}`);
     
     // Check if all players have voted
-    const player.ids = Object.keys(room.players);
-    const allVoted = player.ids.every(id => room.votes[id]);
+    const playerids = Object.keys(room.players);
+    const allVoted = playerids.every(id => room.votes[id]);
     
     if (allVoted) {
       console.log('All players voted, calculating results...');
@@ -2188,11 +2188,11 @@ io.on('connection', (socket) => {
   });
   
   // Advance to next round (admin only)
-  socket.on('advanceRound', async ({ roomId, player.id }) => {
+  socket.on('advanceRound', async ({ roomId, playerid }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    console.log('🔄 Advance round request:', { roomId, player.id, roomHost: room.hostId });
+    console.log('🔄 Advance round request:', { roomId, playerid, roomHost: room.hostId });
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -2201,7 +2201,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === player.id);
+        const dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2217,7 +2217,7 @@ io.on('connection', (socket) => {
       console.error('Error checking user role:', err);
     }
     
-    const isRoomHost = room.hostId === player.id;
+    const isRoomHost = room.hostId === playerid;
     console.log('Permission check:', { isSuperAdmin, isRoomHost });
     
     // Allow either superadmin OR room host to advance round
@@ -2248,11 +2248,11 @@ io.on('connection', (socket) => {
   });
   
   // PHASE 2: Submit economic policy
-  socket.on('submitPolicy', ({ roomId, player.id, policy }) => {
+  socket.on('submitPolicy', ({ roomId, playerid, policy }) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.phase2.active) return;
     
-    const player = room.players[player.id];
+    const player = room.players[playerid];
     if (!player) return;
     
     const currentYear = room.phase2.currentYear;
@@ -2281,11 +2281,11 @@ io.on('connection', (socket) => {
       submittedAt: Date.now()
     };
     
-    console.log(`Player ${player.id} (${player.country}) submitted policy for ${currentYear}`);
+    console.log(`Player ${playerid} (${player.country}) submitted policy for ${currentYear}`);
     
     // Mark ready
-    if (!room.readyPlayers.includes(player.id)) {
-      room.readyPlayers.push(player.id);
+    if (!room.readyPlayers.includes(playerid)) {
+      room.readyPlayers.push(playerid);
     }
     
     broadcastToRoom(roomId);
@@ -2294,11 +2294,11 @@ io.on('connection', (socket) => {
   
   // PHASE 2: Advance to next year
   // PLAYER: Deploy troops
-  socket.on('deployTroops', ({ roomId, player.id, deployment }) => {
+  socket.on('deployTroops', ({ roomId, playerid, deployment }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    const player = room.players[player.id];
+    const player = room.players[playerid];
     if (!player) return;
     
     // Verify the deployment is for the player's own country
@@ -2380,11 +2380,11 @@ io.on('connection', (socket) => {
   });
   
   // Handle battle decisions
-  socket.on('submitBattleDecision', ({ roomId, player.id, battleId, decision, region, year }) => {
+  socket.on('submitBattleDecision', ({ roomId, playerid, battleId, decision, region, year }) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.phase2.active) return;
     
-    const player = room.players[player.id];
+    const player = room.players[playerid];
     if (!player) return;
     
     const country = player.country;
@@ -2524,11 +2524,11 @@ io.on('connection', (socket) => {
   });
 
   // CRISIS: Submit response to active crisis
-  socket.on('submitCrisisResponse', ({ roomId, player.id, choiceId }) => {
+  socket.on('submitCrisisResponse', ({ roomId, playerid, choiceId }) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.phase2.active) return;
     
-    const player = room.players[player.id];
+    const player = room.players[playerid];
     if (!player) return;
     
     const crisis = room.phase2.crises.active;
@@ -2578,7 +2578,7 @@ io.on('connection', (socket) => {
     
     // Store the response
     room.phase2.crises.responses[country] = {
-      player.id,
+      playerid,
       choiceId,
       choice,
       timestamp: Date.now()
@@ -2607,7 +2607,7 @@ io.on('connection', (socket) => {
   });
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
-  socket.on('resolveCrisis', async ({ roomId, player.id }) => {
+  socket.on('resolveCrisis', async ({ roomId, playerid }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
@@ -2618,7 +2618,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === player.id);
+        const dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2634,7 +2634,7 @@ io.on('connection', (socket) => {
       console.error('Error checking user role:', err);
     }
     
-    const isRoomHost = room.hostId === player.id;
+    const isRoomHost = room.hostId === playerid;
     
     if (!isSuperAdmin && !isRoomHost) {
       socket.emit('resolveCrisisError', {
@@ -2658,10 +2658,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('advanceYear', async ({ roomId, player.id }) => {
+  socket.on('advanceYear', async ({ roomId, playerid }) => {
     console.log('=== ADVANCE YEAR REQUEST ===');
     console.log('Room ID:', roomId);
-    console.log('Player ID:', player.id);
+    console.log('Player ID:', playerid);
     
     const room = globalState.rooms[roomId];
     if (!room) {
@@ -2681,7 +2681,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === player.id);
+        const dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2692,7 +2692,7 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', player.id);
+          console.log('User not found in database with user_id:', playerid);
         }
       }
     } catch (err) {
@@ -2700,29 +2700,29 @@ io.on('connection', (socket) => {
     }
     
     // AUTO-FIX: If room has no host, set to current user (if they're in the game)
-    if (!room.hostId && room.players[player.id]) {
-      console.log('⚠️ Room has no host ID, setting to current player:', player.id);
-      room.hostId = player.id;
+    if (!room.hostId && room.players[playerid]) {
+      console.log('⚠️ Room has no host ID, setting to current player:', playerid);
+      room.hostId = playerid;
       saveState();
     }
     
     // AUTO-FIX: If room host is not in the players list, reassign to first player
     if (room.hostId && !room.players[room.hostId]) {
-      const player.ids = Object.keys(room.players);
-      if (player.ids.length > 0) {
-        const newHostId = player.ids[0];
+      const playerids = Object.keys(room.players);
+      if (playerids.length > 0) {
+        const newHostId = playerids[0];
         console.log('⚠️ Room host not in game, reassigning from', room.hostId, 'to', newHostId);
         room.hostId = newHostId;
         saveState();
       }
     }
     
-    const isRoomHost = room.hostId === player.id;
+    const isRoomHost = room.hostId === playerid;
     
     console.log('=== DETAILED PERMISSION CHECK ===');
-    console.log('Player ID from request:', player.id);
+    console.log('Player ID from request:', playerid);
     console.log('Room host ID:', room.hostId);
-    console.log('IDs match:', room.hostId === player.id);
+    console.log('IDs match:', room.hostId === playerid);
     console.log('Is superadmin:', isSuperAdmin);
     console.log('Is room host:', isRoomHost);
     console.log('Permission check result:', { isSuperAdmin, isRoomHost });
@@ -2730,7 +2730,7 @@ io.on('connection', (socket) => {
     // Allow either superadmin OR room host to advance year
     if (!isSuperAdmin && !isRoomHost) {
       console.log('❌ Advance year rejected:', {
-        player.id,
+        playerid,
         isSuperAdmin,
         isRoomHost,
         roomHost: room.hostId,
@@ -2820,7 +2820,7 @@ try {
   });
   
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', async ({ roomId, player.id }) => {
+  socket.on('resetRoom', async ({ roomId, playerid }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
@@ -2831,7 +2831,7 @@ try {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === player.id);
+        const dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2841,7 +2841,7 @@ try {
       console.error('Error checking user role:', err);
     }
     
-    const isRoomHost = room.hostId === player.id;
+    const isRoomHost = room.hostId === playerid;
     
     if (!isSuperAdmin && !isRoomHost) {
       socket.emit('resetRoomResult', { success: false, message: 'Only the game admin can reset games' });
@@ -2874,8 +2874,8 @@ try {
   });
   
   // SUPERADMIN ONLY: Clear all data
-  socket.on('clearAllData', async ({ player.id, confirmCode }) => {
-    console.log('clearAllData called:', { player.id, confirmCode });
+  socket.on('clearAllData', async ({ playerid, confirmCode }) => {
+    console.log('clearAllData called:', { playerid, confirmCode });
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -2885,7 +2885,7 @@ try {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        dbUser = dbUsers.find(u => u.user_id === player.id);
+        dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2927,11 +2927,11 @@ try {
     saveState();
     
     socket.emit('clearDataResult', { success: true, message: 'All data cleared except administrator account' });
-    console.log(`All data cleared by superadmin: ${player.id}`);
+    console.log(`All data cleared by superadmin: ${playerid}`);
   });
   
   // SUPERADMIN ONLY: Delete any room
-  socket.on('adminDeleteRoom', async ({ roomId, player.id }) => {
+  socket.on('adminDeleteRoom', async ({ roomId, playerid }) => {
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
     
@@ -2939,7 +2939,7 @@ try {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === player.id);
+        const dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2977,8 +2977,8 @@ try {
   // Disconnect
   
   // NEW: Get available games (for regular users without active game)
-  socket.on('getAvailableGames', async ({ player.id }) => {
-    const user = Object.values(globalState.users).find(u => u.player.id === player.id);
+  socket.on('getAvailableGames', async ({ playerid }) => {
+    const user = Object.values(globalState.users).find(u => u.playerid === playerid);
     
     if (!user) {
       socket.emit('availableGamesResult', { 
@@ -3023,8 +3023,8 @@ try {
 
   // NEW: Superadmin request for active games list (all games, any phase)
   // NEW: Superadmin request for active games list (all games, any phase)
-  socket.on('getActiveGames', async ({ player.id }) => {
-    console.log('getActiveGames request from player.id:', player.id);
+  socket.on('getActiveGames', async ({ playerid }) => {
+    console.log('getActiveGames request from playerid:', playerid);
     
     // We need to find the username first - check if it's stored on the socket from login
     // Or just trust the role that was set during login by checking if they can access this
@@ -3093,19 +3093,19 @@ try {
     // Find rooms where this socket is a player
     Object.keys(globalState.rooms).forEach(roomId => {
       const room = globalState.rooms[roomId];
-      const player.id = Object.keys(room.players).find(
+      const playerid = Object.keys(room.players).find(
         id => room.players[id].socketId === socket.id
       );
       
-      if (player.id) {
-        room.players[player.id].disconnected = true;
-        room.players[player.id].disconnectedAt = Date.now();
-        room.readyPlayers = room.readyPlayers.filter(id => id !== player.id);
+      if (playerid) {
+        room.players[playerid].disconnected = true;
+        room.players[playerid].disconnectedAt = Date.now();
+        room.readyPlayers = room.readyPlayers.filter(id => id !== playerid);
         
         broadcastToRoom(roomId);
         saveState();
         
-        console.log(`Player ${player.id} disconnected from room ${roomId} - keeping in game`);
+        console.log(`Player ${playerid} disconnected from room ${roomId} - keeping in game`);
       }
     });
     
