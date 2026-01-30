@@ -2437,12 +2437,75 @@ io.on('connection', (socket) => {
       room.readyPlayers.push(playerid);
     }
     
+    // Save policy to database
+    try {
+      const policyData = {
+        gameCode: roomId,
+        playerId: playerid,
+        year: currentYear,
+        round: room.currentRound,
+        ...policy,
+        submittedAt: new Date().toISOString()
+      };
+      
+      await queryDatabase('savePolicyDecision', policyData);
+      console.log(`✅ Policy saved to database for ${player.country}`);
+    } catch (error) {
+      console.error('⚠️ Failed to save policy to database:', error);
+    }
+    
     // Send confirmation to the player
     socket.emit('policySubmitted', {
       success: true,
       country: player.country,
       year: currentYear
     });
+    
+    // Check if all players have submitted policies
+    const activePlayers = Object.keys(room.players).length;
+    const readyCount = room.readyPlayers.length;
+    
+    console.log(`Policy submissions: ${readyCount}/${activePlayers} players ready`);
+    
+    // Auto-advance if all players submitted
+    if (readyCount === activePlayers && activePlayers > 0) {
+      console.log('🎯 All players have submitted policies! Auto-advancing year...');
+      
+      // Wait a moment then auto-advance
+      setTimeout(async () => {
+        try {
+          // Check for crisis
+          if (room.phase2.crises.active) {
+            console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
+            return;
+          }
+          
+          // Calculate economics
+          calculateYearEconomics(roomId);
+          
+          // Advance year
+          room.phase2.currentYear++;
+          room.readyPlayers = [];
+          
+          // Check for new crisis
+          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+          
+          console.log(`✅ Auto-advanced to year ${room.phase2.currentYear}`);
+          
+          // Update database
+          await queryDatabase('updateGame', {
+            gameCode: roomId,
+            currentYear: room.phase2.currentYear,
+            currentRound: room.currentRound
+          });
+          
+          broadcastToRoom(roomId);
+          saveState();
+        } catch (err) {
+          console.error('❌ Auto-advance failed:', err);
+        }
+      }, 2000); // Wait 2 seconds to let everyone see the "all submitted" message
+    }
     
     broadcastToRoom(roomId);
     saveState();
@@ -2763,9 +2826,12 @@ io.on('connection', (socket) => {
   });
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
-  socket.on('resolveCrisis', async ({ roomId, playerid }) => {
+  socket.on('resolveCrisis', async ({ roomId, playerid, userId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
+    
+    // Use userId if provided (for superadmin), otherwise use playerid
+    const checkId = userId || playerid;
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -2774,7 +2840,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
+        const dbUser = dbUsers.find(u => u.user_id === checkId);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2790,7 +2856,8 @@ io.on('connection', (socket) => {
       console.error('Error checking user role:', err);
     }
     
-    const isRoomHost = room.hostId === playerid;
+    // Check if user is the host
+    const isRoomHost = room.hostUserId === checkId || room.hostId === checkId;
     
     if (!isSuperAdmin && !isRoomHost) {
       socket.emit('resolveCrisisError', {
@@ -2945,19 +3012,17 @@ io.on('connection', (socket) => {
     }
 
     // FIXED: Update database with current game state
-try {
-  await queryDatabase('updateGame', {
-    gameCode: roomId,
-    data: {
-      current_round: room.currentRound,
-      current_year: room.phase2.currentYear,
-      game_status: room.gamePhase === 'complete' ? 'completed' : 'active'
+    try {
+      await queryDatabase('updateGame', {
+        gameCode: roomId,
+        currentRound: room.currentRound,
+        currentYear: room.phase2.currentYear,
+        game_status: room.gamePhase === 'complete' ? 'completed' : 'active'
+      });
+      console.log(`✅ Database updated: ${roomId} now at round ${room.currentRound}, year ${room.phase2.currentYear}`);
+    } catch (error) {
+      console.error('⚠️ Failed to update database:', error);
     }
-  });
-  console.log(`✅ Database updated: ${roomId} now at round ${room.currentRound}, year ${room.phase2.currentYear}`);
-} catch (error) {
-  console.error('⚠️ Failed to update database:', error);
-}
     
     console.log('Broadcasting updated game state...');
     broadcastToRoom(roomId);
