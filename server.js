@@ -2346,7 +2346,8 @@ io.on('connection', (socket) => {
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
     
-    try {
+ try {
+      // Query database to get user info
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
@@ -2360,12 +2361,13 @@ io.on('connection', (socket) => {
             is_teacher: dbUser.is_teacher,
             isSuperAdmin
           });
+        } else {
+          console.log('User not found in database with user_id:', playerid);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
     const isRoomHost = room.hostId === playerid;
     console.log('Permission check:', { isSuperAdmin, isRoomHost });
     
