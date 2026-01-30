@@ -2480,12 +2480,11 @@ function YearEndBattlePhase({
                               
                               if (result.game_id) {
                                 // Create room in server memory - pass userId so superadmin becomes host
-                                socket.emit('createRoom', { 
-                                  playerId, 
-                                  userId: playerid: playerId,
-                                  roomName: gameCode 
-                                });
-                                
+                               socket.emit('createRoom', { 
+                                   userId: playerId,    // ✅ Clean - just userId for superadmin
+                                   roomName: gameCode 
+                               });
+                                  
                                 socket.once('roomCreated', ({ success, roomId, hostId }) => {
                                   if (success) {
                                     console.log('Game created successfully:', roomId);
