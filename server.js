@@ -293,7 +293,7 @@ async function saveGameToDatabase(roomId) {
     // Prepare update data matching API's expected field names
     const updateData = {
       gameCode: roomId,
-      game_status: gameStatus,
+      status: gameStatus,
       currentRound: room.currentRound || 0
     };
     
@@ -1645,26 +1645,47 @@ io.on('connection', (socket) => {
   });
   
   // Create new room
-  socket.on('createRoom', async ({ playerid, roomName }) => {
+  socket.on('createRoom', async ({ playerId, roomName, userId }) => {
     const roomId = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const creatorId = userId || playerId; // Use userId if provided, otherwise playerId
     
-    console.log(`📝 Creating room: ${roomId} for player ${playerid}`);
+    console.log(`📝 Creating room: ${roomId} for user ${creatorId}`);
     
-    // Create room state
-    globalState.rooms[roomId] = createGameState(roomId, roomName || roomId, playerid);
+    // Check if creator is superadmin
+    let isSuperAdmin = false;
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === creatorId);
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+          console.log(`   Creator ${dbUser.username} is superadmin: ${isSuperAdmin}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking creator role:', err);
+    }
+    
+    // Create room state - hostId is set to the creator's userId
+    globalState.rooms[roomId] = createGameState(roomId, roomName || roomId, creatorId);
+    globalState.rooms[roomId].hostUserId = creatorId; // Store the host's user ID
+    globalState.rooms[roomId].hostIsSuperAdmin = isSuperAdmin;
+    
+    console.log(`   Room host set to userId: ${creatorId} (superadmin: ${isSuperAdmin})`);
     
     // If this looks like a game code (e.g., "game_123"), update status to active
     if (roomId.startsWith('game_')) {
       globalState.rooms[roomId].status = 'active';
       globalState.rooms[roomId].gameCode = roomId;
       
-      // Update database to set status to active
+      // Update database to set status to active and assign host
       try {
         await queryDatabase('updateGameStatus', { 
           gameCode: roomId, 
-          status: 'active' 
+          status: 'active',
+          hostUserId: creatorId
         });
-        console.log(`✅ Game ${roomId} marked as active in database`);
+        console.log(`✅ Game ${roomId} marked as active in database with host ${creatorId}`);
       } catch (err) {
         console.error('Error updating game status:', err);
       }
@@ -1674,17 +1695,18 @@ io.on('connection', (socket) => {
     socket.emit('roomCreated', { 
       success: true, 
       roomId: roomId,
-      roomName: roomName || roomId
+      roomName: roomName || roomId,
+      hostId: creatorId
     });
     
     broadcastRoomList();
     saveState();
     
-    console.log(`✅ Room created: ${roomName || roomId} (${roomId}) by ${playerid}`);
+    console.log(`✅ Room created: ${roomName || roomId} (${roomId}) by ${creatorId} as ${isSuperAdmin ? 'HOST (superadmin)' : 'player'}`);
   });
   
   // Join existing room
-  socket.on('joinRoom', ({ roomId, userId }) => {
+  socket.on('joinRoom', async ({ roomId, userId }) => {
     console.log(`📥 joinRoom request: roomId=${roomId}, userId=${userId}`);
     
     if (!globalState.rooms[roomId]) {
@@ -1696,17 +1718,54 @@ io.on('connection', (socket) => {
     // Store userId on socket for later reference
     socket.userId = userId;
     
+    const room = globalState.rooms[roomId];
+    
+    // Check if user is superadmin
+    let isSuperAdmin = false;
+    let userRole = 'player';
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === userId);
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+          userRole = isSuperAdmin ? 'superadmin' : 'player';
+          console.log(`   User ${dbUser.username} role: ${userRole}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
+    }
+    
     socket.join(roomId);
     
     // If userId provided, check if they have an active player assignment in this game
     if (userId) {
-      // Find their player record for this game
-      const room = globalState.rooms[roomId];
       console.log(`   Room has ${Object.keys(room.players).length} players`);
       console.log(`   Player keys:`, Object.keys(room.players));
       
-      // Try to find by userId
-      const existingPlayer = room.players[userId];  // Direct lookup since players are keyed by userId
+      // SUPERADMIN: Join as host/observer, NOT as player
+      if (isSuperAdmin) {
+        // Check if this superadmin is the host
+        const isHost = room.hostUserId === userId || room.hostId === userId;
+        
+        console.log(`✅ Superadmin ${userId} joined room ${roomId} as ${isHost ? 'HOST' : 'OBSERVER'}`);
+        
+        socket.emit('joinRoomResult', { 
+          success: true, 
+          roomId: roomId,
+          actualRoomId: roomId,
+          role: 'superadmin',
+          isHost: isHost
+        });
+        
+        broadcastToRoom(roomId);
+        console.log(`✅ Superadmin ${userId} joined room: ${roomId} (will observe only)`);
+        return;
+      }
+      
+      // REGULAR PLAYER: Try to find existing player record
+      const existingPlayer = room.players[userId];
       
       console.log(`   Looking for userId ${userId}: found=${!!existingPlayer}`);
       
@@ -1715,16 +1774,33 @@ io.on('connection', (socket) => {
         existingPlayer.socketId = socket.id;
         existingPlayer.disconnected = false;
         console.log(`✅ User ${userId} reconnected to game ${roomId} as ${existingPlayer.country}`);
+        
+        socket.emit('joinRoomResult', { 
+          success: true, 
+          roomId: roomId,
+          actualRoomId: roomId,
+          role: 'player',
+          reconnected: true,
+          country: existingPlayer.country
+        });
       } else {
         console.log(`   Player ${userId} not found in room - will need to select country`);
+        
+        socket.emit('joinRoomResult', { 
+          success: true, 
+          roomId: roomId,
+          actualRoomId: roomId,
+          role: 'player',
+          needsCountrySelection: true
+        });
       }
+    } else {
+      socket.emit('joinRoomResult', { 
+        success: true, 
+        roomId: roomId,
+        actualRoomId: roomId
+      });
     }
-    
-    socket.emit('joinRoomResult', { 
-      success: true, 
-      roomId: roomId,
-      actualRoomId: roomId
-    });
     
     broadcastToRoom(roomId);
     console.log(`✅ User ${userId || 'guest'} joined room: ${roomId}`);
@@ -1765,7 +1841,7 @@ io.on('connection', (socket) => {
   });
   
   // Join game in room
-  socket.on('joinGame', ({ roomId, userId, playerid, country }) => {
+  socket.on('joinGame', async ({ roomId, userId, playerid, country }) => {
     // Support both userId (new) and playerid (legacy)
     const id = userId || playerid;
     console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerid=${playerid}, country=${country}`);
@@ -1783,35 +1859,99 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Prevent superadmin from joining as player (check socket.userId first, then passed userId)
-    const checkUserId = socket.userId || userId;
-    const isAdminInRoom = Object.values(room.players).some(p => p.userId === checkUserId && p.role === 'superadmin');
-    if (isAdminInRoom) {
-      socket.emit('joinResult', { success: false, message: 'Administrator cannot join as a player. You are an observer.' });
+    // Check if user is superadmin - they should NEVER join as a player
+    let isSuperAdmin = false;
+    try {
+      const dbUsers = await queryDatabase('getAllUsers', {});
+      if (dbUsers && Array.isArray(dbUsers)) {
+        const dbUser = dbUsers.find(u => u.user_id === id);
+        if (dbUser) {
+          isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking user role:', err);
+    }
+    
+    if (isSuperAdmin) {
+      console.log(`❌ Superadmin ${id} attempted to join as player - blocked`);
+      socket.emit('joinResult', { 
+        success: false, 
+        message: 'Administrators cannot join as players. You are an observer only.' 
+      });
       return;
     }
     
+    // Check if country is already taken
     const taken = Object.values(room.players).some(p => p.country === country);
     
     if (taken) {
+      console.log(`❌ Country ${country} already taken`);
       socket.emit('joinResult', { success: false, message: 'Country already taken' });
-    } else {
-      // Store player with both id and userId for flexibility
-      room.players[id] = {
-        id: id,
-        userId: userId || id,
-        country: country,
-        socketId: socket.id,
-        joinedAt: Date.now()
-      };
-      
-      socket.emit('joinResult', { success: true });
-      broadcastToRoom(roomId);
-      broadcastRoomList();
-      saveState();
-      
-      console.log(`Player ${id} (userId: ${userId}) joined as ${country} in room ${roomId}`);
+      return;
     }
+    
+    // Get or create player_id from database
+    let assignedPlayerId = null;
+    try {
+      // Check if user already has a player assignment in this game
+      const existingAssignment = await queryDatabase('getPlayerAssignment', {
+        user_id: id,
+        game_code: roomId
+      });
+      
+      if (existingAssignment && existingAssignment.player_id) {
+        assignedPlayerId = existingAssignment.player_id;
+        console.log(`   User already has player_id ${assignedPlayerId} in this game`);
+      } else {
+        // Get next available player_id from database
+        const nextPlayerId = await queryDatabase('getNextPlayerId', {});
+        assignedPlayerId = nextPlayerId?.next_id || `player_${Date.now()}`;
+        
+        console.log(`   Assigned new player_id: ${assignedPlayerId}`);
+        
+        // Get country_id from country code
+        const countryData = await queryDatabase('getCountryByCode', { country_code: country });
+        const countryId = countryData?.country_id || null;
+        
+        // Save player assignment to database
+        await queryDatabase('createPlayerAssignment', {
+          user_id: id,
+          game_code: roomId,
+          player_id: assignedPlayerId,
+          country_id: countryId,
+          country_code: country
+        });
+        
+        console.log(`   Created player assignment in database: user_id=${id}, player_id=${assignedPlayerId}, country=${country}`);
+      }
+    } catch (err) {
+      console.error('Error managing player assignment:', err);
+      // Fallback to generated player_id if database fails
+      assignedPlayerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    }
+    
+    // Store player with both id and userId for flexibility
+    room.players[id] = {
+      id: id,
+      userId: userId || id,
+      playerId: assignedPlayerId,
+      country: country,
+      socketId: socket.id,
+      joinedAt: Date.now(),
+      role: 'player'
+    };
+    
+    socket.emit('joinResult', { 
+      success: true,
+      playerId: assignedPlayerId,
+      country: country
+    });
+    broadcastToRoom(roomId);
+    broadcastRoomList();
+    saveState();
+    
+    console.log(`✅ Player ${id} (player_id: ${assignedPlayerId}) joined as ${country} in room ${roomId}`);
   });
   
   // Rejoin game after disconnect/reconnect
@@ -2977,16 +3117,8 @@ try {
   // Disconnect
   
   // NEW: Get available games (for regular users without active game)
-  socket.on('getAvailableGames', async ({ playerid }) => {
-    const user = Object.values(globalState.users).find(u => u.playerid === playerid);
-    
-    if (!user) {
-      socket.emit('availableGamesResult', { 
-        success: false, 
-        message: 'Authentication required' 
-      });
-      return;
-    }
+  socket.on('getAvailableGames', async ({ playerId }) => {
+    console.log('getAvailableGames request from playerId:', playerId);
     
     const availableGames = [];
     
@@ -3015,6 +3147,8 @@ try {
       }
     }
     
+    console.log(`Returning ${availableGames.length} available games`);
+    
     socket.emit('availableGamesResult', { 
       success: true, 
       games: availableGames 
@@ -3022,17 +3156,8 @@ try {
   });
 
   // NEW: Superadmin request for active games list (all games, any phase)
-  // NEW: Superadmin request for active games list (all games, any phase)
-  socket.on('getActiveGames', async ({ userid }) => {
-    console.log('getActiveGames request from userid:', userid);
-    
-    // We need to find the username first - check if it's stored on the socket from login
-    // Or just trust the role that was set during login by checking if they can access this
-    
-    // For now, let's just return the games and log what we find
-    // The client already validated role during login, so if they're calling this, they should be admin
-    
-    console.log('Fetching games for potential admin...');
+  socket.on('getActiveGames', async ({ playerId }) => {
+    console.log('getActiveGames request from playerId:', playerId);
     
     // Get ALL games from database  
     const dbGames = await queryDatabase('getGames', { status: 'active' });

@@ -2112,9 +2112,26 @@ function YearEndBattlePhase({
               console.log('State updated in React');
             });
 
-            socket.on('joinRoomResult', ({ success, roomId, message }) => {
+            socket.on('joinRoomResult', ({ success, roomId, message, role, isHost, reconnected, country, needsCountrySelection }) => {
               if (success) {
                 console.log('Joined room:', roomId);
+                console.log('Role:', role);
+                console.log('Is host:', isHost);
+                console.log('Reconnected:', reconnected);
+                console.log('Country:', country);
+                console.log('Needs country selection:', needsCountrySelection);
+                
+                // If reconnected with country, set it
+                if (reconnected && country) {
+                  setPlayerCountry(country);
+                  sessionStorage.setItem('brettonWoodsCountry', country);
+                }
+                
+                // If superadmin, they are observing and should not select a country
+                if (role === 'superadmin') {
+                  console.log('✓ Joined as superadmin/observer');
+                  setPlayerCountry(null); // Superadmin does not have a country
+                }
               } else {
                 console.error('Failed to join room:', message);
               }
@@ -2132,9 +2149,20 @@ function YearEndBattlePhase({
               }
             });
             
-            socket.on('joinResult', ({ success, message }) => {
+            socket.on('joinResult', ({ success, message, playerId: assignedPlayerId, country }) => {
               if (!success) {
                 console.error('Failed to join game:', message);
+                alert(message || 'Failed to join game');
+              } else {
+                console.log('✅ Successfully joined game!');
+                if (assignedPlayerId) {
+                  console.log('   Assigned player_id:', assignedPlayerId);
+                }
+                if (country) {
+                  console.log('   Country:', country);
+                  setPlayerCountry(country);
+                  sessionStorage.setItem('brettonWoodsCountry', country);
+                }
               }
             });
             
@@ -2440,13 +2468,18 @@ function YearEndBattlePhase({
                               console.log('Game created in database:', result);
                               
                               if (result.game_id) {
-                                // Create room in server memory
-                                socket.emit('createRoom', { playerId, roomName: gameCode });
+                                // Create room in server memory - pass userId so superadmin becomes host
+                                socket.emit('createRoom', { 
+                                  playerId, 
+                                  userId: playerId,
+                                  roomName: gameCode 
+                                });
                                 
-                                socket.once('roomCreated', ({ success, roomId }) => {
+                                socket.once('roomCreated', ({ success, roomId, hostId }) => {
                                   if (success) {
                                     console.log('Game created successfully:', roomId);
-                                    alert(`Game created: ${gameCode}`);
+                                    console.log('Host ID:', hostId);
+                                    alert(`Game created: ${gameCode}\nYou are the host.`);
                                     
                                     // Refresh games list
                                     setLoadingGames(true);
