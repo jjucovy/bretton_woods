@@ -1527,7 +1527,6 @@ io.on('connection', (socket) => {
       socket.emit('registerResult', { success: false, message: 'Username already exists' });
       return;
     }
-    
     const playerid = playerId;
     const userId = player.userid // Simple numeric ID for now
     
