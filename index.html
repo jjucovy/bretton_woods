@@ -1053,25 +1053,40 @@ function isCommandEconomy(country, year) {
                 </p>
               </div>
 
-              <button
-                onClick={(e) => {
-                  console.log('🔵 Button click fired!', e);
-                  handleSubmit();
-                }}
-                style={{
-                  width: '100%',
-                  padding: '18px',
-                  background: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '1.1rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  zIndex: 100,
-                  position: 'relative'
-                }}
+             <button
+  type="button"  // ← ADD THIS - prevents form submission
+  onClick={(e) => {
+    e.preventDefault();  // ← ADD THIS
+    e.stopPropagation();  // ← ADD THIS
+    console.log('🔵 Button click fired!', e);
+    console.log('📤 Submitting with:', {
+      playerId,
+      roomId,
+      centralBankRate,
+      exchangeRate,
+      tariffRate,
+      militarySpending,
+      armySize,
+      navySize,
+      airForceSize
+    });
+    handleSubmit();
+  }}
+  style={{
+    width: '100%',
+    padding: '18px',
+    background: '#3b82f6',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '1.1rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    zIndex: 1000,  // ← INCREASE from 100 to 1000
+    position: 'relative',
+    pointerEvents: 'auto'  // ← ADD THIS
+  }}
                 onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
                 onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
               >
