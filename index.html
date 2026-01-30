@@ -66,8 +66,8 @@
         let militaryData = null;
         let loadAttempts = 0;
         const MAX_ATTEMPTS = 3;
-        // Dynamic room ID - set by server or from window.actualRoomId
-        let SINGLE_ROOM_ID = window.actualRoomId || 'game_0';
+        // Dynamic room ID - tracks which game room the user is currently in
+        let currentRoomId = window.actualRoomId || 'game_0';
         
 // FIXED: Match server normalization exactly
 function normalizeCountryName(country) {
@@ -2027,6 +2027,7 @@ function YearEndBattlePhase({
           // Game state
           const [playerCountry, setPlayerCountry] = useState(null);
           const [gameState, setGameState] = useState(null);
+          const [currentRoomId, setCurrentRoomId] = useState(window.actualRoomId || null);
           const [isReady, setIsReady] = useState(false);
           const [connected, setConnected] = useState(false);
           const [skipPhase1, setSkipPhase1] = useState(false);
@@ -2102,7 +2103,7 @@ function YearEndBattlePhase({
                   
                   // Try to rejoin with saved country
                   socket.emit('rejoinGame', { 
-                    roomId: SINGLE_ROOM_ID, 
+                    roomId: currentRoomId, 
                     playerId, 
                     country: savedCountry 
                   });
@@ -2294,7 +2295,7 @@ function YearEndBattlePhase({
                   
                   window.actualRoomId = activeGame.gameCode;
                   sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
-                  SINGLE_ROOM_ID = activeGame.gameCode;
+                  setCurrentRoomId(activeGame.gameCode);
                   
                   // If they have a country assignment, save it
                   if (activeGame.country_code || activeGame.country_id) {
@@ -2340,7 +2341,7 @@ function YearEndBattlePhase({
             // Set the room ID
             window.actualRoomId = gameCode;
             sessionStorage.setItem('brettonWoodsGameRoom', gameCode);
-            SINGLE_ROOM_ID = gameCode;
+            setCurrentRoomId(gameCode);
             
             // Join the selected room
             socket.emit('joinRoom', { roomId: gameCode, userId: playerId });
@@ -2381,7 +2382,7 @@ function YearEndBattlePhase({
           };
 
           const handleReady = () => {
-            socket.emit('setReady', { roomId: SINGLE_ROOM_ID, userId: playerId, ready: !isReady });
+            socket.emit('setReady', { roomId: currentRoomId, userId: playerId, ready: !isReady });
           };
 
           // Get countries and issues from game data
@@ -2900,6 +2901,57 @@ function YearEndBattlePhase({
                 <UserManagementPanel playerId={playerId} />
               )}
 
+              {/* Leave Game Button (Admin Only - Always Visible when in a game) */}
+              {userRole === 'superadmin' && (gameState || currentRoomId) && (
+                <div className="card" style={{ background: '#f3f4f6', border: '2px solid #6b7280', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3 style={{ margin: 0, color: '#1f2937', fontSize: '1rem' }}>
+                        👁️ Observing Game
+                      </h3>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
+                        Room: {gameState?.roomId || currentRoomId || 'Loading...'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (confirm('Leave this game and return to game selection?')) {
+                          console.log('🚪 Leaving game...');
+                          // Clear the current room
+                          sessionStorage.removeItem('brettonWoodsGameRoom');
+                          sessionStorage.removeItem('brettonWoodsCountry');
+                          window.actualRoomId = null;
+                          setCurrentRoomId(null);
+                          
+                          // Leave the room on server
+                          const roomToLeave = gameState?.roomId || currentRoomId;
+                          console.log('   Leaving room:', roomToLeave);
+                          socket.emit('leaveRoom', { roomId: roomToLeave });
+                          
+                          // Reload to show game selection
+                          setTimeout(() => window.location.reload(), 100);
+                        }
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        background: '#6b7280',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#4b5563'}
+                      onMouseOut={(e) => e.currentTarget.style.background = '#6b7280'}
+                    >
+                      ⬅️ Leave Game
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Admin Control Panel */}
               {userRole === 'superadmin' && gameState?.gameStarted && (
                 <div className="card" style={{ background: '#fef3c7', border: '2px solid #f59e0b', marginBottom: '20px' }}>
@@ -2909,7 +2961,7 @@ function YearEndBattlePhase({
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button
                       onClick={() => {
-                        const url = `/api/export-state/${SINGLE_ROOM_ID}`;
+                        const url = `/api/export-state/${currentRoomId}`;
                         window.location.href = url;
                       }}
                       style={{
@@ -2965,7 +3017,7 @@ function YearEndBattlePhase({
                                 return;
                               }
                               
-                              const response = await fetch(`/api/import-state/${SINGLE_ROOM_ID}`, {
+                              const response = await fetch(`/api/import-state/${currentRoomId}`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -2994,7 +3046,7 @@ function YearEndBattlePhase({
                     <button
                       onClick={() => {
                         if (confirm('Reset the game? All progress will be lost.')) {
-                          socket.emit('resetRoom', { roomId: SINGLE_ROOM_ID, playerId });
+                          socket.emit('resetRoom', { roomId: currentRoomId, playerId });
                         }
                       }}
                       style={{
@@ -3061,7 +3113,7 @@ function YearEndBattlePhase({
                             onClick={() => {
                               console.log('Start game button clicked, skipPhase1:', skipPhase1);
                               socket.emit('startGame', { 
-                                roomId: SINGLE_ROOM_ID, 
+                                roomId: currentRoomId, 
                                 playerId,
                                 skipPhase1: skipPhase1 
                               });
@@ -3077,7 +3129,7 @@ function YearEndBattlePhase({
                         <button
                           onClick={() => {
                             if (window.confirm('Reset the game? All progress will be lost.')) {
-                              socket.emit('resetRoom', { roomId: SINGLE_ROOM_ID, playerId });
+                              socket.emit('resetRoom', { roomId: currentRoomId, playerId });
                             }
                           }}
                           style={{
@@ -3409,7 +3461,7 @@ function YearEndBattlePhase({
                                         key={idx}
                                         onClick={() => {
                                           socket.emit('vote', {
-                                            roomId: SINGLE_ROOM_ID,
+                                            roomId: currentRoomId,
                                             playerId,
                                             choice: option.id || optionLetter.toLowerCase()
                                           });
@@ -3649,7 +3701,7 @@ function YearEndBattlePhase({
                             <button
                               onClick={() => {
                                 socket.emit('advanceRound', {
-                                  roomId: SINGLE_ROOM_ID,
+                                  roomId: currentRoomId,
                                   playerId
                                 });
                               }}
@@ -3839,7 +3891,7 @@ function YearEndBattlePhase({
                                         key={option.id}
                                         onClick={() => {
                                           socket.emit('submitCrisisResponse', {
-                                            roomId: SINGLE_ROOM_ID,
+                                            roomId: currentRoomId,
                                             playerId,
                                             choiceId: option.id
                                           });
@@ -3929,7 +3981,7 @@ function YearEndBattlePhase({
                                   <button
                                     onClick={() => {
                                       socket.emit('resolveCrisis', {
-                                        roomId: SINGLE_ROOM_ID,
+                                        roomId: currentRoomId,
                                         playerId
                                       });
                                     }}
@@ -4247,7 +4299,7 @@ function YearEndBattlePhase({
                                 currentYear={currentYear}
                                 playerId={playerId}
                                 socket={socket}
-                                roomId={SINGLE_ROOM_ID}
+                                roomId={currentRoomId}
                                 country={playerCountry}
                                 myData={myData}
                               />
@@ -4256,7 +4308,7 @@ function YearEndBattlePhase({
                                   currentYear={currentYear}
                                   playerId={playerId}
                                   socket={socket}
-                                  roomId={SINGLE_ROOM_ID}
+                                  roomId={currentRoomId}
                                   myData={myData}
                                 />
                               )}
@@ -4265,7 +4317,7 @@ function YearEndBattlePhase({
                                 gameState={gameState}
                                 socket={socket}
                                 playerId={playerId}
-                                roomId={SINGLE_ROOM_ID}
+                                roomId={currentRoomId}
                               />
                             </>
                           ) : (
@@ -4394,7 +4446,7 @@ function YearEndBattlePhase({
                               <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#dc2626' }}>🛡️ Administrator Controls</h3>
                               <button
                                 onClick={() => {
-                                  socket.emit('advanceYear', { roomId: SINGLE_ROOM_ID, playerId });
+                                  socket.emit('advanceYear', { roomId: currentRoomId, playerId });
                                 }}
                                 style={{
                                   padding: '15px 40px',
@@ -4581,7 +4633,7 @@ function YearEndBattlePhase({
                             <button
                               onClick={() => {
                                 // Export game state
-                                const url = `/api/export-state/${SINGLE_ROOM_ID}`;
+                                const url = `/api/export-state/${currentRoomId}`;
                                 window.location.href = url;
                               }}
                               style={{
@@ -4602,7 +4654,7 @@ function YearEndBattlePhase({
                               onClick={() => {
                                 if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
   socket.emit('startNewGame', {
-    roomId: SINGLE_ROOM_ID,
+    roomId: currentRoomId,
     playerId
   });
 }
@@ -4962,7 +5014,7 @@ function YearEndBattlePhase({
               countries: Object.keys(gameData.countries || {}).length,
               issues: (gameData.issues || []).length
             });
-            console.log('Single-room mode: Room ID =', SINGLE_ROOM_ID);
+            console.log('Current room ID:', currentRoomId);
 
               
             try {
