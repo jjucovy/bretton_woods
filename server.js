@@ -2399,7 +2399,7 @@ io.on('connection', (socket) => {
   });
   
   // PHASE 2: Submit economic policy
-  socket.on('submitPolicy', ({ roomId, playerid, policy }) => {
+  socket.on('submitPolicy', async ({ roomId, playerid, policy }) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.phase2.active) return;
     
@@ -2450,7 +2450,7 @@ io.on('connection', (socket) => {
         submittedAt: new Date().toISOString()
       };
       
-      const dbUsers= await queryDatabase('savePolicyDecision', policyData);
+    await queryDatabase('savePolicyDecision', policyData);
       console.log(`✅ Policy saved to database for ${player.country}`);
     } catch (error) {
       console.error('⚠️ Failed to save policy to database:', error);
