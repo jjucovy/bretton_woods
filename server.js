@@ -2450,7 +2450,7 @@ io.on('connection', (socket) => {
         submittedAt: new Date().toISOString()
       };
       
-      await queryDatabase('savePolicyDecision', policyData);
+      const dbUsers= await queryDatabase('savePolicyDecision', policyData);
       console.log(`✅ Policy saved to database for ${player.country}`);
     } catch (error) {
       console.error('⚠️ Failed to save policy to database:', error);
