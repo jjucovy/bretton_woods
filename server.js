@@ -1539,8 +1539,8 @@ io.on('connection', (socket) => {
       return;
     }
     
-    const playerid = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const userId = Math.floor(Math.random() * 1000000) + 1; // Simple numeric ID for now
+    const playerid = `playerId;
+    const userId = player.userid // Simple numeric ID for now
     
     // Only jjucovy@gmail.com is the super admin
     const isSuperAdmin = username.toLowerCase() === 'jjucovy@gmail.com' || username.toLowerCase() === 'jjucovy';
@@ -2717,7 +2717,7 @@ io.on('connection', (socket) => {
       }
     }
     
-    const isRoomHost = room.hostId === playerid;
+    const isRoomHost = room.hostId === userid;
     
     console.log('=== DETAILED PERMISSION CHECK ===');
     console.log('Player ID from request:', playerid);
