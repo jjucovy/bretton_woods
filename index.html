@@ -378,7 +378,7 @@ function isCommandEconomy(country, year) {
 
             socket.emit('deployTroops', {
               roomId,
-              playerId,
+              playerid: playerId,
               deployment
             });
 
@@ -570,7 +570,7 @@ function isCommandEconomy(country, year) {
           const handleSubmit = () => {
             socket.emit('submitPolicy', {
               roomId,
-              playerId,
+              playerid: playerId,
               policy: { 
                 fiveYearPlanTarget,
                 heavyIndustryAllocation,
@@ -873,7 +873,7 @@ function isCommandEconomy(country, year) {
             console.log('📤 Submitting policy for player:', playerId);
             socket.emit('submitPolicy', {
               roomId,
-              playerId,
+              playerid: playerId,
               policy: { 
                 centralBankRate, 
                 exchangeRate, 
@@ -1060,7 +1060,7 @@ function isCommandEconomy(country, year) {
     e.stopPropagation();  // ← ADD THIS
     console.log('🔵 Button click fired!', e);
     console.log('📤 Submitting with:', {
-      playerId,
+      playerid: playerId,
       roomId,
       centralBankRate,
       exchangeRate,
@@ -2180,6 +2180,15 @@ function YearEndBattlePhase({
 
             socket.on('advanceYearError', ({ message }) => {
               console.error('Advance year error:', message);
+              alert('❌ ' + message);
+            });
+
+            socket.on('policySubmitted', ({ success, country, year }) => {
+              if (success) {
+                console.log(`✅ Policy submitted for ${country} - ${year}`);
+                // Show visual confirmation
+                alert(`✅ Policy submitted successfully for ${year}!`);
+              }
             });
 
             socket.on('militaryConflict', (conflictData) => {
@@ -2212,6 +2221,7 @@ function YearEndBattlePhase({
               socket.off('joinResult');
               socket.off('rejoinResult');
               socket.off('advanceYearError');
+              socket.off('policySubmitted');
               socket.off('militaryConflict');
               socket.off('battleResolved');
             };
@@ -2472,7 +2482,7 @@ function YearEndBattlePhase({
                                 // Create room in server memory - pass userId so superadmin becomes host
                                 socket.emit('createRoom', { 
                                   playerId, 
-                                  userId: playerId,
+                                  userId: playerid: playerId,
                                   roomName: gameCode 
                                 });
                                 
@@ -3114,7 +3124,7 @@ function YearEndBattlePhase({
                               console.log('Start game button clicked, skipPhase1:', skipPhase1);
                               socket.emit('startGame', { 
                                 roomId: currentRoomId, 
-                                playerId,
+                                playerid: playerId,
                                 skipPhase1: skipPhase1 
                               });
                             }}
@@ -3462,7 +3472,7 @@ function YearEndBattlePhase({
                                         onClick={() => {
                                           socket.emit('vote', {
                                             roomId: currentRoomId,
-                                            playerId,
+                                            playerid: playerId,
                                             choice: option.id || optionLetter.toLowerCase()
                                           });
                                         }}
@@ -3892,7 +3902,7 @@ function YearEndBattlePhase({
                                         onClick={() => {
                                           socket.emit('submitCrisisResponse', {
                                             roomId: currentRoomId,
-                                            playerId,
+                                            playerid: playerId,
                                             choiceId: option.id
                                           });
                                         }}
@@ -4446,7 +4456,11 @@ function YearEndBattlePhase({
                               <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#dc2626' }}>🛡️ Administrator Controls</h3>
                               <button
                                 onClick={() => {
-                                  socket.emit('advanceYear', { roomId: currentRoomId, playerId });
+                                  // Super admin sends userId, not playerId (they're not a player)
+                                  socket.emit('advanceYear', { 
+                                    roomId: currentRoomId, 
+                                    userId: playerId  // playerId for superadmin is actually their userId
+                                  });
                                 }}
                                 style={{
                                   padding: '15px 40px',

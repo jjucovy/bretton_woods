@@ -498,17 +498,6 @@ app.get('/api/export-users', (req, res) => {
 // ============================================
 
 
-// ============================================
-// SINGLE-ROOM MODE: Auto-create main game room
-// ============================================
-const SINGLE_ROOM_ID = 'main-game';
-
-console.log('🔍 Checking for main game room...');
-console.log('   Current rooms:', Object.keys(globalState.rooms));
-
-
-// ============================================
-
 // Auto-save every 2 minutes
 setInterval(() => {
   saveState();
@@ -1720,6 +1709,9 @@ io.on('connection', (socket) => {
     
     const room = globalState.rooms[roomId];
     
+    // Debug: Log room host information
+    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}`);
+    
     // Check if user is superadmin
     let isSuperAdmin = false;
     let userRole = 'player';
@@ -1747,9 +1739,26 @@ io.on('connection', (socket) => {
       // SUPERADMIN: Join as host/observer, NOT as player
       if (isSuperAdmin) {
         // Check if this superadmin is the host
-        const isHost = room.hostUserId === userId || room.hostId === userId;
+        // First check memory, then check database
+        let isHost = room.hostUserId === userId || room.hostId === userId;
+        
+        // If not found in memory, check database
+        if (!isHost) {
+          try {
+            const gameData = await queryDatabase('getGame', { gameCode: roomId });
+            if (gameData && gameData.host_user_id) {
+              isHost = gameData.host_user_id === userId;
+              // Update memory with host info
+              room.hostUserId = gameData.host_user_id;
+              console.log(`   Retrieved host_user_id from database: ${gameData.host_user_id}`);
+            }
+          } catch (err) {
+            console.error('Error checking host from database:', err);
+          }
+        }
         
         console.log(`✅ Superadmin ${userId} joined room ${roomId} as ${isHost ? 'HOST' : 'OBSERVER'}`);
+        console.log(`   Host check: room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, userId=${userId}, isHost=${isHost}`);
         
         socket.emit('joinRoomResult', { 
           success: true, 
@@ -2428,6 +2437,13 @@ io.on('connection', (socket) => {
       room.readyPlayers.push(playerid);
     }
     
+    // Send confirmation to the player
+    socket.emit('policySubmitted', {
+      success: true,
+      country: player.country,
+      year: currentYear
+    });
+    
     broadcastToRoom(roomId);
     saveState();
   });
@@ -2798,10 +2814,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('advanceYear', async ({ roomId, playerid }) => {
+  socket.on('advanceYear', async ({ roomId, playerid, userId }) => {
     console.log('=== ADVANCE YEAR REQUEST ===');
     console.log('Room ID:', roomId);
     console.log('Player ID:', playerid);
+    console.log('User ID:', userId);
     
     const room = globalState.rooms[roomId];
     if (!room) {
@@ -2810,9 +2827,13 @@ io.on('connection', (socket) => {
     }
     
     console.log('Room found:', room.roomName);
-    console.log('Room host:', room.hostId);
+    console.log('Room host userId:', room.hostUserId);
+    console.log('Room host Id (legacy):', room.hostId);
     console.log('Phase 2 active:', room.phase2.active);
     console.log('Current year:', room.phase2.currentYear);
+    
+    // Use userId if provided (for superadmin), otherwise use playerid
+    const checkId = userId || playerid;
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -2821,7 +2842,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
+        const dbUser = dbUsers.find(u => u.user_id === checkId);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2832,37 +2853,22 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', playerid);
+          console.log('User not found in database with user_id:', checkId);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
     
-    // AUTO-FIX: If room has no host, set to current user (if they're in the game)
-    if (!room.hostId && room.players[playerid]) {
-      console.log('⚠️ Room has no host ID, setting to current player:', playerid);
-      room.hostId = playerid;
-      saveState();
-    }
-    
-    // AUTO-FIX: If room host is not in the players list, reassign to first player
-    if (room.hostId && !room.players[room.hostId]) {
-      const playerids = Object.keys(room.players);
-      if (playerids.length > 0) {
-        const newHostId = playerids[0];
-        console.log('⚠️ Room host not in game, reassigning from', room.hostId, 'to', newHostId);
-        room.hostId = newHostId;
-        saveState();
-      }
-    }
-    
-    const isRoomHost = room.hostId === userid;
+    // Check if user is the host (either by hostUserId or legacy hostId)
+    const isRoomHost = room.hostUserId === checkId || room.hostId === checkId;
     
     console.log('=== DETAILED PERMISSION CHECK ===');
-    console.log('Player ID from request:', playerid);
-    console.log('Room host ID:', room.hostId);
-    console.log('IDs match:', room.hostId === playerid);
+    console.log('Check ID (userId or playerid):', checkId);
+    console.log('Room host userId:', room.hostUserId);
+    console.log('Room host Id (legacy):', room.hostId);
+    console.log('IDs match hostUserId:', room.hostUserId === checkId);
+    console.log('IDs match hostId:', room.hostId === checkId);
     console.log('Is superadmin:', isSuperAdmin);
     console.log('Is room host:', isRoomHost);
     console.log('Permission check result:', { isSuperAdmin, isRoomHost });
@@ -2870,11 +2876,12 @@ io.on('connection', (socket) => {
     // Allow either superadmin OR room host to advance year
     if (!isSuperAdmin && !isRoomHost) {
       console.log('❌ Advance year rejected:', {
-        playerid,
+        checkId,
         isSuperAdmin,
         isRoomHost,
-        roomHost: room.hostId,
-        reason: 'Player is neither superadmin nor room host'
+        roomHostUserId: room.hostUserId,
+        roomHostId: room.hostId,
+        reason: 'User is neither superadmin nor room host'
       });
       socket.emit('advanceYearError', { 
         message: 'Only the game admin can advance the year.' 
