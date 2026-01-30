@@ -1539,7 +1539,7 @@ io.on('connection', (socket) => {
       return;
     }
     
-    const playerid = `playerId;
+    const playerid = playerId;
     const userId = player.userid // Simple numeric ID for now
     
     // Only jjucovy@gmail.com is the super admin
@@ -1561,7 +1561,7 @@ io.on('connection', (socket) => {
     });
     
     saveState();
-    console.log(`User registered: ${username} (${isSuperAdmin ? 'SUPER ADMIN' : 'player'})`);
+    //console.log(`User registered: ${username} (${isSuperAdmin ? 'SUPER ADMIN' : 'player'})`);
   });
   
   // Login existing user
