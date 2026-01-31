@@ -158,7 +158,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: roomState ? Object.keys(roomState.players).length : 0,
         gamePhase: roomState ? roomState.gamePhase : 'unknown',
         phase2Active: roomState ? roomState.phase2?.active : false,
-        currentYear: roomState ? roomState.phase2?.currentYear : null,
+        currentYear: roomState ? 1935+roomState.currentRound : null,
         createdAt: game.created_at,
         startedAt: game.started_at,
         inMemory: !!roomState
@@ -3362,7 +3362,7 @@ async function initializeFromDatabase() {
           roomState.gamePhase = 'phase2';
           roomState.phase2.active = true;
           if (game.current_year) {
-            roomState.phase2.currentYear = game.current_year;
+            1935+roomState.currentRound = game.current_year;
           }
         } else {
           // Phase 1 - assume voting phase by default
@@ -3370,7 +3370,7 @@ async function initializeFromDatabase() {
         }
       }
       
-      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
+      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${currentYear || 'N/A'}`);
       
       // Load players for this game from database
       const players = await queryDatabase('getPlayers', { gameCode: gameCode });
