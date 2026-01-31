@@ -120,7 +120,8 @@ app.get('/api/available-games', async (req, res) => {
             playerCount: playerCount,
             availableSlots: 7 - playerCount,
             createdAt: game.created_at,
-            hostUserId: game.host_user_id
+            hostUserId: game.host_user_id,
+            currentYear:game.currentYear
           });
         }
       }
@@ -158,7 +159,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: roomState ? Object.keys(roomState.players).length : 0,
         gamePhase: roomState ? roomState.gamePhase : 'unknown',
         phase2Active: roomState ? roomState.phase2?.active : false,
-        currentYear: roomState ? roomState.phase2?.currentYear : null,
+        currentYear: roomState ? roomState.currentYear : null,
         createdAt: game.created_at,
         startedAt: game.started_at,
         inMemory: !!roomState
