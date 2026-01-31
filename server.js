@@ -3370,7 +3370,7 @@ async function initializeFromDatabase() {
         }
       }
       
-      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.gamePhase+1935} || 'N/A'}`);
+      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.currentRound+1935} || 'N/A'}`);
       
       // Load players for this game from database
       const players = await queryDatabase('getPlayers', { gameCode: gameCode });
