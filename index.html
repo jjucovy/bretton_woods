@@ -3777,7 +3777,7 @@ function YearEndBattlePhase({
 
                     {/* PHASE 2: POST-WAR ECONOMIC MANAGEMENT */}
                     {gameState.gamePhase === 'phase2' && (() => {
-                      const currentYear = parseInt(gameState.currentRound)+parseInt(1935) || 1946;
+                      const currentYear = gameState.currentYear || 1946;
                       const normalizedCountry = normalizeCountryName(playerCountry);
                       const myData = gameState.phase2?.yearlyData?.[currentYear]?.[normalizedCountry];
                       console.log(`🔍 Statistics lookup:`);
