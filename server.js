@@ -159,7 +159,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: roomState ? Object.keys(roomState.players).length : 0,
         gamePhase: roomState ? roomState.gamePhase : 'unknown',
         phase2Active: roomState ? roomState.phase2?.active : false,
-        currentYear: roomState ? roomState.currentYear : null,
+        currentYear: roomState ? roomState.phase2?.currentYear : null,
         createdAt: game.created_at,
         startedAt: game.started_at,
         inMemory: !!roomState
@@ -299,8 +299,8 @@ async function saveGameToDatabase(roomId) {
     };
     
     // Add Phase 2 year if in Phase 2
-    if (room.phase2?.active && room.currentYear) {
-      updateData.currentYear = room.currentYear;
+    if (room.phase2?.active && room.phase2.currentYear) {
+      updateData.currentYear = room.phase2.currentYear;
     }
     
     // Mark as ended if complete
@@ -315,7 +315,7 @@ async function saveGameToDatabase(roomId) {
       console.log(`💾 Game ${roomId} saved to database:`, {
         status: gameStatus,
         round: room.currentRound,
-        year: room.currentYear || 'N/A'
+        year: room.phase2?.currentYear || 'N/A'
       });
     }
   } catch (err) {
@@ -3296,7 +3296,7 @@ io.on('connection', (socket) => {
           playerCount: Object.keys(roomState.players).length,
           gamePhase: roomState.gamePhase,
           phase2Active: roomState.phase2?.active,
-          currentYear: roomState.currentYear,
+          currentYear: roomState.phase2?.currentYear,
           createdAt: new Date(roomState.createdAt).toISOString(),
           inMemory: true
         });
@@ -3371,7 +3371,7 @@ async function initializeFromDatabase() {
           roomState.gamePhase = 'phase2';
           roomState.phase2.active = true;
           if (game.currentYear) {
-            roomState.currentYear = game.currentYear;
+            roomState.phase2.currentYear = game.currentYear;
           }
         } else {
           // Phase 1 - assume voting phase by default
@@ -3379,7 +3379,7 @@ async function initializeFromDatabase() {
         }
       }
       
-      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.currentYear || 'N/A'}`);
+      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
       
       // Load players for this game from database
       const players = await queryDatabase('getPlayers', { gameCode: gameCode });
