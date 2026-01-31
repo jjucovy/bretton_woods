@@ -117,6 +117,8 @@ app.get('/api/available-games', async (req, res) => {
             gameCode: game.game_code,
             gameId: game.game_id,
             status: game.status,
+            currentRound:game.current_round,
+            currentYear:parseInt(current_round)+1935,
             playerCount: playerCount,
             availableSlots: 7 - playerCount,
             createdAt: game.created_at,
