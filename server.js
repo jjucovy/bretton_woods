@@ -3338,28 +3338,51 @@ io.on('connection', (socket) => {
 // Load games from database on startup
 async function initializeFromDatabase() {
   console.log('⏳ Loading active games from database...');
-  
+
   const games = await queryDatabase('getGames', { status: 'active' });
-  
+
   if (games && Array.isArray(games)) {
     console.log(`✅ Loaded ${games.length} active game(s) from database`);
-    
+
     // Convert DB games to room state
     for (const game of games) {
       const gameCode = game.game_code; // e.g., "game_39"
-      
+
       console.log(`📋 Loading game: ${gameCode}`);
-      
-      // Create room state from database game
+
+      // Check if we already have this room from the state file (with yearlyData etc.)
+      const existingRoom = globalState.rooms[gameCode];
+      if (existingRoom && existingRoom.phase2?.yearlyData && Object.keys(existingRoom.phase2.yearlyData).length > 0) {
+        console.log(`   ✅ Using existing state from file (has yearlyData for years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')})`);
+
+        // Just update players from database in case they changed
+        const players = await queryDatabase('getPlayers', { gameCode: gameCode });
+        if (players && Array.isArray(players) && players.length > 0) {
+          for (const player of players) {
+            existingRoom.players[player.user_id] = {
+              id: player.player_id,
+              userId: player.user_id,
+              country: player.country_code,
+              ready: false,
+              score: (player.phase1_score || 0) + (player.phase2_score || 0),
+              phase1_score: player.phase1_score || 0,
+              phase2_score: player.phase2_score || 0
+            };
+          }
+        }
+        continue; // Keep existing room state, don't overwrite
+      }
+
+      // Create room state from database game (no existing state found)
       const roomState = createGameState(gameCode, `Game ${gameCode}`, game.host_user_id);
       roomState.gameId = game.game_id;
       roomState.status = game.status;
-      
+
       // Restore game state from database
       if (game.current_round) {
         roomState.currentRound = game.current_round;
       }
-      
+
       // Determine game phase from database
       if (game.game_status === 'completed') {
         roomState.gamePhase = 'complete';
@@ -3378,12 +3401,12 @@ async function initializeFromDatabase() {
           roomState.gamePhase = 'voting';
         }
       }
-      
+
       console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
-      
+
       // Load players for this game from database
       const players = await queryDatabase('getPlayers', { gameCode: gameCode });
-      
+
       if (players && Array.isArray(players) && players.length > 0) {
         console.log(`   Found ${players.length} player(s) in database`);
         for (const player of players) {
@@ -3402,7 +3425,7 @@ async function initializeFromDatabase() {
       } else {
         console.log(`   No players found for game ${gameCode}`);
       }
-      
+
       globalState.rooms[gameCode] = roomState;
       console.log(`  ✅ Loaded game: ${gameCode} with ${Object.keys(roomState.players).length} player(s)`);
     }
