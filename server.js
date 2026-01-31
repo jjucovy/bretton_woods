@@ -2556,9 +2556,19 @@ io.on('connection', (socket) => {
             room.gamePhase = 'complete';
             room.phase2.active = false;
             console.log('Phase 2 complete! Final scores calculated.');
+
+            // Update database with completed status
+            await queryDatabase('updateGame', {
+              gameCode: roomId,
+              currentRound: room.currentRound,
+              currentYear: room.phase2.currentYear,
+              game_status: 'completed'
+            });
+
             broadcastToRoom(roomId);
             saveState();
             saveGamePhase2State(roomId);
+            saveGameToDatabase(roomId);
             return;
           }
 
@@ -3067,9 +3077,24 @@ io.on('connection', (socket) => {
       room.gamePhase = 'complete';
       room.phase2.active = false;
       console.log('Phase 2 complete! Final scores calculated.');
+
+      // Update database with completed status
+      try {
+        await queryDatabase('updateGame', {
+          gameCode: roomId,
+          currentRound: room.currentRound,
+          currentYear: room.phase2.currentYear,
+          game_status: 'completed'
+        });
+        console.log(`✅ Database updated: game ${roomId} marked as completed`);
+      } catch (err) {
+        console.error('⚠️ Failed to update database:', err);
+      }
+
       broadcastToRoom(roomId);
       saveState();
       saveGamePhase2State(roomId);
+      saveGameToDatabase(roomId);
       return;
     }
     
