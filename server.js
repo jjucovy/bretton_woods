@@ -3362,7 +3362,7 @@ async function initializeFromDatabase() {
           roomState.gamePhase = 'phase2';
           roomState.phase2.active = true;
           if (game.current_year) {
-            1935+roomState.currentRound = game.current_year;
+            current_year=1935+roomState.currentRound;
           }
         } else {
           // Phase 1 - assume voting phase by default
