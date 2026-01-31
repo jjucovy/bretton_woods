@@ -178,7 +178,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: Object.keys(roomState.players).length,
         gamePhase: roomState.gamePhase,
         phase2Active: roomState.phase2?.active,
-        currentYear: roomState.phase2?.currentYear,
+        currentYear: 1935+roomState.currentRound,
         createdAt: new Date(roomState.createdAt).toISOString(),
         inMemory: true
       });
@@ -864,7 +864,7 @@ function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
   
-  const currentYear = room.phase2.currentYear;
+  const currentYear = 1935+room.currentRound;
   const policies = room.phase2.policies[currentYear] || {};
   const prevYearData = room.phase2.yearlyData[currentYear];
   
@@ -1464,7 +1464,7 @@ function resolveCrisisEffects(roomId) {
   if (!crisis) return false;
   
   const responses = room.phase2.crises.responses;
-  const currentYear = room.phase2.currentYear;
+  const currentYear = 1935+room.currentRound;
   
   console.log(`=== AUTO-RESOLVING CRISIS: ${crisis.title} ===`);
   
@@ -2421,7 +2421,7 @@ io.on('connection', (socket) => {
     const player = room.players[playerid];
     if (!player) return;
     
-    const currentYear = room.phase2.currentYear;
+    const currentYear = 1935+room.currentRound;
     if (!room.phase2.policies[currentYear]) {
       room.phase2.policies[currentYear] = {};
     }
@@ -3287,7 +3287,7 @@ io.on('connection', (socket) => {
           playerCount: Object.keys(roomState.players).length,
           gamePhase: roomState.gamePhase,
           phase2Active: roomState.phase2?.active,
-          currentYear: roomState.phase2?.currentYear,
+          currentYear: 1935+roomState.currentRound,
           createdAt: new Date(roomState.createdAt).toISOString(),
           inMemory: true
         });
