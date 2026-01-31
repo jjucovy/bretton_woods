@@ -2276,8 +2276,6 @@ function YearEndBattlePhase({
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
                 
                 console.log('Login successful. Role:', role);
-                console.log('Active game:', activeGame);
-                
                 // SUPERADMIN: Show game selection screen (all games, any phase)
                 if (role === 'superadmin') {
                   console.log('Superadmin logged in - fetching all active games');
@@ -3779,7 +3777,7 @@ function YearEndBattlePhase({
 
                     {/* PHASE 2: POST-WAR ECONOMIC MANAGEMENT */}
                     {gameState.gamePhase === 'phase2' && (() => {
-                      const currentYear = gameState.phase2?.currentYear || 1946;
+                      const currentYear = gameState.currentRound+1935 || 1946;
                       const normalizedCountry = normalizeCountryName(playerCountry);
                       const myData = gameState.phase2?.yearlyData?.[currentYear]?.[normalizedCountry];
                       console.log(`🔍 Statistics lookup:`);
