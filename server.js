@@ -269,11 +269,52 @@ function saveState() {
       const backupFile = STATE_FILE.replace('.json', '-backup.json');
       fs.copyFileSync(STATE_FILE, backupFile);
     }
-    
+
     fs.writeFileSync(STATE_FILE, JSON.stringify(globalState, null, 2));
     console.log('💾 Multi-room state saved');
   } catch (err) {
     console.error('❌ Error saving state:', err);
+  }
+}
+
+// Save Phase 2 state to per-game file (backup for server restarts)
+function saveGamePhase2State(roomId) {
+  try {
+    const room = globalState.rooms[roomId];
+    if (!room || !room.phase2?.active) return;
+
+    const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
+    const phase2State = {
+      currentYear: room.phase2.currentYear,
+      yearlyData: room.phase2.yearlyData,
+      policies: room.phase2.policies,
+      achievements: room.phase2.achievements,
+      crises: room.phase2.crises,
+      savedAt: Date.now()
+    };
+
+    fs.writeFileSync(gameStateFile, JSON.stringify(phase2State, null, 2));
+    console.log(`💾 Phase 2 state saved for ${roomId}`);
+  } catch (err) {
+    console.error(`❌ Error saving Phase 2 state for ${roomId}:`, err);
+  }
+}
+
+// Load Phase 2 state from per-game file
+function loadGamePhase2State(roomId) {
+  try {
+    const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
+    if (!fs.existsSync(gameStateFile)) {
+      return null;
+    }
+
+    const data = fs.readFileSync(gameStateFile, 'utf8');
+    const phase2State = JSON.parse(data);
+    console.log(`📂 Loaded Phase 2 state for ${roomId} (saved at ${new Date(phase2State.savedAt).toLocaleString()})`);
+    return phase2State;
+  } catch (err) {
+    console.error(`❌ Error loading Phase 2 state for ${roomId}:`, err);
+    return null;
   }
 }
 
@@ -666,6 +707,9 @@ function initializePhase2(roomId) {
   console.log(`   yearlyData[1946] keys:`, Object.keys(room.phase2.yearlyData[1946]));
   console.log(`   yearlyData[1946] sample:`, JSON.stringify(room.phase2.yearlyData[1946], null, 2).substring(0, 400));
   console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)\n`);
+
+  // Save Phase 2 state to per-game file
+  saveGamePhase2State(roomId);
 }
 
 function calculateAgreementBonus(roomId) {
@@ -2523,19 +2567,20 @@ io.on('connection', (socket) => {
             currentYear: room.phase2.currentYear,
             currentRound: room.currentRound
           });
-          
+
           broadcastToRoom(roomId);
           saveState();
+          saveGamePhase2State(roomId); // Save Phase 2 state to per-game file
         } catch (err) {
           console.error('❌ Auto-advance failed:', err);
         }
       }, 2000); // Wait 2 seconds to let everyone see the "all submitted" message
     }
-    
+
     broadcastToRoom(roomId);
     saveState();
   });
-  
+
   // PHASE 2: Advance to next year
   // PLAYER: Deploy troops
   socket.on('deployTroops', ({ roomId, playerid, deployment }) => {
@@ -3052,10 +3097,11 @@ io.on('connection', (socket) => {
     console.log('Broadcasting updated game state...');
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId); // Save Phase 2 state to per-game file
     saveGameToDatabase(roomId); // Save game state to database
     console.log('✅ Year advancement complete');
   });
-  
+
   // ADMIN: Reset room (room host or superadmin)
   socket.on('resetRoom', async ({ roomId, playerid }) => {
     const room = globalState.rooms[roomId];
@@ -3428,10 +3474,24 @@ async function initializeFromDatabase() {
 
       globalState.rooms[gameCode] = roomState;
 
-      // If Phase 2 is active but no yearlyData, initialize it
+      // If Phase 2 is active but no yearlyData, try to load from per-game file
       if (roomState.phase2?.active && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0)) {
-        console.log(`   ⚠️ Phase 2 active but no yearlyData - initializing...`);
-        initializePhase2(gameCode);
+        console.log(`   ⚠️ Phase 2 active but no yearlyData - checking per-game file...`);
+
+        const savedPhase2State = loadGamePhase2State(gameCode);
+        if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
+          // Restore from per-game file
+          roomState.phase2.currentYear = savedPhase2State.currentYear || roomState.phase2.currentYear;
+          roomState.phase2.yearlyData = savedPhase2State.yearlyData;
+          roomState.phase2.policies = savedPhase2State.policies || {};
+          roomState.phase2.achievements = savedPhase2State.achievements || {};
+          roomState.phase2.crises = savedPhase2State.crises || { active: null, history: [], responses: {} };
+          console.log(`   ✅ Restored Phase 2 state from file (years: ${Object.keys(savedPhase2State.yearlyData).join(', ')})`);
+        } else {
+          // Fall back to fresh initialization
+          console.log(`   ⚠️ No saved Phase 2 state found - initializing fresh...`);
+          initializePhase2(gameCode);
+        }
       }
 
       console.log(`  ✅ Loaded game: ${gameCode} with ${Object.keys(roomState.players).length} player(s)`);
