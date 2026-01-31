@@ -299,7 +299,7 @@ async function saveGameToDatabase(roomId) {
     
     // Prepare update data matching API's expected field names
     const updateData = {
-      game_id: parseInt(roomId),
+      game_id: parseInt(game.game_id),
       status: status,
       current_round: currentRound
     };
@@ -1686,7 +1686,7 @@ io.on('connection', (socket) => {
       // Update database to set status to lobby
       try {
         await queryDatabase('updateGame', { 
-          game_id: roomId,
+          game_id: game.game_id,
           status: 'lobby'
         });
         console.log(`✅ Game ${roomId} created in database`);
@@ -2511,7 +2511,7 @@ io.on('connection', (socket) => {
           
           // Update database
           await queryDatabase('updateGame', {
-            game_id: roomId,
+            game_id: game.game_id,
             status: 'phase2_active',
             current_round: room.currentRound
           });
@@ -3031,7 +3031,7 @@ io.on('connection', (socket) => {
     // FIXED: Update database with current game state
     try {
       await queryDatabase('updateGame', {
-        game_id: roomId,
+        game_id: game.game_id,
         status: room.gamePhase === 'complete' ? 'completed' : 'phase2_active',
         current_round: room.currentRound
       });
