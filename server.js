@@ -334,6 +334,7 @@ async function saveGameToDatabase(roomId) {
     
     // Prepare update data matching API's expected field names
     const updateData = {
+      game_id: room.gameId,
       gameCode: roomId,
       status: gameStatus,
       currentRound: room.currentRound || 0
@@ -2543,25 +2544,36 @@ io.on('connection', (socket) => {
       // Wait a moment then auto-advance
       setTimeout(async () => {
         try {
+          // Re-fetch room in case state changed
+          const currentRoom = globalState.rooms[roomId];
+          if (!currentRoom || !currentRoom.phase2?.active) {
+            console.log('⚠️ Room no longer active, skipping auto-advance');
+            return;
+          }
+
           // Check for crisis
-          if (room.phase2.crises.active) {
+          if (currentRoom.phase2.crises.active) {
             console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
             return;
           }
 
+          const currentYear = currentRoom.phase2.currentYear;
+          console.log(`🔍 Auto-advance check: currentYear=${currentYear}`);
+
           // Check if we're already at the end (1952)
-          if (room.phase2.currentYear >= 1952) {
+          if (currentYear >= 1952) {
             // Don't calculate more economics, just finalize
             calculatePhase2Scores(roomId);
-            room.gamePhase = 'complete';
-            room.phase2.active = false;
+            currentRoom.gamePhase = 'complete';
+            currentRoom.phase2.active = false;
             console.log('Phase 2 complete! Final scores calculated.');
 
             // Update database with completed status
             await queryDatabase('updateGame', {
+              game_id: currentRoom.gameId,
               gameCode: roomId,
-              currentRound: room.currentRound,
-              currentYear: room.phase2.currentYear,
+              currentRound: currentRoom.currentRound,
+              currentYear: currentRoom.phase2.currentYear,
               game_status: 'completed'
             });
 
@@ -2576,24 +2588,25 @@ io.on('connection', (socket) => {
           calculateYearEconomics(roomId);
 
           // Advance year
-          room.phase2.currentYear++;
-          room.readyPlayers = [];
+          currentRoom.phase2.currentYear++;
+          currentRoom.readyPlayers = [];
 
           // Check for new crisis
-          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+          triggerCrisisIfNeeded(roomId, currentRoom.phase2.currentYear);
 
-          console.log(`✅ Auto-advanced to year ${room.phase2.currentYear}`);
+          console.log(`✅ Auto-advanced to year ${currentRoom.phase2.currentYear}`);
 
           // Check if we've reached the final year
-          if (room.phase2.currentYear >= 1952) {
+          if (currentRoom.phase2.currentYear >= 1952) {
             console.log('Reached final year 1952. Next advance will complete Phase 2.');
           }
 
           // Update database
           await queryDatabase('updateGame', {
+            game_id: currentRoom.gameId,
             gameCode: roomId,
-            currentYear: room.phase2.currentYear,
-            currentRound: room.currentRound
+            currentYear: currentRoom.phase2.currentYear,
+            currentRound: currentRoom.currentRound
           });
 
           broadcastToRoom(roomId);
@@ -3092,6 +3105,7 @@ io.on('connection', (socket) => {
       // Update database with completed status
       try {
         await queryDatabase('updateGame', {
+          game_id: room.gameId,
           gameCode: roomId,
           currentRound: room.currentRound,
           currentYear: room.phase2.currentYear,
@@ -3139,6 +3153,7 @@ io.on('connection', (socket) => {
     // FIXED: Update database with current game state
     try {
       await queryDatabase('updateGame', {
+        game_id: room.gameId,
         gameCode: roomId,
         currentRound: room.currentRound,
         currentYear: room.phase2.currentYear,
