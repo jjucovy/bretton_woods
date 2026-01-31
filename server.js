@@ -2682,25 +2682,28 @@ io.on('connection', (socket) => {
         
         console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
         
-        // Emit battle modal to all involved countries
+        // Emit battle modal only to involved countries (not superadmin)
         const involvedCountries = conflict.countries;
         involvedCountries.forEach(country => {
           // Find the player with this country
           const playerEntry = Object.entries(room.players).find(([id, p]) => p.country === country);
           if (playerEntry) {
-            const [userId] = playerEntry;
-            
-            // Emit to this specific player
-            io.to(roomId).emit('militaryConflict', {
-              message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
-              region: deployment.region,
-              countries: involvedCountries,
-              year: room.phase2.currentYear,
-              battleId: conflict.battleId,
-              yourCountry: country
-            });
-            
-            console.log(`📨 Sent battle modal to ${country} (user ${userId})`);
+            const [userId, playerData] = playerEntry;
+
+            // Emit only to this specific player's socket
+            if (playerData.socketId) {
+              io.to(playerData.socketId).emit('militaryConflict', {
+                message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
+                region: deployment.region,
+                countries: involvedCountries,
+                year: room.phase2.currentYear,
+                battleId: conflict.battleId,
+                yourCountry: country
+              });
+              console.log(`📨 Sent battle modal to ${country} (socket ${playerData.socketId})`);
+            } else {
+              console.log(`⚠️ No socket for ${country} - cannot send battle modal`);
+            }
           }
         });
       }
@@ -2846,14 +2849,23 @@ io.on('connection', (socket) => {
       room.phase2.battleResults.push(battleResult);
       
       console.log('Battle resolved:', battleResult);
-      
-      // Broadcast results to all players in the battle
-      io.to(roomId).emit('battleResolved', {
-        battleId,
-        result: battleResult
+
+      // Send results only to players involved in the battle (not superadmin)
+      battleResult.participants.forEach(participant => {
+        const playerEntry = Object.entries(room.players).find(([id, p]) => p.country === participant.country);
+        if (playerEntry) {
+          const [userId, playerData] = playerEntry;
+          if (playerData.socketId) {
+            io.to(playerData.socketId).emit('battleResolved', {
+              battleId,
+              result: battleResult
+            });
+            console.log(`📨 Sent battle result to ${participant.country}`);
+          }
+        }
       });
     }
-    
+
     broadcastToRoom(roomId);
     saveState();
     saveGamePhase2State(roomId);
