@@ -562,7 +562,7 @@ function broadcastToRoom(roomId) {
   if (room.phase2?.active) {
     console.log(`\n📡 BROADCASTING ROOM ${roomId}:`);
     console.log(`   phase2.active: ${room.phase2.active}`);
-    console.log(`   phase2.currentYear: ${room.currentYear}`);
+    console.log(`   phase2.currentYear: ${room.phase2.currentYear}`);
     console.log(`   phase2.yearlyData type: ${typeof room.phase2.yearlyData}`);
     console.log(`   phase2.yearlyData keys:`, Object.keys(room.phase2.yearlyData));
     
