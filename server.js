@@ -117,8 +117,6 @@ app.get('/api/available-games', async (req, res) => {
             gameCode: game.game_code,
             gameId: game.game_id,
             status: game.status,
-            currentRound:game.current_round,
-            currentYear:parseInt(current_round)+1935,
             playerCount: playerCount,
             availableSlots: 7 - playerCount,
             createdAt: game.created_at,
@@ -160,7 +158,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: roomState ? Object.keys(roomState.players).length : 0,
         gamePhase: roomState ? roomState.gamePhase : 'unknown',
         phase2Active: roomState ? roomState.phase2?.active : false,
-        currentYear: roomState ? 1935+parseInt(game.currentRound) : null,
+        currentYear: roomState ? roomState.phase2?.currentYear : null,
         createdAt: game.created_at,
         startedAt: game.started_at,
         inMemory: !!roomState
@@ -180,7 +178,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: Object.keys(roomState.players).length,
         gamePhase: roomState.gamePhase,
         phase2Active: roomState.phase2?.active,
-        currentYear: 1935+parseInt(roomState.currentRound),
+        currentYear: roomState.phase2?.currentYear,
         createdAt: new Date(roomState.createdAt).toISOString(),
         inMemory: true
       });
@@ -284,27 +282,25 @@ async function saveGameToDatabase(roomId) {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    // Determine status and current_round (0-17)
-    let status = 'lobby';
-    let currentRound = 0;
-    
-    if (room.phase2?.active) {
-      status = 'phase2_active';
-      currentRound = 0; // Phase 2 doesn't use the 0-17 round counter
-    } else if (room.gamePhase === 'complete') {
-      status = 'completed';
-      currentRound = 17;
-    } else if (room.gameStarted && room.currentRound) {
-      status = 'phase1_active';
-      currentRound = room.currentRound;
+    // Map game phase to status
+    let gameStatus = 'lobby';
+    if (room.gamePhase === 'complete') {
+      gameStatus = 'completed';
+    } else if (room.gameStarted) {
+      gameStatus = 'active';
     }
     
     // Prepare update data matching API's expected field names
     const updateData = {
-      game_id: parseInt(game.game_id),
-      status: status,
-      current_round: currentRound
+      gameCode: roomId,
+      status: gameStatus,
+      currentRound: room.currentRound || 0
     };
+    
+    // Add Phase 2 year if in Phase 2
+    if (room.phase2?.active && room.phase2.currentYear) {
+      updateData.currentYear = room.phase2.currentYear;
+    }
     
     // Mark as ended if complete
     if (room.gamePhase === 'complete') {
@@ -315,7 +311,11 @@ async function saveGameToDatabase(roomId) {
     const result = await queryDatabase('updateGame', updateData);
     
     if (result) {
-      console.log(`💾 Game ${roomId} saved:`, { status, current_round: currentRound });
+      console.log(`💾 Game ${roomId} saved to database:`, {
+        status: gameStatus,
+        round: room.currentRound,
+        year: room.phase2?.currentYear || 'N/A'
+      });
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
@@ -559,10 +559,24 @@ function broadcastToRoom(roomId) {
   
   // Log what we're about to broadcast
   if (room.phase2?.active) {
-    console.log(`📡 Broadcasting room ${roomId}:`);
+    console.log(`\n📡 BROADCASTING ROOM ${roomId}:`);
+    console.log(`   phase2.active: ${room.phase2.active}`);
+    console.log(`   phase2.currentYear: ${room.phase2.currentYear}`);
+    console.log(`   phase2.yearlyData type: ${typeof room.phase2.yearlyData}`);
     console.log(`   phase2.yearlyData keys:`, Object.keys(room.phase2.yearlyData));
-    console.log(`   phase2.yearlyData[1946] keys:`, Object.keys(room.phase2.yearlyData[1946] || {}));
-    console.log(`   Full yearlyData:`, JSON.stringify(room.phase2.yearlyData, null, 2).substring(0, 500));
+    
+    if (room.phase2.yearlyData[1946]) {
+      const year1946 = room.phase2.yearlyData[1946];
+      console.log(`   yearlyData[1946] type: ${typeof year1946}`);
+      console.log(`   yearlyData[1946] keys:`, Object.keys(year1946));
+      
+      const firstCountry = Object.entries(year1946)[0];
+      if (firstCountry) {
+        console.log(`   Sample (${firstCountry[0]}):`, JSON.stringify(firstCountry[1], null, 2).substring(0, 200));
+      }
+    } else {
+      console.log(`   ⚠️ yearlyData[1946] is ${typeof room.phase2.yearlyData[1946]}`);
+    }
   }
   
   io.to(roomId).emit('stateUpdate', room);
@@ -579,18 +593,12 @@ function broadcastRoomList() {
 // ============================================
 
 function initializePhase2(roomId) {
-  console.log(`\n🚀🚀🚀 PHASE 2 INIT START - Room: ${roomId} 🚀🚀🚀`);
   const room = globalState.rooms[roomId];
-  if (!room) {
-    console.log(`❌ Room not found: ${roomId}`);
-    return;
-  }
-  console.log(`✓ Room found. Players: ${Object.keys(room.players).length}`);
+  if (!room) return;
   
   const gameDataPath = path.join(__dirname, 'game-data.json');
   const gameData = JSON.parse(fs.readFileSync(gameDataPath, 'utf8'));
   const initialEconomicData = gameData.economicData;
-  console.log(`✓ Game data loaded. Countries available: ${Object.keys(initialEconomicData).join(', ')}`);
   
   room.phase2.active = true;
   room.phase2.currentYear = 1946;
@@ -613,6 +621,9 @@ function initializePhase2(roomId) {
   
   // Initialize starting economic conditions for each country
   room.phase2.yearlyData[1946] = {};
+  console.log(`\n🎯 INITIALIZING PHASE 2 FOR ROOM ${roomId}`);
+  console.log(`   Players in room:`, Object.keys(room.players).length);
+  
   Object.values(room.players).forEach(player => {
     const country = normalizeCountryName(player.country);
     
@@ -624,16 +635,13 @@ function initializePhase2(roomId) {
     const initialData = initialEconomicData[countryKey] || initialEconomicData[country];
     
     if (!initialData) {
-      console.warn(`⚠️ No economic data for ${country} (tried: ${countryKey}). Using defaults.`);
-      initialData = {
-        goldReserves: 10000,
-        tradeBalance: 0,
-        industrialOutput: 50,
-        military: { army: 1000000, navy: 100000, airForce: 50000, total: 1150000 }
-      };
+      console.error(`⚠️ No economic data found for country: ${country} (tried ${countryKey})`);
+      console.log('Available countries in economicData:', Object.keys(initialEconomicData));
+      return; // Skip this country
     }
     
-    room.phase2.yearlyData[1946][normalizeCountryName(country)] = {
+    const normalizedCountry = normalizeCountryName(country);
+    room.phase2.yearlyData[1946][normalizedCountry] = {
       gdpGrowth: 0,
       goldReserves: initialData.goldReserves || 1000,
       unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' || country === 'USS' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
@@ -649,18 +657,14 @@ function initializePhase2(roomId) {
         total: initialData.military?.total || 1150000
       }
     };
+    
+    console.log(`   ✅ Loaded ${normalizedCountry}: Industrial=${initialData.industrialOutput}, Military=${initialData.military?.total}`);
   });
   
-  const dataCount = Object.keys(room.phase2.yearlyData[1946] || {}).length;
-  console.log(`✅ Phase 2 initialized for room ${roomId}`);
-  console.log(`   yearlyData[1946] contains: ${dataCount} countries`);
-  if (dataCount > 0) {
-    const countries = Object.keys(room.phase2.yearlyData[1946]);
-    console.log(`   Countries: ${countries.join(', ')}`);
-  } else {
-    console.error(`   ❌ NO COUNTRIES LOADED!`);
-  }
-  console.log(`🚀🚀🚀 PHASE 2 INIT COMPLETE 🚀🚀🚀\n`);
+  console.log(`\n📦 PHASE 2 DATA READY:`);
+  console.log(`   yearlyData[1946] keys:`, Object.keys(room.phase2.yearlyData[1946]));
+  console.log(`   yearlyData[1946] sample:`, JSON.stringify(room.phase2.yearlyData[1946], null, 2).substring(0, 400));
+  console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)\n`);
 }
 
 function calculateAgreementBonus(roomId) {
@@ -866,7 +870,7 @@ function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
   
-  const currentYear = 1935+parseInt(roomState.currentRound);
+  const currentYear = room.phase2.currentYear;
   const policies = room.phase2.policies[currentYear] || {};
   const prevYearData = room.phase2.yearlyData[currentYear];
   
@@ -1466,7 +1470,7 @@ function resolveCrisisEffects(roomId) {
   if (!crisis) return false;
   
   const responses = room.phase2.crises.responses;
-  const currentYear = 1935+parseInt(room.currentRound);
+  const currentYear = room.phase2.currentYear;
   
   console.log(`=== AUTO-RESOLVING CRISIS: ${crisis.title} ===`);
   
@@ -1685,13 +1689,14 @@ io.on('connection', (socket) => {
       globalState.rooms[roomId].status = 'active';
       globalState.rooms[roomId].gameCode = roomId;
       
-      // Update database to set status to lobby
+      // Update database to set status to active and assign host
       try {
-        await queryDatabase('updateGame', { 
-          game_id: game.game_id,
-          status: 'lobby'
+        await queryDatabase('updateGameStatus', { 
+          gameCode: roomId, 
+          status: 'active',
+          hostUserId: creatorId
         });
-        console.log(`✅ Game ${roomId} created in database`);
+        console.log(`✅ Game ${roomId} marked as active in database with host ${creatorId}`);
       } catch (err) {
         console.error('Error updating game status:', err);
       }
@@ -2423,7 +2428,7 @@ io.on('connection', (socket) => {
     const player = room.players[playerid];
     if (!player) return;
     
-    const currentYear = 1935+parseInt(room.currentRound);
+    const currentYear = room.phase2.currentYear;
     if (!room.phase2.policies[currentYear]) {
       room.phase2.policies[currentYear] = {};
     }
@@ -2503,19 +2508,19 @@ io.on('connection', (socket) => {
           calculateYearEconomics(roomId);
           
           // Advance year
-          currentYear++;
+          room.phase2.currentYear++;
           room.readyPlayers = [];
           
           // Check for new crisis
-          triggerCrisisIfNeeded(roomId, currentYear);
+          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
           
-          console.log(`✅ Auto-advanced to year ${currentYear}`);
+          console.log(`✅ Auto-advanced to year ${room.phase2.currentYear}`);
           
           // Update database
           await queryDatabase('updateGame', {
-            game_id: game.game_id,
-            status: 'phase2_active',
-            current_round: room.currentRound
+            gameCode: roomId,
+            currentYear: room.phase2.currentYear,
+            currentRound: room.currentRound
           });
           
           broadcastToRoom(roomId);
@@ -2554,7 +2559,7 @@ io.on('connection', (socket) => {
     const deploymentRecord = {
       ...deployment,
       timestamp: Date.now(),
-      year: currentYear
+      year: room.phase2.currentYear
     };
     
     room.phase2.deployments.push(deploymentRecord);
@@ -2566,7 +2571,7 @@ io.on('connection', (socket) => {
       const otherDeployments = room.phase2.deployments.filter(d => 
         d.region === deployment.region && 
         d.country !== deployment.country &&
-        d.year === currentYear
+        d.year === room.phase2.currentYear
       );
       
       if (otherDeployments.length > 0) {
@@ -2578,9 +2583,9 @@ io.on('connection', (socket) => {
         const conflict = {
           region: deployment.region,
           countries: [deployment.country, ...otherDeployments.map(d => d.country)],
-          year: currentYear,
+          year: room.phase2.currentYear,
           timestamp: Date.now(),
-          battleId: `${deployment.region}-${currentYear}-${Date.now()}`
+          battleId: `${deployment.region}-${room.phase2.currentYear}-${Date.now()}`
         };
         
         room.phase2.conflicts.push(conflict);
@@ -2600,7 +2605,7 @@ io.on('connection', (socket) => {
               message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
               region: deployment.region,
               countries: involvedCountries,
-              year: currentYear,
+              year: room.phase2.currentYear,
               battleId: conflict.battleId,
               yourCountry: country
             });
@@ -2797,7 +2802,7 @@ io.on('connection', (socket) => {
     }
     
     // Validate military requirements
-    const currentYear = room.currentYear;
+    const currentYear = room.phase2.currentYear;
     const yearData = room.phase2.yearlyData[currentYear]?.[country];
     
     if (choice.militaryRequired && yearData) {
@@ -2916,7 +2921,7 @@ io.on('connection', (socket) => {
     console.log('Room host userId:', room.hostUserId);
     console.log('Room host Id (legacy):', room.hostId);
     console.log('Phase 2 active:', room.phase2.active);
-    console.log('Current year:', room.currentYear);
+    console.log('Current year:', room.phase2.currentYear);
     
     // Use userId if provided (for superadmin), otherwise use playerid
     const checkId = userId || playerid;
@@ -2992,7 +2997,7 @@ io.on('connection', (socket) => {
     }
     
     // Check if we're already at the end
-    if (room.currentYear >= 1952) {
+    if (room.phase2.currentYear >= 1952) {
       // Don't calculate more economics, just finalize
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
@@ -3017,7 +3022,7 @@ io.on('connection', (socket) => {
     }
     
     // Advance year
-    room.currentYear++;
+    room.phase2.currentYear++;
     room.readyPlayers = [];
     
     // Check for crisis events this year
@@ -3033,11 +3038,12 @@ io.on('connection', (socket) => {
     // FIXED: Update database with current game state
     try {
       await queryDatabase('updateGame', {
-        game_id: game.game_id,
-        status: room.gamePhase === 'complete' ? 'completed' : 'phase2_active',
-        current_round: room.currentRound
+        gameCode: roomId,
+        currentRound: room.currentRound,
+        currentYear: room.phase2.currentYear,
+        game_status: room.gamePhase === 'complete' ? 'completed' : 'active'
       });
-      console.log(`✅ Database updated: ${roomId} now at round ${room.currentRound}`);
+      console.log(`✅ Database updated: ${roomId} now at round ${room.currentRound}, year ${room.phase2.currentYear}`);
     } catch (error) {
       console.error('⚠️ Failed to update database:', error);
     }
@@ -3268,7 +3274,7 @@ io.on('connection', (socket) => {
           playerCount: roomState ? Object.keys(roomState.players).length : 0,
           gamePhase: roomState ? roomState.gamePhase : 'unknown',
           phase2Active: roomState ? roomState.phase2?.active : false,
-          currentYear: roomState ? parseInt(game.current_round)+1935 : null,
+          currentYear: roomState ? roomState.phase2?.currentYear : null,
           createdAt: game.created_at,
           startedAt: game.started_at,
           inMemory: !!roomState
@@ -3289,7 +3295,7 @@ io.on('connection', (socket) => {
           playerCount: Object.keys(roomState.players).length,
           gamePhase: roomState.gamePhase,
           phase2Active: roomState.phase2?.active,
-          currentYear: 1935+parseInt(roomState.currentRound),
+          currentYear: roomState.phase2?.currentYear,
           createdAt: new Date(roomState.createdAt).toISOString(),
           inMemory: true
         });
@@ -3364,7 +3370,7 @@ async function initializeFromDatabase() {
           roomState.gamePhase = 'phase2';
           roomState.phase2.active = true;
           if (game.current_year) {
-            game.current_year=1935+roomState.currentRound;
+            roomState.phase2.currentYear = game.current_year;
           }
         } else {
           // Phase 1 - assume voting phase by default
@@ -3372,7 +3378,7 @@ async function initializeFromDatabase() {
         }
       }
       
-      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${parseFloat(roomState.currentRound)+1935} || 'N/A'}`);
+      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
       
       // Load players for this game from database
       const players = await queryDatabase('getPlayers', { gameCode: gameCode });
