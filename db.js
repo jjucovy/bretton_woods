@@ -8,7 +8,7 @@ const API_KEY = 'bretton-woods-secret-key-2024';
 
 async function callAPI(action, data = {}) {
   try {
-    const payload = { action, ...data };
+    const payload = { action, api_key: API_KEY, ...data };
     // Log for critical data operations
     if (['saveVote', 'saveRoundResult', 'saveGameResult', 'saveCrisisResponse', 'saveDeployment', 'submitBattleDecision'].includes(action)) {
       console.log(`📡 API Call: ${action}`, JSON.stringify(payload).substring(0, 200));
@@ -17,8 +17,7 @@ async function callAPI(action, data = {}) {
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)
     });
