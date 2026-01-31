@@ -2548,19 +2548,37 @@ io.on('connection', (socket) => {
             console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
             return;
           }
-          
+
+          // Check if we're already at the end (1952)
+          if (room.phase2.currentYear >= 1952) {
+            // Don't calculate more economics, just finalize
+            calculatePhase2Scores(roomId);
+            room.gamePhase = 'complete';
+            room.phase2.active = false;
+            console.log('Phase 2 complete! Final scores calculated.');
+            broadcastToRoom(roomId);
+            saveState();
+            saveGamePhase2State(roomId);
+            return;
+          }
+
           // Calculate economics
           calculateYearEconomics(roomId);
-          
+
           // Advance year
           room.phase2.currentYear++;
           room.readyPlayers = [];
-          
+
           // Check for new crisis
           triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
-          
+
           console.log(`✅ Auto-advanced to year ${room.phase2.currentYear}`);
-          
+
+          // Check if we've reached the final year
+          if (room.phase2.currentYear >= 1952) {
+            console.log('Reached final year 1952. Next advance will complete Phase 2.');
+          }
+
           // Update database
           await queryDatabase('updateGame', {
             gameCode: roomId,
