@@ -3069,6 +3069,7 @@ io.on('connection', (socket) => {
       console.log('Phase 2 complete! Final scores calculated.');
       broadcastToRoom(roomId);
       saveState();
+      saveGamePhase2State(roomId);
       return;
     }
     
