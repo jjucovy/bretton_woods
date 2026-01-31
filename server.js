@@ -1683,14 +1683,13 @@ io.on('connection', (socket) => {
       globalState.rooms[roomId].status = 'active';
       globalState.rooms[roomId].gameCode = roomId;
       
-      // Update database to set status to active and assign host
+      // Update database to set status to lobby
       try {
-        await queryDatabase('updateGameStatus', { 
-          gameCode: roomId, 
-          status: 'active',
-          hostUserId: creatorId
+        await queryDatabase('updateGame', { 
+          game_id: roomId,
+          status: 'lobby'
         });
-        console.log(`✅ Game ${roomId} marked as active in database with host ${creatorId}`);
+        console.log(`✅ Game ${roomId} created in database`);
       } catch (err) {
         console.error('Error updating game status:', err);
       }
@@ -2512,9 +2511,9 @@ io.on('connection', (socket) => {
           
           // Update database
           await queryDatabase('updateGame', {
-            gameCode: roomId,
-            currentYear: room.phase2.currentYear,
-            currentRound: room.currentRound
+            game_id: roomId,
+            status: 'phase2_active',
+            current_round: room.currentRound
           });
           
           broadcastToRoom(roomId);
@@ -3032,12 +3031,11 @@ io.on('connection', (socket) => {
     // FIXED: Update database with current game state
     try {
       await queryDatabase('updateGame', {
-        gameCode: roomId,
-        currentRound: room.currentRound,
-        currentYear: room.phase2.currentYear,
-        game_status: room.gamePhase === 'complete' ? 'completed' : 'active'
+        game_id: roomId,
+        status: room.gamePhase === 'complete' ? 'completed' : 'phase2_active',
+        current_round: room.currentRound
       });
-      console.log(`✅ Database updated: ${roomId} now at round ${room.currentRound}, year ${room.phase2.currentYear}`);
+      console.log(`✅ Database updated: ${roomId} now at round ${room.currentRound}`);
     } catch (error) {
       console.error('⚠️ Failed to update database:', error);
     }
