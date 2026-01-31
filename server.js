@@ -2851,17 +2851,32 @@ io.on('connection', (socket) => {
       console.log('Battle resolved:', battleResult);
 
       // Send results only to players involved in the battle (not superadmin)
+      console.log('📋 Looking up players for battle results:', battleResult.participants.map(p => p.country));
+      console.log('📋 Room players:', Object.entries(room.players).map(([id, p]) => `${id}: ${p.country}`));
+
       battleResult.participants.forEach(participant => {
-        const playerEntry = Object.entries(room.players).find(([id, p]) => p.country === participant.country);
+        const playerEntry = Object.entries(room.players).find(([id, p]) => {
+          const match = p.country === participant.country ||
+                        normalizeCountryName(p.country) === normalizeCountryName(participant.country);
+          return match;
+        });
+
+        console.log(`📋 Looking for ${participant.country}: found=${!!playerEntry}`);
+
         if (playerEntry) {
-          const [userId, playerData] = playerEntry;
+          const [odName, playerData] = playerEntry;
+          console.log(`📋 Player ${participant.country} socketId: ${playerData.socketId}`);
           if (playerData.socketId) {
             io.to(playerData.socketId).emit('battleResolved', {
               battleId,
               result: battleResult
             });
-            console.log(`📨 Sent battle result to ${participant.country}`);
+            console.log(`📨 Sent battle result to ${participant.country} (socket: ${playerData.socketId})`);
+          } else {
+            console.log(`⚠️ No socketId for ${participant.country}`);
           }
+        } else {
+          console.log(`⚠️ Player not found for country: ${participant.country}`);
         }
       });
     }
