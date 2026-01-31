@@ -334,13 +334,14 @@ async function saveGameToDatabase(roomId) {
     
     // Prepare update data matching API's expected field names
     const updateData = {
+      game_id: room.gameId,
       gameCode: roomId,
       status: gameStatus,
       currentRound: room.currentRound || 0
     };
     
-    // Add Phase 2 year if in Phase 2
-    if (room.phase2?.active && room.phase2.currentYear) {
+    // Add Phase 2 year if available (don't require active since game might be complete)
+    if (room.phase2?.currentYear) {
       updateData.currentYear = room.phase2.currentYear;
     }
     
@@ -2543,34 +2544,75 @@ io.on('connection', (socket) => {
       // Wait a moment then auto-advance
       setTimeout(async () => {
         try {
+          // Re-fetch room in case state changed
+          const currentRoom = globalState.rooms[roomId];
+          if (!currentRoom || !currentRoom.phase2?.active) {
+            console.log('⚠️ Room no longer active, skipping auto-advance');
+            return;
+          }
+
           // Check for crisis
-          if (room.phase2.crises.active) {
+          if (currentRoom.phase2.crises.active) {
             console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
             return;
           }
-          
+
+          const currentYear = currentRoom.phase2.currentYear;
+          console.log(`🔍 Auto-advance check: currentYear=${currentYear}`);
+
+          // Check if we're already at the end (1952)
+          if (currentYear >= 1952) {
+            // Don't calculate more economics, just finalize
+            calculatePhase2Scores(roomId);
+            currentRoom.gamePhase = 'complete';
+            currentRoom.phase2.active = false;
+            console.log('Phase 2 complete! Final scores calculated.');
+
+            // Update database with completed status
+            await queryDatabase('updateGame', {
+              game_id: currentRoom.gameId,
+              gameCode: roomId,
+              currentRound: currentRoom.currentRound,
+              currentYear: currentRoom.phase2.currentYear,
+              game_status: 'completed'
+            });
+
+            broadcastToRoom(roomId);
+            saveState();
+            saveGamePhase2State(roomId);
+            saveGameToDatabase(roomId);
+            return;
+          }
+
           // Calculate economics
           calculateYearEconomics(roomId);
-          
+
           // Advance year
-          room.phase2.currentYear++;
-          room.readyPlayers = [];
-          
+          currentRoom.phase2.currentYear++;
+          currentRoom.readyPlayers = [];
+
           // Check for new crisis
-          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
-          
-          console.log(`✅ Auto-advanced to year ${room.phase2.currentYear}`);
-          
+          triggerCrisisIfNeeded(roomId, currentRoom.phase2.currentYear);
+
+          console.log(`✅ Auto-advanced to year ${currentRoom.phase2.currentYear}`);
+
+          // Check if we've reached the final year
+          if (currentRoom.phase2.currentYear >= 1952) {
+            console.log('Reached final year 1952. Next advance will complete Phase 2.');
+          }
+
           // Update database
           await queryDatabase('updateGame', {
+            game_id: currentRoom.gameId,
             gameCode: roomId,
-            currentYear: room.phase2.currentYear,
-            currentRound: room.currentRound
+            currentYear: currentRoom.phase2.currentYear,
+            currentRound: currentRoom.currentRound
           });
 
           broadcastToRoom(roomId);
           saveState();
-          saveGamePhase2State(roomId); // Save Phase 2 state to per-game file
+          saveGamePhase2State(roomId);
+          saveGameToDatabase(roomId);
         } catch (err) {
           console.error('❌ Auto-advance failed:', err);
         }
@@ -2579,6 +2621,8 @@ io.on('connection', (socket) => {
 
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
 
   // PHASE 2: Advance to next year
@@ -2638,36 +2682,41 @@ io.on('connection', (socket) => {
         
         console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
         
-        // Emit battle modal to all involved countries
+        // Emit battle modal only to involved countries (not superadmin)
         const involvedCountries = conflict.countries;
         involvedCountries.forEach(country => {
           // Find the player with this country
           const playerEntry = Object.entries(room.players).find(([id, p]) => p.country === country);
           if (playerEntry) {
-            const [userId] = playerEntry;
-            
-            // Emit to this specific player
-            io.to(roomId).emit('militaryConflict', {
-              message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
-              region: deployment.region,
-              countries: involvedCountries,
-              year: room.phase2.currentYear,
-              battleId: conflict.battleId,
-              yourCountry: country
-            });
-            
-            console.log(`📨 Sent battle modal to ${country} (user ${userId})`);
+            const [userId, playerData] = playerEntry;
+
+            // Emit only to this specific player's socket
+            if (playerData.socketId) {
+              io.to(playerData.socketId).emit('militaryConflict', {
+                message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
+                region: deployment.region,
+                countries: involvedCountries,
+                year: room.phase2.currentYear,
+                battleId: conflict.battleId,
+                yourCountry: country
+              });
+              console.log(`📨 Sent battle modal to ${country} (socket ${playerData.socketId})`);
+            } else {
+              console.log(`⚠️ No socket for ${country} - cannot send battle modal`);
+            }
           }
         });
       }
     }
     
     console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
-    
+
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
-  
+
   // Handle battle decisions
   socket.on('submitBattleDecision', ({ roomId, playerid, battleId, decision, region, year }) => {
     const room = globalState.rooms[roomId];
@@ -2800,16 +2849,27 @@ io.on('connection', (socket) => {
       room.phase2.battleResults.push(battleResult);
       
       console.log('Battle resolved:', battleResult);
-      
-      // Broadcast results to all players in the battle
-      io.to(roomId).emit('battleResolved', {
-        battleId,
-        result: battleResult
+
+      // Send results only to players involved in the battle (not superadmin)
+      battleResult.participants.forEach(participant => {
+        const playerEntry = Object.entries(room.players).find(([id, p]) => p.country === participant.country);
+        if (playerEntry) {
+          const [userId, playerData] = playerEntry;
+          if (playerData.socketId) {
+            io.to(playerData.socketId).emit('battleResolved', {
+              battleId,
+              result: battleResult
+            });
+            console.log(`📨 Sent battle result to ${participant.country}`);
+          }
+        }
       });
     }
-    
+
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
 
   // CRISIS: Submit response to active crisis
@@ -2893,6 +2953,8 @@ io.on('connection', (socket) => {
     
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
@@ -2943,11 +3005,13 @@ io.on('connection', (socket) => {
     }
     
     console.log(`Admin manually resolving crisis: ${crisis.title}`);
-    
+
     const success = resolveCrisisEffects(roomId);
     if (success) {
       broadcastToRoom(roomId);
       saveState();
+      saveGamePhase2State(roomId);
+      saveGameToDatabase(roomId);
     }
   });
 
@@ -3049,8 +3113,25 @@ io.on('connection', (socket) => {
       room.gamePhase = 'complete';
       room.phase2.active = false;
       console.log('Phase 2 complete! Final scores calculated.');
+
+      // Update database with completed status
+      try {
+        await queryDatabase('updateGame', {
+          game_id: room.gameId,
+          gameCode: roomId,
+          currentRound: room.currentRound,
+          currentYear: room.phase2.currentYear,
+          game_status: 'completed'
+        });
+        console.log(`✅ Database updated: game ${roomId} marked as completed`);
+      } catch (err) {
+        console.error('⚠️ Failed to update database:', err);
+      }
+
       broadcastToRoom(roomId);
       saveState();
+      saveGamePhase2State(roomId);
+      saveGameToDatabase(roomId);
       return;
     }
     
@@ -3084,6 +3165,7 @@ io.on('connection', (socket) => {
     // FIXED: Update database with current game state
     try {
       await queryDatabase('updateGame', {
+        game_id: room.gameId,
         gameCode: roomId,
         currentRound: room.currentRound,
         currentYear: room.phase2.currentYear,
