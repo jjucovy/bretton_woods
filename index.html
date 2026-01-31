@@ -2031,10 +2031,12 @@ function YearEndBattlePhase({
           const [isReady, setIsReady] = useState(false);
           const [connected, setConnected] = useState(false);
           const [skipPhase1, setSkipPhase1] = useState(false);
-          
+
           // Battle modal state
           const [showBattleModal, setShowBattleModal] = useState(false);
           const [militaryConflict, setMilitaryConflict] = useState(null);
+          const [showBattleResultModal, setShowBattleResultModal] = useState(false);
+          const [battleResultData, setBattleResultData] = useState(null);
 
           // Check for existing session
           useEffect(() => {
@@ -2200,16 +2202,13 @@ function YearEndBattlePhase({
             
             socket.on('battleResolved', (data) => {
               console.log('⚔️ Battle resolved:', data);
-              // Close the battle modal
+              // Close the battle decision modal
               setShowBattleModal(false);
               setMilitaryConflict(null);
-              
-              // Show results in console for now (could add a results modal later)
-              const result = data.result;
-              console.log(`Battle winner: ${result.winner}`);
-              result.participants.forEach(p => {
-                console.log(`${p.country}: ${p.outcome} - ${p.casualties} casualties`);
-              });
+
+              // Show the battle results modal
+              setBattleResultData(data.result);
+              setShowBattleResultModal(true);
             });
 
             return () => {
@@ -5012,6 +5011,101 @@ function YearEndBattlePhase({
                           💡 Fight: Maximize military advantage | Negotiate: Minimize casualties | Retreat: Preserve forces
                         </p>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Battle Results Modal */}
+                {showBattleResultModal && battleResultData && (
+                  <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1001
+                  }}>
+                    <div style={{
+                      background: 'linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%)',
+                      borderRadius: '16px',
+                      padding: '24px',
+                      maxWidth: '500px',
+                      width: '90%',
+                      border: '2px solid #3b82f6',
+                      boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+                    }}>
+                      <h2 style={{ color: '#fbbf24', margin: '0 0 16px 0', textAlign: 'center' }}>
+                        ⚔️ Battle Results - {battleResultData.region}
+                      </h2>
+
+                      <div style={{
+                        background: battleResultData.winner ? '#065f46' : '#1f2937',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        marginBottom: '16px',
+                        textAlign: 'center'
+                      }}>
+                        <span style={{ color: '#fbbf24', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                          {battleResultData.winner ? `🏆 ${battleResultData.winner} Victory!` : '🤝 Stalemate'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {battleResultData.participants?.map((p, idx) => (
+                          <div key={idx} style={{
+                            background: p.country === battleResultData.winner ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.1)',
+                            border: `1px solid ${p.country === battleResultData.winner ? '#22c55e' : '#6b7280'}`,
+                            borderRadius: '8px',
+                            padding: '12px'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                {p.country} {p.country === battleResultData.winner && '🏆'}
+                              </span>
+                              <span style={{
+                                color: p.decision === 'fight' ? '#ef4444' : p.decision === 'negotiate' ? '#f59e0b' : '#3b82f6',
+                                fontSize: '0.85rem',
+                                textTransform: 'uppercase'
+                              }}>
+                                {p.decision}
+                              </span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.9rem' }}>
+                              <div style={{ color: '#9ca3af' }}>
+                                Outcome: <span style={{ color: p.outcome?.includes('victory') ? '#22c55e' : '#ef4444' }}>{p.outcome}</span>
+                              </div>
+                              <div style={{ color: '#9ca3af' }}>
+                                Casualties: <span style={{ color: '#ef4444' }}>{p.casualties?.toLocaleString() || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setShowBattleResultModal(false);
+                          setBattleResultData(null);
+                        }}
+                        style={{
+                          width: '100%',
+                          marginTop: '16px',
+                          padding: '12px',
+                          background: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '1rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Close
+                      </button>
                     </div>
                   </div>
                 )}
