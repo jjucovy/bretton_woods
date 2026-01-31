@@ -2064,7 +2064,7 @@ function YearEndBattlePhase({
 
             socket.on('stateUpdate', (state) => {
               console.log('=== STATE UPDATE ===');
-              console.log(state)
+              console.log('State', Object.values(state))
               console.log('Game started:', state.gameStarted);
               console.log('Game phase:', state.gamePhase);
               console.log('Current round:', state.currentRound);
