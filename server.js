@@ -339,8 +339,8 @@ async function saveGameToDatabase(roomId) {
       currentRound: room.currentRound || 0
     };
     
-    // Add Phase 2 year if in Phase 2
-    if (room.phase2?.active && room.phase2.currentYear) {
+    // Add Phase 2 year if available (don't require active since game might be complete)
+    if (room.phase2?.currentYear) {
       updateData.currentYear = room.phase2.currentYear;
     }
     
@@ -2598,7 +2598,8 @@ io.on('connection', (socket) => {
 
           broadcastToRoom(roomId);
           saveState();
-          saveGamePhase2State(roomId); // Save Phase 2 state to per-game file
+          saveGamePhase2State(roomId);
+          saveGameToDatabase(roomId);
         } catch (err) {
           console.error('❌ Auto-advance failed:', err);
         }
@@ -2607,6 +2608,8 @@ io.on('connection', (socket) => {
 
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
 
   // PHASE 2: Advance to next year
@@ -2691,11 +2694,13 @@ io.on('connection', (socket) => {
     }
     
     console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
-    
+
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
-  
+
   // Handle battle decisions
   socket.on('submitBattleDecision', ({ roomId, playerid, battleId, decision, region, year }) => {
     const room = globalState.rooms[roomId];
@@ -2838,6 +2843,8 @@ io.on('connection', (socket) => {
     
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
 
   // CRISIS: Submit response to active crisis
@@ -2921,6 +2928,8 @@ io.on('connection', (socket) => {
     
     broadcastToRoom(roomId);
     saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
   });
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
@@ -2971,11 +2980,13 @@ io.on('connection', (socket) => {
     }
     
     console.log(`Admin manually resolving crisis: ${crisis.title}`);
-    
+
     const success = resolveCrisisEffects(roomId);
     if (success) {
       broadcastToRoom(roomId);
       saveState();
+      saveGamePhase2State(roomId);
+      saveGameToDatabase(roomId);
     }
   });
 
