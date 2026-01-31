@@ -223,7 +223,7 @@ function createGameState(roomId, roomName, hostId) {
     militaryDeployments: militaryDeploymentsData,
     phase2: {
       active: false,
-      currentYear: currentYear,
+      currentYear: 1946,
       maxYears: 7, // 1946-1952
       policies: {}, // year -> country -> policy
       yearlyData: {}, // year -> country -> economic data
