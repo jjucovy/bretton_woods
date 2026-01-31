@@ -559,10 +559,24 @@ function broadcastToRoom(roomId) {
   
   // Log what we're about to broadcast
   if (room.phase2?.active) {
-    console.log(`📡 Broadcasting room ${roomId}:`);
+    console.log(`\n📡 BROADCASTING ROOM ${roomId}:`);
+    console.log(`   phase2.active: ${room.phase2.active}`);
+    console.log(`   phase2.currentYear: ${room.phase2.currentYear}`);
+    console.log(`   phase2.yearlyData type: ${typeof room.phase2.yearlyData}`);
     console.log(`   phase2.yearlyData keys:`, Object.keys(room.phase2.yearlyData));
-    console.log(`   phase2.yearlyData[1946] keys:`, Object.keys(room.phase2.yearlyData[1946] || {}));
-    console.log(`   Full yearlyData:`, JSON.stringify(room.phase2.yearlyData, null, 2).substring(0, 500));
+    
+    if (room.phase2.yearlyData[1946]) {
+      const year1946 = room.phase2.yearlyData[1946];
+      console.log(`   yearlyData[1946] type: ${typeof year1946}`);
+      console.log(`   yearlyData[1946] keys:`, Object.keys(year1946));
+      
+      const firstCountry = Object.entries(year1946)[0];
+      if (firstCountry) {
+        console.log(`   Sample (${firstCountry[0]}):`, JSON.stringify(firstCountry[1], null, 2).substring(0, 200));
+      }
+    } else {
+      console.log(`   ⚠️ yearlyData[1946] is ${typeof room.phase2.yearlyData[1946]}`);
+    }
   }
   
   io.to(roomId).emit('stateUpdate', room);
@@ -607,6 +621,9 @@ function initializePhase2(roomId) {
   
   // Initialize starting economic conditions for each country
   room.phase2.yearlyData[1946] = {};
+  console.log(`\n🎯 INITIALIZING PHASE 2 FOR ROOM ${roomId}`);
+  console.log(`   Players in room:`, Object.keys(room.players).length);
+  
   Object.values(room.players).forEach(player => {
     const country = normalizeCountryName(player.country);
     
@@ -623,7 +640,8 @@ function initializePhase2(roomId) {
       return; // Skip this country
     }
     
-    room.phase2.yearlyData[1946][normalizeCountryName(country)] = {
+    const normalizedCountry = normalizeCountryName(country);
+    room.phase2.yearlyData[1946][normalizedCountry] = {
       gdpGrowth: 0,
       goldReserves: initialData.goldReserves || 1000,
       unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' || country === 'USS' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
@@ -639,9 +657,14 @@ function initializePhase2(roomId) {
         total: initialData.military?.total || 1150000
       }
     };
+    
+    console.log(`   ✅ Loaded ${normalizedCountry}: Industrial=${initialData.industrialOutput}, Military=${initialData.military?.total}`);
   });
   
-  console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)`);
+  console.log(`\n📦 PHASE 2 DATA READY:`);
+  console.log(`   yearlyData[1946] keys:`, Object.keys(room.phase2.yearlyData[1946]));
+  console.log(`   yearlyData[1946] sample:`, JSON.stringify(room.phase2.yearlyData[1946], null, 2).substring(0, 400));
+  console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)\n`);
 }
 
 function calculateAgreementBonus(roomId) {
