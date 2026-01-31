@@ -299,8 +299,8 @@ async function saveGameToDatabase(roomId) {
     };
     
     // Add Phase 2 year if in Phase 2
-    if (room.phase2?.active && room.phase2.currentYear) {
-      updateData.currentYear = room.phase2.currentYear;
+    if (room.phase2?.active && room.currentYear) {
+      updateData.currentYear = room.currentYear;
     }
     
     // Mark as ended if complete
@@ -315,7 +315,7 @@ async function saveGameToDatabase(roomId) {
       console.log(`💾 Game ${roomId} saved to database:`, {
         status: gameStatus,
         round: room.currentRound,
-        year: room.phase2?.currentYear || 'N/A'
+        year: room.currentYear || 'N/A'
       });
     }
   } catch (err) {
@@ -562,7 +562,7 @@ function broadcastToRoom(roomId) {
   if (room.phase2?.active) {
     console.log(`\n📡 BROADCASTING ROOM ${roomId}:`);
     console.log(`   phase2.active: ${room.phase2.active}`);
-    console.log(`   phase2.currentYear: ${room.phase2.currentYear}`);
+    console.log(`   phase2.currentYear: ${room.currentYear}`);
     console.log(`   phase2.yearlyData type: ${typeof room.phase2.yearlyData}`);
     console.log(`   phase2.yearlyData keys:`, Object.keys(room.phase2.yearlyData));
     
