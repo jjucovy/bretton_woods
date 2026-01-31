@@ -282,25 +282,27 @@ async function saveGameToDatabase(roomId) {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    // Map game phase to status
-    let gameStatus = 'lobby';
-    if (room.gamePhase === 'complete') {
-      gameStatus = 'completed';
-    } else if (room.gameStarted) {
-      gameStatus = 'active';
+    // Determine status and current_round (0-17)
+    let status = 'lobby';
+    let currentRound = 0;
+    
+    if (room.phase2?.active) {
+      status = 'phase2_active';
+      currentRound = 0; // Phase 2 doesn't use the 0-17 round counter
+    } else if (room.gamePhase === 'complete') {
+      status = 'completed';
+      currentRound = 17;
+    } else if (room.gameStarted && room.currentRound) {
+      status = 'phase1_active';
+      currentRound = room.currentRound;
     }
     
     // Prepare update data matching API's expected field names
     const updateData = {
-      gameCode: roomId,
-      status: gameStatus,
-      currentRound: room.currentRound || 0
+      game_id: parseInt(roomId),
+      status: status,
+      current_round: currentRound
     };
-    
-    // Add Phase 2 year if in Phase 2
-    if (room.phase2?.active && room.phase2.currentYear) {
-      updateData.currentYear = room.phase2.currentYear;
-    }
     
     // Mark as ended if complete
     if (room.gamePhase === 'complete') {
@@ -311,11 +313,7 @@ async function saveGameToDatabase(roomId) {
     const result = await queryDatabase('updateGame', updateData);
     
     if (result) {
-      console.log(`💾 Game ${roomId} saved to database:`, {
-        status: gameStatus,
-        round: room.currentRound,
-        year: room.phase2?.currentYear || 'N/A'
-      });
+      console.log(`💾 Game ${roomId} saved:`, { status, current_round: currentRound });
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
