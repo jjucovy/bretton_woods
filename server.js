@@ -3427,6 +3427,13 @@ async function initializeFromDatabase() {
       }
 
       globalState.rooms[gameCode] = roomState;
+
+      // If Phase 2 is active but no yearlyData, initialize it
+      if (roomState.phase2?.active && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0)) {
+        console.log(`   ⚠️ Phase 2 active but no yearlyData - initializing...`);
+        initializePhase2(gameCode);
+      }
+
       console.log(`  ✅ Loaded game: ${gameCode} with ${Object.keys(roomState.players).length} player(s)`);
     }
   } else {
