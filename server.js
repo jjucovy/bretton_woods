@@ -158,7 +158,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: roomState ? Object.keys(roomState.players).length : 0,
         gamePhase: roomState ? roomState.gamePhase : 'unknown',
         phase2Active: roomState ? roomState.phase2?.active : false,
-        currentYear: roomState ? 1935+roomState.currentRound : null,
+        currentYear: roomState ? 1935+parseInt(roomState.currentRound) : null,
         createdAt: game.created_at,
         startedAt: game.started_at,
         inMemory: !!roomState
@@ -178,7 +178,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: Object.keys(roomState.players).length,
         gamePhase: roomState.gamePhase,
         phase2Active: roomState.phase2?.active,
-        currentYear: 1935+roomState.currentRound,
+        currentYear: 1935+parseInt(roomState.currentRound),
         createdAt: new Date(roomState.createdAt).toISOString(),
         inMemory: true
       });
@@ -221,7 +221,7 @@ function createGameState(roomId, roomName, hostId) {
     militaryDeployments: militaryDeploymentsData,
     phase2: {
       active: false,
-      currentYear: 1946,
+      currentYear: currentYear,
       maxYears: 7, // 1946-1952
       policies: {}, // year -> country -> policy
       yearlyData: {}, // year -> country -> economic data
@@ -864,7 +864,7 @@ function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
   
-  const currentYear = 1935+room.currentRound;
+  const currentYear = 1935+parseInt(roomState.currentRound);
   const policies = room.phase2.policies[currentYear] || {};
   const prevYearData = room.phase2.yearlyData[currentYear];
   
@@ -1464,7 +1464,7 @@ function resolveCrisisEffects(roomId) {
   if (!crisis) return false;
   
   const responses = room.phase2.crises.responses;
-  const currentYear = 1935+room.currentRound;
+  const currentYear = 1935+parseInt(room.currentRound);
   
   console.log(`=== AUTO-RESOLVING CRISIS: ${crisis.title} ===`);
   
@@ -2421,7 +2421,7 @@ io.on('connection', (socket) => {
     const player = room.players[playerid];
     if (!player) return;
     
-    const currentYear = 1935+room.currentRound;
+    const currentYear = 1935+parseInt(room.currentRound);
     if (!room.phase2.policies[currentYear]) {
       room.phase2.policies[currentYear] = {};
     }
@@ -2501,13 +2501,13 @@ io.on('connection', (socket) => {
           calculateYearEconomics(roomId);
           
           // Advance year
-          room.phase2.currentYear++;
+          currentYear++;
           room.readyPlayers = [];
           
           // Check for new crisis
-          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+          triggerCrisisIfNeeded(roomId, currentYear);
           
-          console.log(`✅ Auto-advanced to year ${room.phase2.currentYear}`);
+          console.log(`✅ Auto-advanced to year ${currentYear}`);
           
           // Update database
           await queryDatabase('updateGame', {
@@ -2552,7 +2552,7 @@ io.on('connection', (socket) => {
     const deploymentRecord = {
       ...deployment,
       timestamp: Date.now(),
-      year: room.phase2.currentYear
+      year: currentYear
     };
     
     room.phase2.deployments.push(deploymentRecord);
@@ -2564,7 +2564,7 @@ io.on('connection', (socket) => {
       const otherDeployments = room.phase2.deployments.filter(d => 
         d.region === deployment.region && 
         d.country !== deployment.country &&
-        d.year === room.phase2.currentYear
+        d.year === currentYear
       );
       
       if (otherDeployments.length > 0) {
@@ -2576,9 +2576,9 @@ io.on('connection', (socket) => {
         const conflict = {
           region: deployment.region,
           countries: [deployment.country, ...otherDeployments.map(d => d.country)],
-          year: room.phase2.currentYear,
+          year: currentYear,
           timestamp: Date.now(),
-          battleId: `${deployment.region}-${room.phase2.currentYear}-${Date.now()}`
+          battleId: `${deployment.region}-${currentYear}-${Date.now()}`
         };
         
         room.phase2.conflicts.push(conflict);
@@ -2598,7 +2598,7 @@ io.on('connection', (socket) => {
               message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
               region: deployment.region,
               countries: involvedCountries,
-              year: room.phase2.currentYear,
+              year: currentYear,
               battleId: conflict.battleId,
               yourCountry: country
             });
@@ -2795,7 +2795,7 @@ io.on('connection', (socket) => {
     }
     
     // Validate military requirements
-    const currentYear = room.phase2.currentYear;
+    const currentYear = room.currentYear;
     const yearData = room.phase2.yearlyData[currentYear]?.[country];
     
     if (choice.militaryRequired && yearData) {
@@ -2914,7 +2914,7 @@ io.on('connection', (socket) => {
     console.log('Room host userId:', room.hostUserId);
     console.log('Room host Id (legacy):', room.hostId);
     console.log('Phase 2 active:', room.phase2.active);
-    console.log('Current year:', room.phase2.currentYear);
+    console.log('Current year:', room.currentYear);
     
     // Use userId if provided (for superadmin), otherwise use playerid
     const checkId = userId || playerid;
@@ -2990,7 +2990,7 @@ io.on('connection', (socket) => {
     }
     
     // Check if we're already at the end
-    if (room.phase2.currentYear >= 1952) {
+    if (room.currentYear >= 1952) {
       // Don't calculate more economics, just finalize
       calculatePhase2Scores(roomId);
       room.gamePhase = 'complete';
@@ -3015,7 +3015,7 @@ io.on('connection', (socket) => {
     }
     
     // Advance year
-    room.phase2.currentYear++;
+    room.currentYear++;
     room.readyPlayers = [];
     
     // Check for crisis events this year
