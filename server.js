@@ -160,7 +160,7 @@ app.get('/api/active-games', async (req, res) => {
         playerCount: roomState ? Object.keys(roomState.players).length : 0,
         gamePhase: roomState ? roomState.gamePhase : 'unknown',
         phase2Active: roomState ? roomState.phase2?.active : false,
-        currentYear: roomState ? 1935+parseInt(roomState.currentRound) : null,
+        currentYear: roomState ? 1935+parseInt(game.currentRound) : null,
         createdAt: game.created_at,
         startedAt: game.started_at,
         inMemory: !!roomState
@@ -3268,7 +3268,7 @@ io.on('connection', (socket) => {
           playerCount: roomState ? Object.keys(roomState.players).length : 0,
           gamePhase: roomState ? roomState.gamePhase : 'unknown',
           phase2Active: roomState ? roomState.phase2?.active : false,
-          currentYear: roomState ? roomState.phase2?.currentYear : null,
+          currentYear: roomState ? parseInt(game.current_round)+1935 : null,
           createdAt: game.created_at,
           startedAt: game.started_at,
           inMemory: !!roomState
@@ -3289,7 +3289,7 @@ io.on('connection', (socket) => {
           playerCount: Object.keys(roomState.players).length,
           gamePhase: roomState.gamePhase,
           phase2Active: roomState.phase2?.active,
-          currentYear: 1935+roomState.currentRound,
+          currentYear: 1935+parseInt(roomState.currentRound),
           createdAt: new Date(roomState.createdAt).toISOString(),
           inMemory: true
         });
