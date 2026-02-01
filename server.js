@@ -359,11 +359,13 @@ async function saveGameToDatabase(roomId) {
     }
 
     // Prepare update data matching API's expected field names
+room.currentRound++
+    
     const updateData = {
       game_id: parseInt(dbGameId),
       gameCode: roomId,
       status: gameStatus,
-      current_round: parseInt(room.currentRound) || 0
+      current_round: parseInt(room.currentRound)|| 0
     };
 
     
