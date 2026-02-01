@@ -58,7 +58,22 @@ async function queryDatabase(action, data = {}) {
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
+    // Get raw text first to handle empty responses
+    const text = await response.text();
+
+    if (!text || text.trim() === '') {
+      console.error(`❌ DB Error [${action}]: Empty response from API`);
+      return null;
+    }
+
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (parseError) {
+      console.error(`❌ DB Error [${action}]: Invalid JSON response:`, text.substring(0, 200));
+      return null;
+    }
+
     console.log(`📥 DB Response [${action}]:`, JSON.stringify(result).substring(0, 200));
 
     if (result.success) {
@@ -288,7 +303,8 @@ function saveState() {
 function saveGamePhase2State(roomId) {
   try {
     const room = globalState.rooms[roomId];
-    if (!room || !room.phase2?.active) return;
+    // Save if we have phase2 data (don't require active - game might be complete)
+    if (!room || !room.phase2 || !room.phase2.yearlyData) return;
 
     const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
     const phase2State = {
@@ -297,11 +313,12 @@ function saveGamePhase2State(roomId) {
       policies: room.phase2.policies,
       achievements: room.phase2.achievements,
       crises: room.phase2.crises,
+      active: room.phase2.active,
       savedAt: Date.now()
     };
 
     fs.writeFileSync(gameStateFile, JSON.stringify(phase2State, null, 2));
-    console.log(`💾 Phase 2 state saved for ${roomId}`);
+    console.log(`💾 Phase 2 state saved for ${roomId} (year: ${room.phase2.currentYear}, active: ${room.phase2.active})`);
   } catch (err) {
     console.error(`❌ Error saving Phase 2 state for ${roomId}:`, err);
   }
@@ -891,35 +908,64 @@ function calculateExchangeRate(country, currentYear, policy, previousData, room)
   };
 }
 
-// Trigger crisis events if appropriate for current year
+// Trigger crisis events at the END of year turn
+// Can trigger multiple crises per year, with random chance per crisis
 function triggerCrisisIfNeeded(roomId, year) {
   const room = globalState.rooms[roomId];
   if (!room) return;
-  
-  // Check if there's already an active crisis
-  if (room.phase2.crises.active) {
-    console.log(`Crisis already active, skipping trigger for year ${year}`);
-    return;
-  }
-  
-  // Find crisis events for this year that haven't been triggered yet
-  const availableCrisis = crisisEventsData.crisisEvents.find(event => 
-    event.year === year && 
+
+  // Find ALL crisis events for this year that haven't been triggered yet
+  const availableCrises = crisisEventsData.crisisEvents.filter(event =>
+    event.year === year &&
     !room.phase2.crises.history.find(h => h.id === event.id)
   );
-  
-  if (availableCrisis) {
-    console.log(`🚨 Triggering crisis: ${availableCrisis.title} for year ${year}`);
-    room.phase2.crises.active = {
-      ...availableCrisis,
-      triggeredAt: Date.now(),
-      resolved: false
-    };
-    room.phase2.crises.responses = {};
-    
-    console.log(`✋ Crisis active - waiting for player responses`);
-    console.log(`Affected countries:`, availableCrisis.affectedCountries);
+
+  if (availableCrises.length === 0) {
+    console.log(`📅 No new crises available for year ${year}`);
+    return;
   }
+
+  console.log(`📅 Found ${availableCrises.length} potential crisis(es) for year ${year}`);
+
+  // Random chance for each crisis to trigger (60% base chance)
+  const CRISIS_TRIGGER_CHANCE = 0.6;
+  const triggeredCrises = [];
+
+  for (const crisis of availableCrises) {
+    const roll = Math.random();
+    const willTrigger = roll < CRISIS_TRIGGER_CHANCE;
+
+    console.log(`   🎲 ${crisis.title}: roll=${roll.toFixed(2)} vs ${CRISIS_TRIGGER_CHANCE} → ${willTrigger ? 'TRIGGERED' : 'skipped'}`);
+
+    if (willTrigger) {
+      triggeredCrises.push(crisis);
+    }
+  }
+
+  if (triggeredCrises.length === 0) {
+    console.log(`📅 No crises triggered this year (all failed random check)`);
+    return;
+  }
+
+  // Store all triggered crises as active (array instead of single object)
+  if (!Array.isArray(room.phase2.crises.active)) {
+    room.phase2.crises.active = [];
+  }
+
+  for (const crisis of triggeredCrises) {
+    console.log(`🚨 Triggering crisis: ${crisis.title}`);
+
+    room.phase2.crises.active.push({
+      ...crisis,
+      triggeredAt: Date.now(),
+      resolved: false,
+      responses: {} // Track responses per crisis
+    });
+
+    console.log(`   Affected countries:`, crisis.affectedCountries);
+  }
+
+  console.log(`✋ ${triggeredCrises.length} crisis(es) active - waiting for player responses`);
 }
 
 function calculateYearEconomics(roomId) {
@@ -1517,71 +1563,97 @@ function calculatePhase2Scores(roomId) {
   return phase2Scores;
 }
 
-// Helper function to resolve crisis and apply effects
-function resolveCrisisEffects(roomId) {
+// Helper function to resolve a specific crisis and apply effects
+// If crisisId is not provided, resolves all active crises
+function resolveCrisisEffects(roomId, crisisId = null) {
   const room = globalState.rooms[roomId];
   if (!room) return false;
-  
-  const crisis = room.phase2.crises.active;
-  if (!crisis) return false;
-  
-  const responses = room.phase2.crises.responses;
+
+  // Handle both old single-crisis format and new array format
+  let activeCrises = room.phase2.crises.active;
+  if (!activeCrises) return false;
+
+  // Convert to array if it's the old format
+  if (!Array.isArray(activeCrises)) {
+    activeCrises = [activeCrises];
+  }
+
+  if (activeCrises.length === 0) return false;
+
   const currentYear = room.phase2.currentYear;
-  
-  console.log(`=== AUTO-RESOLVING CRISIS: ${crisis.title} ===`);
-  
-  // Apply each country's choice effects
-  Object.entries(responses).forEach(([country, response]) => {
-    const choice = response.choice;
-    const effects = choice.effects || {};
-    
-    // Get or create year data for this country
-    if (!room.phase2.yearlyData[currentYear]) {
-      room.phase2.yearlyData[currentYear] = {};
+  const resolvedCrises = [];
+
+  for (const crisis of activeCrises) {
+    // If crisisId specified, only resolve that one
+    if (crisisId && crisis.id !== crisisId) continue;
+
+    const responses = crisis.responses || room.phase2.crises.responses || {};
+
+    console.log(`=== RESOLVING CRISIS: ${crisis.title} ===`);
+
+    // Apply each country's choice effects
+    Object.entries(responses).forEach(([country, response]) => {
+      const choice = response.choice;
+      const effects = choice.effects || {};
+
+      // Get or create year data for this country
+      if (!room.phase2.yearlyData[currentYear]) {
+        room.phase2.yearlyData[currentYear] = {};
+      }
+      if (!room.phase2.yearlyData[currentYear][country]) {
+        const prevYear = currentYear - 1;
+        room.phase2.yearlyData[currentYear][country] = {
+          ...room.phase2.yearlyData[prevYear]?.[country]
+        };
+      }
+
+      const yearData = room.phase2.yearlyData[currentYear][country];
+
+      // Apply economic effects
+      if (effects.gdpGrowth) yearData.gdpGrowth = (yearData.gdpGrowth || 0) + effects.gdpGrowth;
+      if (effects.tradeBalance) yearData.tradeBalance = (yearData.tradeBalance || 0) + effects.tradeBalance;
+      if (effects.inflation) yearData.inflation = (yearData.inflation || 0) + effects.inflation;
+      if (effects.unemployment) yearData.unemployment = (yearData.unemployment || 0) + effects.unemployment;
+
+      // Apply diplomatic points
+      if (effects.diplomaticPoints) {
+        if (!room.phase2.diplomaticPoints) room.phase2.diplomaticPoints = {};
+        room.phase2.diplomaticPoints[country] = (room.phase2.diplomaticPoints[country] || 0) + effects.diplomaticPoints;
+      }
+
+      console.log(`  ${country}: ${choice.text}`);
+      if (Object.keys(effects).length > 0) {
+        console.log(`    Effects:`, effects);
+      }
+    });
+
+    // Move crisis to history
+    room.phase2.crises.history.push({
+      ...crisis,
+      responses,
+      resolvedAt: Date.now(),
+      autoResolved: true
+    });
+
+    resolvedCrises.push(crisis.id);
+    console.log(`✅ Crisis resolved - ${Object.keys(responses).length} countries responded`);
+  }
+
+  // Remove resolved crises from active list
+  if (Array.isArray(room.phase2.crises.active)) {
+    room.phase2.crises.active = room.phase2.crises.active.filter(c => !resolvedCrises.includes(c.id));
+    if (room.phase2.crises.active.length === 0) {
+      room.phase2.crises.active = [];
     }
-    if (!room.phase2.yearlyData[currentYear][country]) {
-      // Initialize with previous year data if missing
-      const prevYear = currentYear - 1;
-      room.phase2.yearlyData[currentYear][country] = {
-        ...room.phase2.yearlyData[prevYear]?.[country]
-      };
-    }
-    
-    const yearData = room.phase2.yearlyData[currentYear][country];
-    
-    // Apply economic effects
-    if (effects.gdpGrowth) yearData.gdpGrowth = (yearData.gdpGrowth || 0) + effects.gdpGrowth;
-    if (effects.tradeBalance) yearData.tradeBalance = (yearData.tradeBalance || 0) + effects.tradeBalance;
-    if (effects.inflation) yearData.inflation = (yearData.inflation || 0) + effects.inflation;
-    if (effects.unemployment) yearData.unemployment = (yearData.unemployment || 0) + effects.unemployment;
-    
-    // Apply diplomatic points (stored separately, counted in final scoring)
-    if (effects.diplomaticPoints) {
-      if (!room.phase2.diplomaticPoints) room.phase2.diplomaticPoints = {};
-      room.phase2.diplomaticPoints[country] = (room.phase2.diplomaticPoints[country] || 0) + effects.diplomaticPoints;
-    }
-    
-    console.log(`  ${country}: ${choice.text}`);
-    if (Object.keys(effects).length > 0) {
-      console.log(`    Effects:`, effects);
-    }
-  });
-  
-  // Move crisis to history
-  room.phase2.crises.history.push({
-    ...crisis,
-    responses,
-    resolvedAt: Date.now(),
-    autoResolved: true
-  });
-  
-  room.phase2.crises.active = null;
+  } else {
+    room.phase2.crises.active = [];
+  }
+
+  // Clear old-style responses if using new format
   room.phase2.crises.responses = {};
-  
-  console.log(`✅ Crisis auto-resolved - ${Object.keys(responses).length} countries responded`);
-  
+
   saveState();
-  return true;
+  return resolvedCrises.length > 0;
 }
 
 // ============================================
@@ -2056,16 +2128,19 @@ io.on('connection', (socket) => {
     if (existingPlayer && existingPlayer.country === country) {
       // Player is rejoining their previous slot
       console.log(`✅ Player ${playerid} rejoining as ${country} in room ${roomId}`);
-      
+
+      // Join the socket room first so they receive the broadcast
+      socket.join(roomId);
+
       // Update socket ID and clear disconnected flag
       existingPlayer.socketId = socket.id;
       existingPlayer.disconnected = false;
       delete existingPlayer.disconnectedAt;
-      
+
       socket.emit('rejoinResult', { success: true, country: country });
-      broadcastToRoom(roomId);
+      broadcastToRoom(roomId); // Now they'll receive this since they're in the room
       saveState();
-      
+
       console.log(`Player ${playerid} reconnected to room ${roomId} as ${country}`);
     } else if (existingPlayer && existingPlayer.country !== country) {
       // Player trying to rejoin as different country
@@ -2901,36 +2976,63 @@ io.on('connection', (socket) => {
   });
 
   // CRISIS: Submit response to active crisis
-  socket.on('submitCrisisResponse', ({ roomId, playerid, choiceId }) => {
+  // Now supports multiple active crises - crisisId identifies which one
+  socket.on('submitCrisisResponse', ({ roomId, playerid, choiceId, crisisId }) => {
     const room = globalState.rooms[roomId];
-    if (!room || !room.phase2.active) return;
-    
+    if (!room || !room.phase2?.active) return;
+
     const player = room.players[playerid];
     if (!player) return;
 
-    const crisis = room.phase2.crises.active;
-    if (!crisis) {
+    // Handle both old single-crisis format and new array format
+    let activeCrises = room.phase2.crises.active;
+    if (!activeCrises || (Array.isArray(activeCrises) && activeCrises.length === 0)) {
       console.log('No active crisis');
+      return;
+    }
+
+    // Convert to array if old format
+    if (!Array.isArray(activeCrises)) {
+      activeCrises = [activeCrises];
+      room.phase2.crises.active = activeCrises;
+    }
+
+    // Find the specific crisis (by crisisId or default to first)
+    let crisis;
+    if (crisisId) {
+      crisis = activeCrises.find(c => c.id === crisisId);
+    } else {
+      // Backwards compatibility: find first crisis this country is affected by
+      const country = player.country;
+      const normalizedCountry = normalizeCountryName(country);
+      crisis = activeCrises.find(c =>
+        c.affectedCountries.some(ac =>
+          ac === country || ac === normalizedCountry || normalizeCountryName(ac) === normalizedCountry
+        )
+      );
+    }
+
+    if (!crisis) {
+      console.log('Crisis not found or player not affected');
       return;
     }
 
     const country = player.country;
     const normalizedCountry = normalizeCountryName(country);
 
-    // Check if this country is affected by the crisis (check both original and normalized)
+    // Check if this country is affected by the crisis
     const isAffected = crisis.affectedCountries.some(c =>
       c === country || c === normalizedCountry || normalizeCountryName(c) === normalizedCountry
     );
     if (!isAffected) {
-      console.log(`${country} (normalized: ${normalizedCountry}) not affected by this crisis`);
-      console.log(`Affected countries: ${crisis.affectedCountries.join(', ')}`);
+      console.log(`${country} (normalized: ${normalizedCountry}) not affected by crisis: ${crisis.title}`);
       return;
     }
 
-    // Get the choice - try both original and normalized country names
+    // Get the choice
     let countryOptions = crisis.options[country] || crisis.options[normalizedCountry];
     if (!countryOptions) {
-      console.log(`No options for ${country} or ${normalizedCountry} in this crisis`);
+      console.log(`No options for ${country} or ${normalizedCountry} in crisis: ${crisis.title}`);
       console.log(`Available option keys: ${Object.keys(crisis.options).join(', ')}`);
       return;
     }
@@ -2960,17 +3062,22 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Store the response using normalized country name
-    room.phase2.crises.responses[normalizedCountry] = {
+    // Initialize responses object on the crisis if needed
+    if (!crisis.responses) {
+      crisis.responses = {};
+    }
+
+    // Store the response in the crisis's own responses object
+    crisis.responses[normalizedCountry] = {
       playerid,
       choiceId,
       choice,
       timestamp: Date.now()
     };
 
-    console.log(`${country} (${normalizedCountry}) submitted crisis response: ${choice.text}`);
+    console.log(`${country} (${normalizedCountry}) submitted response to "${crisis.title}": ${choice.text}`);
 
-    // Check if all affected countries with active players have responded
+    // Check if all affected countries with active players have responded to THIS crisis
     const affectedCountriesWithPlayers = crisis.affectedCountries.filter(c => {
       const normalizedC = normalizeCountryName(c);
       return Object.values(room.players).some(p =>
@@ -2980,14 +3087,14 @@ io.on('connection', (socket) => {
 
     const allResponded = affectedCountriesWithPlayers.every(c => {
       const normalizedC = normalizeCountryName(c);
-      return room.phase2.crises.responses[c] || room.phase2.crises.responses[normalizedC];
+      return crisis.responses[c] || crisis.responses[normalizedC];
     });
 
-    console.log(`Crisis responses: ${Object.keys(room.phase2.crises.responses).length}/${affectedCountriesWithPlayers.length}`);
+    console.log(`Crisis "${crisis.title}" responses: ${Object.keys(crisis.responses).length}/${affectedCountriesWithPlayers.length}`);
 
     if (allResponded) {
-      console.log('✅ All affected countries responded - auto-resolving crisis');
-      resolveCrisisEffects(roomId);
+      console.log(`✅ All affected countries responded to "${crisis.title}" - auto-resolving`);
+      resolveCrisisEffects(roomId, crisis.id);
     }
 
     broadcastToRoom(roomId);
@@ -2997,22 +3104,23 @@ io.on('connection', (socket) => {
   });
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
-  socket.on('resolveCrisis', async ({ roomId, playerid, userId }) => {
+  // crisisId is optional - if not provided, resolves all active crises
+  socket.on('resolveCrisis', async ({ roomId, playerid, userId, crisisId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
+
     // Use userId if provided (for superadmin), otherwise use playerid
     const checkId = userId || playerid;
-    
+
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
-    
+
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
         const dbUser = dbUsers.find(u => u.user_id === checkId);
-        
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
           console.log('User checking crisis resolution permission:', {
@@ -3026,26 +3134,36 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
+
     // Check if user is the host
     const isRoomHost = room.hostUserId === checkId || room.hostId === checkId;
-    
+
     if (!isSuperAdmin && !isRoomHost) {
       socket.emit('resolveCrisisError', {
         message: 'Only the game admin can manually resolve crises'
       });
       return;
     }
-    
-    const crisis = room.phase2.crises.active;
-    if (!crisis) {
+
+    // Handle both old and new format
+    let activeCrises = room.phase2.crises.active;
+    if (!activeCrises || (Array.isArray(activeCrises) && activeCrises.length === 0)) {
       console.log('No active crisis to resolve');
       return;
     }
-    
-    console.log(`Admin manually resolving crisis: ${crisis.title}`);
 
-    const success = resolveCrisisEffects(roomId);
+    if (!Array.isArray(activeCrises)) {
+      activeCrises = [activeCrises];
+    }
+
+    if (crisisId) {
+      const crisis = activeCrises.find(c => c.id === crisisId);
+      console.log(`Admin manually resolving crisis: ${crisis?.title || crisisId}`);
+    } else {
+      console.log(`Admin manually resolving all ${activeCrises.length} active crisis(es)`);
+    }
+
+    const success = resolveCrisisEffects(roomId, crisisId);
     if (success) {
       broadcastToRoom(roomId);
       saveState();
@@ -3568,21 +3686,29 @@ async function initializeFromDatabase() {
 
       globalState.rooms[gameCode] = roomState;
 
-      // If Phase 2 is active but no yearlyData, try to load from per-game file
-      if (roomState.phase2?.active && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0)) {
-        console.log(`   ⚠️ Phase 2 active but no yearlyData - checking per-game file...`);
+      // Try to load Phase 2 state from per-game file if needed
+      // Check: phase2 exists but missing yearlyData, OR game was in phase2/complete
+      const needsPhase2Data = roomState.phase2 && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0);
+      const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
+
+      if (needsPhase2Data || wasInPhase2) {
+        console.log(`   ⚠️ Phase 2 data needed (phase=${roomState.gamePhase}, round=${roomState.currentRound}) - checking per-game file...`);
 
         const savedPhase2State = loadGamePhase2State(gameCode);
         if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
           // Restore from per-game file
+          if (!roomState.phase2) {
+            roomState.phase2 = {};
+          }
           roomState.phase2.currentYear = savedPhase2State.currentYear || roomState.phase2.currentYear;
           roomState.phase2.yearlyData = savedPhase2State.yearlyData;
           roomState.phase2.policies = savedPhase2State.policies || {};
           roomState.phase2.achievements = savedPhase2State.achievements || {};
           roomState.phase2.crises = savedPhase2State.crises || { active: null, history: [], responses: {} };
-          console.log(`   ✅ Restored Phase 2 state from file (years: ${Object.keys(savedPhase2State.yearlyData).join(', ')})`);
-        } else {
-          // Fall back to fresh initialization
+          roomState.phase2.active = savedPhase2State.active !== undefined ? savedPhase2State.active : true;
+          console.log(`   ✅ Restored Phase 2 state from file (year: ${savedPhase2State.currentYear}, years: ${Object.keys(savedPhase2State.yearlyData).join(', ')})`);
+        } else if (wasInPhase2) {
+          // Fall back to fresh initialization only if game was supposed to be in Phase 2
           console.log(`   ⚠️ No saved Phase 2 state found - initializing fresh...`);
           initializePhase2(gameCode);
         }
