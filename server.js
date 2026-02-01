@@ -343,9 +343,10 @@ async function saveGameToDatabase(roomId) {
     const updateData = {
       gameCode: roomId,
       status: gameStatus,
-      currentRound: room.currentRound || 0
+      current_round: parseInt(room.currentRound)|| 0
     };
 
+    
     // Add Phase 2 year if available (don't require active since game might be complete)
     if (room.phase2?.currentYear) {
       updateData.currentYear = room.phase2.currentYear;
@@ -362,7 +363,7 @@ async function saveGameToDatabase(roomId) {
     if (result) {
       console.log(`💾 Game ${roomId} saved to database:`, {
         status: gameStatus,
-        round: room.currentRound,
+        current_round:  parseInt(room.currentRound) ,
         year: room.phase2?.currentYear || 'N/A'
       });
     } else {
