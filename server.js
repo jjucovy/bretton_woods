@@ -341,6 +341,7 @@ async function saveGameToDatabase(roomId) {
 
     // Prepare update data - API uses gameCode as the lookup key, not game_id
     const updateData = {
+      game_id: gameID
       gameCode: roomId,
       status: gameStatus,
       current_round: parseInt(room.currentRound)|| 0
