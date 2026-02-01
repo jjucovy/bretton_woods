@@ -2682,15 +2682,16 @@ io.on('connection', (socket) => {
         
         console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
         
-        // Emit battle modal only to involved countries (not superadmin)
+        // Emit battle modal to involved countries
         const involvedCountries = conflict.countries;
-        involvedCountries.forEach(country => {
-          // Find the player with this country
-          const playerEntry = Object.entries(room.players).find(([id, p]) => p.country === country);
-          if (playerEntry) {
-            const [userId, playerData] = playerEntry;
+        let sentToAnySocket = false;
 
-            // Emit only to this specific player's socket
+        involvedCountries.forEach(country => {
+          const playerEntry = Object.entries(room.players).find(([id, p]) =>
+            p.country === country || normalizeCountryName(p.country) === normalizeCountryName(country)
+          );
+          if (playerEntry) {
+            const [odName, playerData] = playerEntry;
             if (playerData.socketId) {
               io.to(playerData.socketId).emit('militaryConflict', {
                 message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
@@ -2701,11 +2702,25 @@ io.on('connection', (socket) => {
                 yourCountry: country
               });
               console.log(`📨 Sent battle modal to ${country} (socket ${playerData.socketId})`);
-            } else {
-              console.log(`⚠️ No socket for ${country} - cannot send battle modal`);
+              sentToAnySocket = true;
             }
           }
         });
+
+        // Fallback: if no sockets were found, broadcast to room
+        if (!sentToAnySocket) {
+          console.log(`⚠️ No valid sockets found - broadcasting militaryConflict to entire room`);
+          involvedCountries.forEach(country => {
+            io.to(roomId).emit('militaryConflict', {
+              message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
+              region: deployment.region,
+              countries: involvedCountries,
+              year: room.phase2.currentYear,
+              battleId: conflict.battleId,
+              yourCountry: country
+            });
+          });
+        }
       }
     }
     
@@ -2850,10 +2865,11 @@ io.on('connection', (socket) => {
       
       console.log('Battle resolved:', battleResult);
 
-      // Send results only to players involved in the battle (not superadmin)
+      // Send results to players involved in the battle
       console.log('📋 Looking up players for battle results:', battleResult.participants.map(p => p.country));
-      console.log('📋 Room players:', Object.entries(room.players).map(([id, p]) => `${id}: ${p.country}`));
+      console.log('📋 Room players:', Object.entries(room.players).map(([id, p]) => `${id}: ${p.country} (socket: ${p.socketId || 'none'})`));
 
+      let sentToAnySocket = false;
       battleResult.participants.forEach(participant => {
         const playerEntry = Object.entries(room.players).find(([id, p]) => {
           const match = p.country === participant.country ||
@@ -2861,24 +2877,27 @@ io.on('connection', (socket) => {
           return match;
         });
 
-        console.log(`📋 Looking for ${participant.country}: found=${!!playerEntry}`);
-
         if (playerEntry) {
-          const [odName, playerData] = playerEntry;
-          console.log(`📋 Player ${participant.country} socketId: ${playerData.socketId}`);
+          const [playerId, playerData] = playerEntry;
           if (playerData.socketId) {
             io.to(playerData.socketId).emit('battleResolved', {
               battleId,
               result: battleResult
             });
             console.log(`📨 Sent battle result to ${participant.country} (socket: ${playerData.socketId})`);
-          } else {
-            console.log(`⚠️ No socketId for ${participant.country}`);
+            sentToAnySocket = true;
           }
-        } else {
-          console.log(`⚠️ Player not found for country: ${participant.country}`);
         }
       });
+
+      // Fallback: if no sockets were found (e.g., after server restart), broadcast to room
+      if (!sentToAnySocket) {
+        console.log(`⚠️ No valid sockets found - broadcasting battleResolved to entire room`);
+        io.to(roomId).emit('battleResolved', {
+          battleId,
+          result: battleResult
+        });
+      }
     }
 
     broadcastToRoom(roomId);
