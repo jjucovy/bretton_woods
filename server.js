@@ -2072,16 +2072,19 @@ io.on('connection', (socket) => {
     if (existingPlayer && existingPlayer.country === country) {
       // Player is rejoining their previous slot
       console.log(`✅ Player ${playerid} rejoining as ${country} in room ${roomId}`);
-      
+
+      // Join the socket room first so they receive the broadcast
+      socket.join(roomId);
+
       // Update socket ID and clear disconnected flag
       existingPlayer.socketId = socket.id;
       existingPlayer.disconnected = false;
       delete existingPlayer.disconnectedAt;
-      
+
       socket.emit('rejoinResult', { success: true, country: country });
-      broadcastToRoom(roomId);
+      broadcastToRoom(roomId); // Now they'll receive this since they're in the room
       saveState();
-      
+
       console.log(`Player ${playerid} reconnected to room ${roomId} as ${country}`);
     } else if (existingPlayer && existingPlayer.country !== country) {
       // Player trying to rejoin as different country
