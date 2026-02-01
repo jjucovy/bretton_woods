@@ -363,7 +363,7 @@ async function saveGameToDatabase(roomId) {
       game_id: dbGameId,
       gameCode: roomId,
       status: gameStatus,
-      currentRound: parseInt(room.currentRound) || 0
+      currentRound: parseInt(room.currentRound)+1 || 0
     };
 
     // Add Phase 2 year if available (don't require active since game might be complete)
@@ -383,7 +383,7 @@ async function saveGameToDatabase(roomId) {
       console.log(`💾 Game ${roomId} saved to database:`, {
         game_id: dbGameId,
         status: gameStatus,
-        round: parseInt(room.currentRound),
+        round: parseInt(currentRound),
         year: room.phase2?.currentYear || 'N/A'
       });
     }
