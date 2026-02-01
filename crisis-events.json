@@ -66,6 +66,15 @@
               "diplomaticPoints": 5
             },
             "outcome": "Soviet aid helps CCP win by 1949. China becomes communist ally."
+          },
+          {
+            "id": "diplomatic-support",
+            "text": "📢 Diplomatic Support Only",
+            "cost": 100,
+            "effects": {
+              "diplomaticPoints": 3
+            },
+            "outcome": "Public support for CCP without major resource commitment. Mao wins anyway but less grateful."
           }
         ]
       }
@@ -171,6 +180,27 @@
             },
             "outcome": "Accept nationalization with payment. Railways were losing money anyway."
           }
+        ],
+        "USA": [
+          {
+            "id": "economic-pressure",
+            "text": "💵 Economic Pressure on Argentina",
+            "cost": 200,
+            "effects": {
+              "tradeBalance": -200,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Try to isolate Perón economically. Backfires - pushes Argentina toward neutrality."
+          },
+          {
+            "id": "accept-peronism",
+            "text": "🤝 Accept Perón's Third Way",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": 3
+            },
+            "outcome": "Pragmatic acceptance. Argentina remains trading partner despite ideological differences."
+          }
         ]
       }
     },
@@ -237,6 +267,27 @@
               "diplomaticPoints": 10
             },
             "outcome": "Nehru champions anti-colonialism. Leader of non-aligned."
+          }
+        ],
+        "USSR": [
+          {
+            "id": "aid-viet-minh",
+            "text": "🚩 Provide Aid to Viet Minh",
+            "cost": 400,
+            "effects": {
+              "tradeBalance": -400,
+              "diplomaticPoints": 5
+            },
+            "outcome": "Soviet weapons help Ho Chi Minh. Another communist victory in Asia."
+          },
+          {
+            "id": "cautious-support",
+            "text": "📢 Cautious Diplomatic Support",
+            "cost": 50,
+            "effects": {
+              "diplomaticPoints": 3
+            },
+            "outcome": "Support decolonization publicly without major commitment. Focus resources on Europe."
           }
         ]
       }
@@ -486,6 +537,51 @@
               "diplomaticPoints": 3
             },
             "outcome": "Distant conflict. Focus on domestic issues."
+          }
+        ],
+        "USSR": [
+          {
+            "id": "support-north",
+            "text": "🚩 Provide Weapons and Advisors to North Korea",
+            "cost": 800,
+            "effects": {
+              "tradeBalance": -800,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Soviet MiGs and tanks help North Korea. Risk of direct confrontation with USA."
+          },
+          {
+            "id": "limited-involvement",
+            "text": "⚠️ Limited Covert Support",
+            "cost": 300,
+            "effects": {
+              "tradeBalance": -300,
+              "diplomaticPoints": 2
+            },
+            "outcome": "Provide some aid while maintaining deniability. Let China take the lead."
+          }
+        ],
+        "France": [
+          {
+            "id": "token-forces",
+            "text": "🪖 Send Token UN Forces",
+            "militaryRequired": { "army": 10000 },
+            "cost": 150,
+            "effects": {
+              "gdpGrowth": -0.2,
+              "tradeBalance": -150,
+              "diplomaticPoints": 5
+            },
+            "outcome": "Show solidarity with allies while preserving forces for Indochina."
+          },
+          {
+            "id": "focus-indochina",
+            "text": "🇻🇳 Focus on Indochina Instead",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": -3
+            },
+            "outcome": "Already fighting in Vietnam. Cannot commit to Korea. Allies understand... mostly."
           }
         ]
       }
