@@ -2201,14 +2201,23 @@ function YearEndBattlePhase({
             });
             
             socket.on('battleResolved', (data) => {
-              console.log('⚔️ Battle resolved:', data);
+              console.log('⚔️ Battle resolved event received:', data);
+              console.log('⚔️ Battle result data:', data.result);
+              console.log('⚔️ Participants:', data.result?.participants);
+
               // Close the battle decision modal
               setShowBattleModal(false);
               setMilitaryConflict(null);
 
               // Show the battle results modal
-              setBattleResultData(data.result);
-              setShowBattleResultModal(true);
+              if (data.result) {
+                console.log('⚔️ Setting battle result modal state...');
+                setBattleResultData(data.result);
+                setShowBattleResultModal(true);
+                console.log('⚔️ Battle result modal should now be visible');
+              } else {
+                console.error('⚔️ No result data in battleResolved event!');
+              }
             });
 
             return () => {
