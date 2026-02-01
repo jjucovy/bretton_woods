@@ -383,7 +383,7 @@ async function saveGameToDatabase(roomId) {
       console.log(`💾 Game ${roomId} saved to database:`, {
         game_id: dbGameId,
         status: gameStatus,
-        round: currentRound,
+        current_round: currentRound,
         year: room.phase2?.currentYear || 'N/A'
       });
     }
