@@ -2913,43 +2913,50 @@ io.on('connection', (socket) => {
     
     const player = room.players[playerid];
     if (!player) return;
-    
+
     const crisis = room.phase2.crises.active;
     if (!crisis) {
       console.log('No active crisis');
       return;
     }
-    
+
     const country = player.country;
-    
-    // Check if this country is affected by the crisis
-    if (!crisis.affectedCountries.includes(country)) {
-      console.log(`${country} not affected by this crisis`);
+    const normalizedCountry = normalizeCountryName(country);
+
+    // Check if this country is affected by the crisis (check both original and normalized)
+    const isAffected = crisis.affectedCountries.some(c =>
+      c === country || c === normalizedCountry || normalizeCountryName(c) === normalizedCountry
+    );
+    if (!isAffected) {
+      console.log(`${country} (normalized: ${normalizedCountry}) not affected by this crisis`);
+      console.log(`Affected countries: ${crisis.affectedCountries.join(', ')}`);
       return;
     }
-    
-    // Get the choice
-    const countryOptions = crisis.options[country];
+
+    // Get the choice - try both original and normalized country names
+    let countryOptions = crisis.options[country] || crisis.options[normalizedCountry];
     if (!countryOptions) {
-      console.log(`No options for ${country} in this crisis`);
+      console.log(`No options for ${country} or ${normalizedCountry} in this crisis`);
+      console.log(`Available option keys: ${Object.keys(crisis.options).join(', ')}`);
       return;
     }
-    
+
     const choice = countryOptions.find(opt => opt.id === choiceId);
     if (!choice) {
       console.log(`Invalid choice ID: ${choiceId}`);
       return;
     }
-    
+
     // Validate military requirements
     const currentYear = room.phase2.currentYear;
-    const yearData = room.phase2.yearlyData[currentYear]?.[country];
-    
+    const yearData = room.phase2.yearlyData[currentYear]?.[normalizedCountry] ||
+                     room.phase2.yearlyData[currentYear]?.[country];
+
     if (choice.militaryRequired && yearData) {
       const hasArmy = !choice.militaryRequired.army || yearData.military.army >= choice.militaryRequired.army;
       const hasNavy = !choice.militaryRequired.navy || yearData.military.navy >= choice.militaryRequired.navy;
       const hasAir = !choice.militaryRequired.airForce || yearData.military.airForce >= choice.militaryRequired.airForce;
-      
+
       if (!hasArmy || !hasNavy || !hasAir) {
         socket.emit('crisisResponseError', {
           message: 'Insufficient military forces for this option'
@@ -2958,33 +2965,37 @@ io.on('connection', (socket) => {
         return;
       }
     }
-    
-    // Store the response
-    room.phase2.crises.responses[country] = {
+
+    // Store the response using normalized country name
+    room.phase2.crises.responses[normalizedCountry] = {
       playerid,
       choiceId,
       choice,
       timestamp: Date.now()
     };
-    
-    console.log(`${country} submitted crisis response: ${choice.text}`);
-    
+
+    console.log(`${country} (${normalizedCountry}) submitted crisis response: ${choice.text}`);
+
     // Check if all affected countries with active players have responded
     const affectedCountriesWithPlayers = crisis.affectedCountries.filter(c => {
-      return Object.values(room.players).some(p => p.country === c);
+      const normalizedC = normalizeCountryName(c);
+      return Object.values(room.players).some(p =>
+        p.country === c || normalizeCountryName(p.country) === normalizedC
+      );
     });
-    
-    const allResponded = affectedCountriesWithPlayers.every(c => 
-      room.phase2.crises.responses[c]
-    );
-    
+
+    const allResponded = affectedCountriesWithPlayers.every(c => {
+      const normalizedC = normalizeCountryName(c);
+      return room.phase2.crises.responses[c] || room.phase2.crises.responses[normalizedC];
+    });
+
     console.log(`Crisis responses: ${Object.keys(room.phase2.crises.responses).length}/${affectedCountriesWithPlayers.length}`);
-    
+
     if (allResponded) {
       console.log('✅ All affected countries responded - auto-resolving crisis');
       resolveCrisisEffects(roomId);
     }
-    
+
     broadcastToRoom(roomId);
     saveState();
     saveGamePhase2State(roomId);
