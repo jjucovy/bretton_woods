@@ -363,7 +363,7 @@ async function saveGameToDatabase(roomId) {
       game_id: parseInt(dbGameId),
       gameCode: roomId,
       status: gameStatus,
-      current_round: parseInt(room.currentRound)+1 || 0
+      current_round: parseInt(room.currentRound) || 0
     };
 
     
