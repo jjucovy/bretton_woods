@@ -4932,10 +4932,11 @@ function YearEndBattlePhase({
                             onClick={() => {
                               console.log('⚔️ Player chose FIGHT');
                               socket.emit('submitBattleDecision', {
+                                roomId: currentRoomId,
+                                playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
-                                decision: 'FIGHT',
-                                country: playerCountry,
+                                decision: 'fight',
                                 year: militaryConflict.year
                               });
                               setShowBattleModal(false);
@@ -4956,15 +4957,16 @@ function YearEndBattlePhase({
                           >
                             ⚔️ Fight
                           </button>
-                          
+
                           <button
                             onClick={() => {
                               console.log('🤝 Player chose NEGOTIATE');
                               socket.emit('submitBattleDecision', {
+                                roomId: currentRoomId,
+                                playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
-                                decision: 'NEGOTIATE',
-                                country: playerCountry,
+                                decision: 'negotiate',
                                 year: militaryConflict.year
                               });
                               setShowBattleModal(false);
@@ -4985,15 +4987,16 @@ function YearEndBattlePhase({
                           >
                             🤝 Negotiate
                           </button>
-                          
+
                           <button
                             onClick={() => {
                               console.log('🏃 Player chose RETREAT');
                               socket.emit('submitBattleDecision', {
+                                roomId: currentRoomId,
+                                playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
-                                decision: 'RETREAT',
-                                country: playerCountry,
+                                decision: 'withdraw',
                                 year: militaryConflict.year
                               });
                               setShowBattleModal(false);
