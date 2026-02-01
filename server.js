@@ -363,7 +363,7 @@ async function saveGameToDatabase(roomId) {
       game_id: dbGameId,
       gameCode: roomId,
       status: gameStatus,
-      currentRound: parseInt(room.currentRound)+1 || 0
+      currentRound: parseInt(room.currentRound) || 0
     };
 
     // Add Phase 2 year if available (don't require active since game might be complete)
