@@ -331,25 +331,6 @@ async function saveGameToDatabase(roomId) {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
-    // Check if we have a valid database game_id
-    // Database IDs are typically small numbers, timestamps are large (13+ digits)
-    let dbGameId = room.gameId;
-    const isValidDbId = dbGameId && dbGameId < 1000000000000; // Less than timestamp
-
-    // If no valid DB ID, try to look up by gameCode
-    if (!isValidDbId) {
-      console.log(`⚠️ Game ${roomId} has no valid DB ID (gameId=${dbGameId}), trying lookup by gameCode...`);
-      const gameData = await queryDatabase('getGame', { gameCode: roomId });
-      if (gameData && gameData.game_id) {
-        dbGameId = gameData.game_id;
-        room.gameId = dbGameId; // Store for future use
-        console.log(`✅ Found game in DB: game_id=${dbGameId}`);
-      } else {
-        console.log(`⚠️ Game ${roomId} not found in database - skipping DB update`);
-        return;
-      }
-    }
-
     // Map game phase to status
     let gameStatus = 'lobby';
     if (room.gamePhase === 'complete') {
@@ -358,9 +339,8 @@ async function saveGameToDatabase(roomId) {
       gameStatus = 'active';
     }
 
-    // Prepare update data matching API's expected field names
+    // Prepare update data - API uses gameCode as the lookup key, not game_id
     const updateData = {
-      game_id: dbGameId,
       gameCode: roomId,
       status: gameStatus,
       currentRound: room.currentRound || 0
@@ -381,11 +361,12 @@ async function saveGameToDatabase(roomId) {
 
     if (result) {
       console.log(`💾 Game ${roomId} saved to database:`, {
-        game_id: dbGameId,
         status: gameStatus,
         round: room.currentRound,
         year: room.phase2?.currentYear || 'N/A'
       });
+    } else {
+      console.log(`⚠️ Game ${roomId} DB update returned no result`);
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
