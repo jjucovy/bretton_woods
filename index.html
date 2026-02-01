@@ -3798,11 +3798,25 @@ function YearEndBattlePhase({
                       console.log(`   yearlyData[${currentYear}]=`, gameState.phase2?.yearlyData?.[currentYear]);
                       console.log(`   myData=`, myData);
                       const hasSubmitted = gameState.readyPlayers?.includes(playerId);
-                      const activeCrisis = gameState.phase2?.crises?.active;
-                      const crisisResponses = gameState.phase2?.crises?.responses || {};
+
+                      // Handle both old single-crisis format and new array format
+                      let activeCrises = gameState.phase2?.crises?.active;
+                      if (activeCrises && !Array.isArray(activeCrises)) {
+                        activeCrises = [activeCrises]; // Convert old format to array
+                      }
+                      activeCrises = activeCrises || [];
+
+                      // Find the first crisis that affects the current player
+                      const activeCrisis = activeCrises.find(c =>
+                        c.affectedCountries?.includes(playerCountry) ||
+                        c.options?.[playerCountry]
+                      ) || activeCrises[0]; // fallback to first crisis if any
+
+                      // Get responses from the crisis itself (new format) or from parent (old format)
+                      const crisisResponses = activeCrisis?.responses || gameState.phase2?.crises?.responses || {};
                       const myCountryOptions = activeCrisis?.options?.[playerCountry] || [];
                       const hasRespondedToCrisis = crisisResponses[playerCountry];
-                      
+
                       // Debug crisis options
                       if (activeCrisis) {
                         console.log('🔍 Crisis Debug:');
@@ -3910,7 +3924,8 @@ function YearEndBattlePhase({
                                           socket.emit('submitCrisisResponse', {
                                             roomId: currentRoomId,
                                             playerid: playerId,
-                                            choiceId: option.id
+                                            choiceId: option.id,
+                                            crisisId: activeCrisis?.id
                                           });
                                         }}
                                         style={{
