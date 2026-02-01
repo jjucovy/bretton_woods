@@ -2586,8 +2586,9 @@ io.on('connection', (socket) => {
           // Calculate economics
           calculateYearEconomics(roomId);
 
-          // Advance year
+          // Advance year and round
           currentRoom.phase2.currentYear++;
+          currentRoom.currentRound++; // Track Phase 2 progress in DB
           currentRoom.readyPlayers = [];
 
           // Check for new crisis
@@ -3170,8 +3171,9 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Advance year
+    // Advance year and round
     room.phase2.currentYear++;
+    room.currentRound++; // Track Phase 2 progress in DB (11=1946, 12=1947, etc.)
     room.readyPlayers = [];
     
     // Check for crisis events this year
