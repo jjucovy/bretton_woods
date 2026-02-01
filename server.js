@@ -58,7 +58,22 @@ async function queryDatabase(action, data = {}) {
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
+    // Get raw text first to handle empty responses
+    const text = await response.text();
+
+    if (!text || text.trim() === '') {
+      console.error(`❌ DB Error [${action}]: Empty response from API`);
+      return null;
+    }
+
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (parseError) {
+      console.error(`❌ DB Error [${action}]: Invalid JSON response:`, text.substring(0, 200));
+      return null;
+    }
+
     console.log(`📥 DB Response [${action}]:`, JSON.stringify(result).substring(0, 200));
 
     if (result.success) {
@@ -288,7 +303,8 @@ function saveState() {
 function saveGamePhase2State(roomId) {
   try {
     const room = globalState.rooms[roomId];
-    if (!room || !room.phase2?.active) return;
+    // Save if we have phase2 data (don't require active - game might be complete)
+    if (!room || !room.phase2 || !room.phase2.yearlyData) return;
 
     const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
     const phase2State = {
@@ -297,11 +313,12 @@ function saveGamePhase2State(roomId) {
       policies: room.phase2.policies,
       achievements: room.phase2.achievements,
       crises: room.phase2.crises,
+      active: room.phase2.active,
       savedAt: Date.now()
     };
 
     fs.writeFileSync(gameStateFile, JSON.stringify(phase2State, null, 2));
-    console.log(`💾 Phase 2 state saved for ${roomId}`);
+    console.log(`💾 Phase 2 state saved for ${roomId} (year: ${room.phase2.currentYear}, active: ${room.phase2.active})`);
   } catch (err) {
     console.error(`❌ Error saving Phase 2 state for ${roomId}:`, err);
   }
@@ -3567,21 +3584,29 @@ async function initializeFromDatabase() {
 
       globalState.rooms[gameCode] = roomState;
 
-      // If Phase 2 is active but no yearlyData, try to load from per-game file
-      if (roomState.phase2?.active && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0)) {
-        console.log(`   ⚠️ Phase 2 active but no yearlyData - checking per-game file...`);
+      // Try to load Phase 2 state from per-game file if needed
+      // Check: phase2 exists but missing yearlyData, OR game was in phase2/complete
+      const needsPhase2Data = roomState.phase2 && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0);
+      const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
+
+      if (needsPhase2Data || wasInPhase2) {
+        console.log(`   ⚠️ Phase 2 data needed (phase=${roomState.gamePhase}, round=${roomState.currentRound}) - checking per-game file...`);
 
         const savedPhase2State = loadGamePhase2State(gameCode);
         if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
           // Restore from per-game file
+          if (!roomState.phase2) {
+            roomState.phase2 = {};
+          }
           roomState.phase2.currentYear = savedPhase2State.currentYear || roomState.phase2.currentYear;
           roomState.phase2.yearlyData = savedPhase2State.yearlyData;
           roomState.phase2.policies = savedPhase2State.policies || {};
           roomState.phase2.achievements = savedPhase2State.achievements || {};
           roomState.phase2.crises = savedPhase2State.crises || { active: null, history: [], responses: {} };
-          console.log(`   ✅ Restored Phase 2 state from file (years: ${Object.keys(savedPhase2State.yearlyData).join(', ')})`);
-        } else {
-          // Fall back to fresh initialization
+          roomState.phase2.active = savedPhase2State.active !== undefined ? savedPhase2State.active : true;
+          console.log(`   ✅ Restored Phase 2 state from file (year: ${savedPhase2State.currentYear}, years: ${Object.keys(savedPhase2State.yearlyData).join(', ')})`);
+        } else if (wasInPhase2) {
+          // Fall back to fresh initialization only if game was supposed to be in Phase 2
           console.log(`   ⚠️ No saved Phase 2 state found - initializing fresh...`);
           initializePhase2(gameCode);
         }
