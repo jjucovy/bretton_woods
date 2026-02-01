@@ -331,25 +331,6 @@ async function saveGameToDatabase(roomId) {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
-    // Check if we have a valid database game_id
-    // Database IDs are typically small numbers, timestamps are large (13+ digits)
-    let dbGameId = room.gameId;
-    const isValidDbId = dbGameId && dbGameId < 1000000000000; // Less than timestamp
-
-    // If no valid DB ID, try to look up by gameCode
-    if (!isValidDbId) {
-      console.log(`⚠️ Game ${roomId} has no valid DB ID (gameId=${dbGameId}), trying lookup by gameCode...`);
-      const gameData = await queryDatabase('getGame', { gameCode: roomId });
-      if (gameData && gameData.game_id) {
-        dbGameId = gameData.game_id;
-        room.gameId = dbGameId; // Store for future use
-        console.log(`✅ Found game in DB: game_id=${dbGameId}`);
-      } else {
-        console.log(`⚠️ Game ${roomId} not found in database - skipping DB update`);
-        return;
-      }
-    }
-
     // Map game phase to status
     let gameStatus = 'lobby';
     if (room.gamePhase === 'complete') {
@@ -358,11 +339,8 @@ async function saveGameToDatabase(roomId) {
       gameStatus = 'active';
     }
 
-    // Prepare update data matching API's expected field names
-
-    
+    // Prepare update data - API uses gameCode as the lookup key, not game_id
     const updateData = {
-      game_id: parseInt(dbGameId),
       gameCode: roomId,
       status: gameStatus,
       current_round: parseInt(room.currentRound)|| 0
@@ -384,11 +362,12 @@ async function saveGameToDatabase(roomId) {
 
     if (result) {
       console.log(`💾 Game ${roomId} saved to database:`, {
-        game_id: dbGameId,
         status: gameStatus,
         current_round:  parseInt(room.currentRound) ,
         year: room.phase2?.currentYear || 'N/A'
       });
+    } else {
+      console.log(`⚠️ Game ${roomId} DB update returned no result`);
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
@@ -2598,27 +2577,19 @@ io.on('connection', (socket) => {
             currentRoom.phase2.active = false;
             console.log('Phase 2 complete! Final scores calculated.');
 
-            // Update database with completed status
-            await queryDatabase('updateGame', {
-              game_id: currentRoom.gameId,
-              gameCode: roomId,
-              currentRound: currentRoom.currentRound,
-              currentYear: currentRoom.phase2.currentYear,
-              game_status: 'completed'
-            });
-
             broadcastToRoom(roomId);
             saveState();
             saveGamePhase2State(roomId);
-            saveGameToDatabase(roomId);
+            saveGameToDatabase(roomId); // Handles DB update with correct status
             return;
           }
 
           // Calculate economics
           calculateYearEconomics(roomId);
 
-          // Advance year
+          // Advance year and round
           currentRoom.phase2.currentYear++;
+          currentRoom.currentRound++; // Track Phase 2 progress in DB
           currentRoom.readyPlayers = [];
 
           // Check for new crisis
@@ -2631,18 +2602,10 @@ io.on('connection', (socket) => {
             console.log('Reached final year 1952. Next advance will complete Phase 2.');
           }
 
-          // Update database
-          await queryDatabase('updateGame', {
-            game_id: currentRoom.gameId,
-            gameCode: roomId,
-            currentYear: currentRoom.phase2.currentYear,
-            currentRound: currentRoom.currentRound
-          });
-
           broadcastToRoom(roomId);
           saveState();
           saveGamePhase2State(roomId);
-          saveGameToDatabase(roomId);
+          saveGameToDatabase(roomId); // Handles DB update
         } catch (err) {
           console.error('❌ Auto-advance failed:', err);
         }
@@ -3189,24 +3152,10 @@ io.on('connection', (socket) => {
       room.phase2.active = false;
       console.log('Phase 2 complete! Final scores calculated.');
 
-      // Update database with completed status
-      try {
-        await queryDatabase('updateGame', {
-          game_id: room.gameId,
-          gameCode: roomId,
-          currentRound: room.currentRound,
-          currentYear: room.phase2.currentYear,
-          game_status: 'completed'
-        });
-        console.log(`✅ Database updated: game ${roomId} marked as completed`);
-      } catch (err) {
-        console.error('⚠️ Failed to update database:', err);
-      }
-
       broadcastToRoom(roomId);
       saveState();
       saveGamePhase2State(roomId);
-      saveGameToDatabase(roomId);
+      saveGameToDatabase(roomId); // Handles DB update with completed status
       return;
     }
     
@@ -3223,8 +3172,9 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Advance year
+    // Advance year and round
     room.phase2.currentYear++;
+    room.currentRound++; // Track Phase 2 progress in DB (11=1946, 12=1947, etc.)
     room.readyPlayers = [];
     
     // Check for crisis events this year
@@ -3237,20 +3187,6 @@ io.on('connection', (socket) => {
       console.log('Reached final year 1952. Next advance will complete Phase 2.');
     }
 
-    // FIXED: Update database with current game state
-    try {
-      await queryDatabase('updateGame', {
-        game_id: room.gameId,
-        gameCode: roomId,
-        currentRound: room.currentRound,
-        currentYear: room.phase2.currentYear,
-        game_status: room.gamePhase === 'complete' ? 'completed' : 'active'
-      });
-      console.log(`✅ Database updated: ${roomId} now at round ${room.currentRound}, year ${room.phase2.currentYear}`);
-    } catch (error) {
-      console.error('⚠️ Failed to update database:', error);
-    }
-    
     console.log('Broadcasting updated game state...');
     broadcastToRoom(roomId);
     saveState();
