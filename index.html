@@ -2496,14 +2496,20 @@ function YearEndBattlePhase({
 
           // Helper: Convert country code to name used in voting options
           const getCountryNameForVoting = (countryCode) => {
+            // Normalize country codes to match scores object keys
             const codeToName = {
               'USA': 'USA',
               'UK': 'UK',
               'USS': 'USSR',
+              'USSR': 'USSR',
               'FRA': 'France',
+              'France': 'France',
               'CHN': 'China',
+              'China': 'China',
               'IND': 'India',
-              'ARG': 'Argentina'
+              'India': 'India',
+              'ARG': 'Argentina',
+              'Argentina': 'Argentina'
             };
             return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
           };
