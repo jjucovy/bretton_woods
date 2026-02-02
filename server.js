@@ -2549,11 +2549,11 @@ io.on('connection', (socket) => {
   });
   
   // Advance to next round (admin only)
-    socket.on('advanceRound', async ({ roomId}) => {
+  socket.on('advanceRound', async ({ roomId, playerid }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    console.log('🔄 Advance round request:', { roomId, roomHost: room.hostId });
+    console.log('🔄 Advance round request:', { roomId, playerid, roomHost: room.hostId });
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -2563,7 +2563,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === room.hostId);
+        const dbUser = dbUsers.find(u => u.user_id === playerid);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2574,13 +2574,13 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', user_id);
+          console.log('User not found in database with user_id:', playerid);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    const isRoomHost = room.hostId === user_id;
+    const isRoomHost = room.hostId === playerid;
     console.log('Permission check:', { isSuperAdmin, isRoomHost });
     
     // Allow either superadmin OR room host to advance round
