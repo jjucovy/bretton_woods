@@ -2563,7 +2563,7 @@ io.on('connection', (socket) => {
       const dbUsers = await queryDatabase('getAllUsers', {});
       
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
+        const dbUser = dbUsers.find(u => u.user_id === userId);
         
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
@@ -2574,13 +2574,13 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', playerid);
+          console.log('User not found in database with user_id:', userId);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    const isRoomHost = room.hostId === playerid;
+    const isRoomHost = room.hostId === userId;
     console.log('Permission check:', { isSuperAdmin, isRoomHost });
     
     // Allow either superadmin OR room host to advance round
