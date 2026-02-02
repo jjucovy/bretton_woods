@@ -1,4 +1,4 @@
-// server-multiroom.js - Bretton Woods Multi-Room Server
+x// server-multiroom.js - Bretton Woods Multi-Room Server
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -470,6 +470,7 @@ async function saveGameToDatabase(roomId) {
 
     if (result) {
       console.log(`💾 Game ${roomId} saved to database:`, {
+        game_id:  parseInt(room.gameId),
         status: gameStatus,
         current_round:  parseInt(room.currentRound) ,
         year: room.phase2?.currentYear || 'N/A'
