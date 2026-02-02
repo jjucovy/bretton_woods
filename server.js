@@ -2580,7 +2580,7 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    const isRoomHost = room.hostId === userId;
+    const isRoomHost = room.hostId === user_id;
     console.log('Permission check:', { isSuperAdmin, isRoomHost });
     
     // Allow either superadmin OR room host to advance round
