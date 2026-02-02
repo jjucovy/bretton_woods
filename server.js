@@ -2623,11 +2623,15 @@ io.on('connection', (socket) => {
     const readyCount = room.readyPlayers.length;
     
     console.log(`Policy submissions: ${readyCount}/${activePlayers} players ready`);
-    
+
     // Auto-advance if all players submitted
     if (readyCount === activePlayers && activePlayers > 0) {
       console.log('🎯 All players have submitted policies! Auto-advancing year...');
-      
+
+      // Store expected year BEFORE setTimeout to detect if manual advance happened
+      const expectedYear = room.phase2.currentYear;
+      const expectedRound = room.currentRound;
+
       // Wait a moment then auto-advance
       setTimeout(async () => {
         try {
@@ -2635,6 +2639,12 @@ io.on('connection', (socket) => {
           const currentRoom = globalState.rooms[roomId];
           if (!currentRoom || !currentRoom.phase2?.active) {
             console.log('⚠️ Room no longer active, skipping auto-advance');
+            return;
+          }
+
+          // Check if year was already advanced (by manual advanceYear call)
+          if (currentRoom.phase2.currentYear !== expectedYear || currentRoom.currentRound !== expectedRound) {
+            console.log(`⚠️ Year already advanced (expected ${expectedYear}, now ${currentRoom.phase2.currentYear}) - skipping auto-advance`);
             return;
           }
 
