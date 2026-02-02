@@ -2057,6 +2057,42 @@ function YearEndBattlePhase({
             socket.on('connect', () => {
               setConnected(true);
               console.log('Connected to server');
+
+              // Auto-rejoin game if user has saved session and game room
+              const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom');
+              const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
+
+              if (savedPlayerId && savedGameRoom) {
+                console.log('Auto-rejoining game:', savedGameRoom, 'as user:', savedPlayerId);
+                window.actualRoomId = savedGameRoom;
+                setCurrentRoomId(savedGameRoom);
+                socket.emit('joinRoom', { roomId: savedGameRoom, userId: savedPlayerId });
+              } else if (savedPlayerId && !savedGameRoom) {
+                // User is logged in but not in a game - show game selection
+                console.log('User logged in but not in a game - showing game selection');
+                if (savedUserRole !== 'superadmin') {
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
+                  socket.emit('getAvailableGames', { playerId: savedPlayerId });
+                  socket.once('availableGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) {
+                      setAvailableGames(games || []);
+                    }
+                  });
+                } else {
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
+                  socket.emit('getActiveGames', { playerId: savedPlayerId });
+                  socket.once('activeGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) {
+                      setAvailableGames(games || []);
+                    }
+                  });
+                }
+              }
             });
 
             socket.on('disconnect', () => {
@@ -2167,6 +2203,11 @@ function YearEndBattlePhase({
                   setPlayerCountry(country);
                   sessionStorage.setItem('brettonWoodsCountry', country);
                 }
+                // Save game room to session for auto-rejoin on refresh
+                if (window.actualRoomId) {
+                  sessionStorage.setItem('brettonWoodsGameRoom', window.actualRoomId);
+                  console.log('   Saved game room to session:', window.actualRoomId);
+                }
               }
             });
             
@@ -2254,12 +2295,46 @@ function YearEndBattlePhase({
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', newPlayerId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
-                
-                // For new players, show game selection
-                console.log('Registration successful. Showing game selection...');
-                
+
+                console.log('Registration successful. Role:', role);
+
+                // For superadmin, show all games to observe
+                if (role === 'superadmin') {
+                  console.log('Superadmin registered - fetching all active games');
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
+
+                  socket.emit('getActiveGames', { playerId: newPlayerId });
+                  socket.once('activeGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) {
+                      setAvailableGames(games || []);
+                    }
+                  });
+                  return;
+                }
+
+                // For new players, show game selection (fetch available lobby games)
+                console.log('New player registered. Fetching available games...');
+                setShowGameSelection(true);
+                setLoadingGames(true);
+
+                socket.emit('getAvailableGames', { playerId: newPlayerId });
+                socket.once('availableGamesResult', ({ success, games, message: gamesMessage }) => {
+                  setLoadingGames(false);
+                  console.log('Available games result:', { success, games, gamesMessage });
+                  if (success) {
+                    setAvailableGames(games || []);
+                    console.log('Available games loaded:', games);
+                  } else {
+                    console.error('Failed to load games:', gamesMessage);
+                    setAvailableGames([]);
+                  }
+                });
+
               } else {
                 console.error('Registration failed:', message);
+                alert('Registration failed: ' + (message || 'Unknown error'));
               }
             });
           };
@@ -2272,8 +2347,8 @@ function YearEndBattlePhase({
 
             socket.emit('login', { username, password });
             
-            socket.once('loginResult', ({ success, userId, role, message, activeGame }) => {
-              
+            socket.once('loginResult', ({ success, userId, role, message, activeGame, availableGames: loginAvailableGames }) => {
+
               if (success) {
                 setUsername(username);
                 setPlayerId(userId);
@@ -2282,8 +2357,10 @@ function YearEndBattlePhase({
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', userId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
-                
+
                 console.log('Login successful. Role:', role);
+                console.log('Available games from login:', loginAvailableGames?.length || 0);
+
                 // SUPERADMIN: Show game selection screen (all games, any phase)
                 if (role === 'superadmin') {
                   console.log('Superadmin logged in - fetching all active games');
@@ -2330,20 +2407,28 @@ function YearEndBattlePhase({
                 // REGULAR PLAYER WITHOUT ACTIVE GAME: Show available games
                 console.log('Player has no active game - showing available games');
                 setShowGameSelection(true);
-                setLoadingGames(true);
-                
-                socket.emit('getAvailableGames', { playerId: userId });
-                socket.once('availableGamesResult', ({ success, games, message }) => {
+
+                // Use available games from login result if provided
+                if (loginAvailableGames && loginAvailableGames.length > 0) {
+                  console.log('Using available games from login result:', loginAvailableGames);
+                  setAvailableGames(loginAvailableGames);
                   setLoadingGames(false);
-                  console.log('Available games result:', { success, games, message });
-                  if (success) {
-                    setAvailableGames(games || []);
-                    console.log('Available games loaded:', games);
-                  } else {
-                    console.error('Failed to load games:', message);
-                    setAvailableGames([]);
-                  }
-                });
+                } else {
+                  // Fetch from server if not provided in login result
+                  setLoadingGames(true);
+                  socket.emit('getAvailableGames', { playerId: userId });
+                  socket.once('availableGamesResult', ({ success, games, message }) => {
+                    setLoadingGames(false);
+                    console.log('Available games result:', { success, games, message });
+                    if (success) {
+                      setAvailableGames(games || []);
+                      console.log('Available games loaded:', games);
+                    } else {
+                      console.error('Failed to load games:', message);
+                      setAvailableGames([]);
+                    }
+                  });
+                }
 
               } else {
                 console.log('Login failed:', message);
@@ -4788,29 +4873,60 @@ function YearEndBattlePhase({
 
                     {userRole !== 'superadmin' && !playerCountry && (
                       <div>
-                        <h3>Select Your Country</h3>
-                        <div className="country-grid">
-                          {availableCountries.map(key => {
-                            const country = countries[key];
-                            if (!country) return null;
-                            return (
-                              <div 
-                                key={key} 
-                                className={`country-card ${country.color}`}
-                                onClick={() => handleJoinGame(key)}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <h3>{country.name}</h3>
-                                <p style={{ fontSize: '0.875rem', marginBottom: '12px', opacity: '0.9' }}>
-                                  {country.economicPosition}
-                                </p>
-                                <p style={{ fontSize: '0.75rem', opacity: '0.8' }}>
-                                  {country.role}
-                                </p>
-                              </div>
-                            );
-                          })}
+                        <div style={{
+                          padding: '16px',
+                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                          borderRadius: '8px',
+                          marginBottom: '20px',
+                          border: '2px solid #f59e0b'
+                        }}>
+                          <h3 style={{ margin: '0 0 8px 0', color: '#92400e' }}>
+                            Select Your Country
+                          </h3>
+                          <p style={{ margin: 0, color: '#78350f', fontSize: '0.9rem' }}>
+                            Choose a country to represent at the Bretton Woods Conference.
+                            {availableCountries.length === 0
+                              ? ' No countries are currently available.'
+                              : ` ${availableCountries.length} of 7 countries available.`}
+                          </p>
                         </div>
+                        {availableCountries.length > 0 ? (
+                          <div className="country-grid">
+                            {availableCountries.map(key => {
+                              const country = countries[key];
+                              if (!country) return null;
+                              return (
+                                <div
+                                  key={key}
+                                  className={`country-card ${country.color}`}
+                                  onClick={() => handleJoinGame(key)}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  <h3>{country.name}</h3>
+                                  <p style={{ fontSize: '0.875rem', marginBottom: '12px', opacity: '0.9' }}>
+                                    {country.economicPosition}
+                                  </p>
+                                  <p style={{ fontSize: '0.75rem', opacity: '0.8' }}>
+                                    {country.role}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div style={{
+                            padding: '40px',
+                            textAlign: 'center',
+                            background: '#f1f5f9',
+                            borderRadius: '8px',
+                            color: '#64748b'
+                          }}>
+                            <div style={{ fontSize: '2rem', marginBottom: '16px' }}>🏳️</div>
+                            <p style={{ margin: 0 }}>
+                              All countries have been taken. Please wait for another game or check back later.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 

@@ -1758,13 +1758,25 @@ io.on('connection', (socket) => {
       // Get available lobby games if user is a player and doesn't have active game
       let availableGames = [];
       if (role === 'player' && !activeGame) {
-        const lobbyGames = Object.values(globalState.rooms).filter(room => !room.gameStarted);
+        // Filter games that are in lobby phase and have room for new players
+        const lobbyGames = Object.values(globalState.rooms).filter(room => {
+          // Must be in lobby phase (not started)
+          if (room.gamePhase !== 'lobby' || room.gameStarted) return false;
+          // Must have room for new players (less than 7)
+          const playerCount = Object.keys(room.players).length;
+          if (playerCount >= 7) return false;
+          return true;
+        });
         availableGames = lobbyGames.map(room => ({
           roomId: room.roomId,
           gameCode: room.gameCode || room.roomId,
           playerCount: Object.keys(room.players).length,
-          maxPlayers: 7
+          maxPlayers: 7,
+          availableSlots: 7 - Object.keys(room.players).length,
+          hostUserId: room.hostUserId || room.hostId,
+          createdAt: room.createdAt
         }));
+        console.log(`   Found ${availableGames.length} available lobby games for player`);
       }
       
       socket.emit('loginResult', { 
@@ -1946,15 +1958,59 @@ io.on('connection', (socket) => {
           country: existingPlayer.country
         });
       } else {
-        console.log(`   Player ${userId} not found in room - will need to select country`);
-        
-        socket.emit('joinRoomResult', { 
-          success: true, 
-          roomId: roomId,
-          actualRoomId: roomId,
-          role: 'player',
-          needsCountrySelection: true
-        });
+        // Player not found in memory - check database for existing assignment
+        console.log(`   Player ${userId} not found in memory - checking database...`);
+
+        let dbAssignment = null;
+        try {
+          dbAssignment = await queryDatabase('getPlayerAssignment', {
+            user_id: userId,
+            game_code: roomId
+          });
+        } catch (err) {
+          console.error('Error checking player assignment:', err);
+        }
+
+        if (dbAssignment && dbAssignment.country_code) {
+          // Player has an existing assignment in database - restore them
+          console.log(`   ✓ Found player assignment in database: ${dbAssignment.country_code}`);
+
+          // Add player back to room state
+          room.players[userId] = {
+            id: userId,
+            userId: userId,
+            playerId: dbAssignment.player_id,
+            country: dbAssignment.country_code,
+            socketId: socket.id,
+            joinedAt: Date.now(),
+            role: 'player',
+            reconnected: true
+          };
+
+          socket.emit('joinRoomResult', {
+            success: true,
+            roomId: roomId,
+            actualRoomId: roomId,
+            role: 'player',
+            reconnected: true,
+            country: dbAssignment.country_code
+          });
+
+          broadcastToRoom(roomId);
+          saveState();
+          console.log(`✅ User ${userId} restored to game ${roomId} as ${dbAssignment.country_code} from database`);
+        } else {
+          // Player has no assignment - they need to select a country
+          console.log(`   Player ${userId} not found in database - needs country selection`);
+
+          socket.emit('joinRoomResult', {
+            success: true,
+            roomId: roomId,
+            actualRoomId: roomId,
+            role: 'player',
+            needsCountrySelection: true
+          });
+        }
       }
     } else {
       socket.emit('joinRoomResult', { 
