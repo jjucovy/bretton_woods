@@ -2638,8 +2638,11 @@ io.on('connection', (socket) => {
             return;
           }
 
-          // Check for crisis
-          if (currentRoom.phase2.crises.active) {
+          // Check for crisis (now an array - check length)
+          const hasActiveCrisis = Array.isArray(currentRoom.phase2.crises.active)
+            ? currentRoom.phase2.crises.active.length > 0
+            : !!currentRoom.phase2.crises.active;
+          if (hasActiveCrisis) {
             console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
             return;
           }
@@ -3256,11 +3259,15 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check if there's an active crisis that needs resolution
-    if (room.phase2.crises.active) {
+    // Check if there's an active crisis that needs resolution (now an array)
+    const activeCrises = Array.isArray(room.phase2.crises.active)
+      ? room.phase2.crises.active
+      : (room.phase2.crises.active ? [room.phase2.crises.active] : []);
+    if (activeCrises.length > 0) {
+      const crisisTitles = activeCrises.map(c => c.title).join(', ');
       console.log('⚠️ Cannot advance year - active crisis must be resolved first');
       socket.emit('advanceYearError', {
-        message: `Crisis in progress: ${room.phase2.crises.active.title}. Resolve the crisis before advancing.`
+        message: `Crisis in progress: ${crisisTitles}. Resolve the crisis before advancing.`
       });
       return;
     }
