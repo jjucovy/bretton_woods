@@ -736,6 +736,9 @@ function initializePhase2(roomId) {
   console.log(`   yearlyData[1946] sample:`, JSON.stringify(room.phase2.yearlyData[1946], null, 2).substring(0, 400));
   console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)\n`);
 
+  // Check for 1946 crises at game start
+  triggerCrisisIfNeeded(roomId, 1946);
+
   // Save Phase 2 state to per-game file
   saveGamePhase2State(roomId);
 }
