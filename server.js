@@ -2032,15 +2032,19 @@ io.on('connection', (socket) => {
   });
   
   // Delete room (host only)
-  socket.on('deleteRoom', ({ roomId, playerid }) => {
+  socket.on('deleteRoom', ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+
     const room = globalState.rooms[roomId];
-    
+
     if (!room) {
       socket.emit('deleteRoomResult', { success: false, message: 'Room not found' });
       return;
     }
-    
-    if (room.hostId !== playerid) {
+
+    // Check using hostUserId (which is always user_id)
+    if (room.hostUserId !== id && room.hostId !== id) {
       socket.emit('deleteRoomResult', { success: false, message: 'Only host can delete room' });
       return;
     }
@@ -2252,30 +2256,32 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', async ({ roomId, playerid, skipPhase1 }) => {
+  socket.on('startGame', async ({ roomId, playerId, playerid, userId, skipPhase1 }) => {
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const id = userId || playerId || playerid;
+
     console.log('=== START GAME REQUEST ===');
     console.log('Room ID:', roomId);
-    console.log('Player ID:', playerid);
+    console.log('User ID:', id);
     console.log('Skip Phase 1:', skipPhase1 || false);
-    
+
     const room = globalState.rooms[roomId];
     if (!room) {
       console.log('ERROR: Room not found');
       socket.emit('startGameResult', { success: false, message: 'Room not found' });
       return;
     }
-    
-    // Check if user is superadmin by querying database
-    // We need to find the user by their user_id (which is playerid in our case)
+
+    // Check if user is superadmin by querying database using user_id
     let isSuperAdmin = false;
-    
+
     try {
       // Query database to get user info
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
           console.log('User found in DB:', {
@@ -2285,16 +2291,17 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', playerid);
+          console.log('User not found in database with user_id:', id);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
-    const isRoomHost = room.hostId === playerid;
+
+    // Check if user is the room host using hostUserId (which is always user_id)
+    const isRoomHost = room.hostUserId === id || room.hostId === id;
     console.log('Is superadmin:', isSuperAdmin);
-    console.log('Is room host:', isRoomHost);
+    console.log('Is room host:', isRoomHost, '| Checking id:', id, '| hostUserId:', room.hostUserId, '| hostId:', room.hostId);
     
     if (!isSuperAdmin && !isRoomHost) {
       console.log('ERROR: Not superadmin or room host');
@@ -2549,22 +2556,25 @@ io.on('connection', (socket) => {
   });
   
   // Advance to next round (admin only)
-  socket.on('advanceRound', async ({ roomId, playerid }) => {
+  socket.on('advanceRound', async ({ roomId, playerId, playerid, userId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
-    console.log('🔄 Advance round request:', { roomId, playerid, roomHost: room.hostId });
-    
-    // Check if user is superadmin by querying database
+
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const id = userId || playerId || playerid;
+
+    console.log('🔄 Advance round request:', { roomId, receivedId: id, hostUserId: room.hostUserId, hostId: room.hostId });
+
+    // Check if user is superadmin by querying database using user_id
     let isSuperAdmin = false;
-    
- try {
-      // Query database to get user info
+
+    try {
+      // Query database to get user info by user_id
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
           console.log('User found in DB:', {
@@ -2574,20 +2584,22 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', playerid);
+          console.log('User not found in database with user_id:', id);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    const isRoomHost = room.hostId === playerid;
-    console.log('Permission check:', { isSuperAdmin, isRoomHost });
-    
+
+    // Check if user is the room host using hostUserId (which is always user_id)
+    const isRoomHost = room.hostUserId === id || room.hostId === id;
+    console.log('Permission check:', { isSuperAdmin, isRoomHost, checkingId: id, hostUserId: room.hostUserId, hostId: room.hostId });
+
     // Allow either superadmin OR room host to advance round
     if (!isSuperAdmin && !isRoomHost) {
       console.log('❌ Advance round rejected - not admin or host');
-      socket.emit('advanceRoundError', { 
-        message: 'Only the game admin can advance the round.' 
+      socket.emit('advanceRoundError', {
+        message: 'Only the game admin can advance the round.'
       });
       return;
     }
@@ -3164,12 +3176,12 @@ io.on('connection', (socket) => {
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
   // crisisId is optional - if not provided, resolves all active crises
-  socket.on('resolveCrisis', async ({ roomId, playerid, userId, crisisId }) => {
+  socket.on('resolveCrisis', async ({ roomId, playerId, playerid, userId, crisisId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
-    // Use userId if provided (for superadmin), otherwise use playerid
-    const checkId = userId || playerid;
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const checkId = userId || playerId || playerid;
 
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -3231,26 +3243,25 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('advanceYear', async ({ roomId, playerid, userId }) => {
+  socket.on('advanceYear', async ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const checkId = userId || playerId || playerid;
+
     console.log('=== ADVANCE YEAR REQUEST ===');
     console.log('Room ID:', roomId);
-    console.log('Player ID:', playerid);
-    console.log('User ID:', userId);
-    
+    console.log('User ID:', checkId);
+
     const room = globalState.rooms[roomId];
     if (!room) {
       console.log('ERROR: Room not found');
       return;
     }
-    
+
     console.log('Room found:', room.roomName);
     console.log('Room host userId:', room.hostUserId);
     console.log('Room host Id (legacy):', room.hostId);
     console.log('Phase 2 active:', room.phase2.active);
     console.log('Current year:', room.phase2.currentYear);
-    
-    // Use userId if provided (for superadmin), otherwise use playerid
-    const checkId = userId || playerid;
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -3374,19 +3385,22 @@ io.on('connection', (socket) => {
   });
 
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', async ({ roomId, playerid }) => {
+  socket.on('resetRoom', async ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
+
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
-    
+
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3394,8 +3408,9 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
-    const isRoomHost = room.hostId === playerid;
+
+    // Check using hostUserId (which is always user_id)
+    const isRoomHost = room.hostUserId === id || room.hostId === id;
     
     if (!isSuperAdmin && !isRoomHost) {
       socket.emit('resetRoomResult', { success: false, message: 'Only the game admin can reset games' });
@@ -3428,19 +3443,21 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Clear all data
-  socket.on('clearAllData', async ({ playerid, confirmCode }) => {
-    console.log('clearAllData called:', { playerid, confirmCode });
-    
+  socket.on('clearAllData', async ({ playerId, playerid, userId, confirmCode }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+    console.log('clearAllData called:', { userId: id, confirmCode });
+
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
     let dbUser = null;
-    
+
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3448,7 +3465,7 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
+
     if (!dbUser) {
       socket.emit('clearDataResult', { success: false, message: 'User not found. Please try logging out and back in.' });
       return;
@@ -3481,20 +3498,23 @@ io.on('connection', (socket) => {
     saveState();
     
     socket.emit('clearDataResult', { success: true, message: 'All data cleared except administrator account' });
-    console.log(`All data cleared by superadmin: ${playerid}`);
+    console.log(`All data cleared by superadmin: ${id}`);
   });
-  
+
   // SUPERADMIN ONLY: Delete any room
-  socket.on('adminDeleteRoom', async ({ roomId, playerid }) => {
+  socket.on('adminDeleteRoom', async ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
-    
+
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3502,7 +3522,7 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
+
     if (!isSuperAdmin) {
       socket.emit('deleteRoomResult', { success: false, message: 'Administrator access required' });
       return;
