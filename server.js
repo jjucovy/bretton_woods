@@ -2788,14 +2788,14 @@ io.on('connection', (socket) => {
     try {
       const policyData = {
         gameCode: roomId,
-        playerId: playerid,
-        year: currentYear,
+        userId: playerid,
         round: room.currentRound,
+        year: currentYear,
         ...policy,
         submittedAt: new Date().toISOString()
       };
-      
-    await queryDatabase('savePolicyDecision', policyData);
+
+      await queryDatabase('savePolicy', policyData);
       console.log(`✅ Policy saved to database for ${player.country}`);
     } catch (error) {
       console.error('⚠️ Failed to save policy to database:', error);
