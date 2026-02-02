@@ -446,15 +446,17 @@ async function saveGameToDatabase(roomId) {
       gameStatus = 'active';
     }
 
+    // Get the current round value
+    const currentRound = room.currentRound !== undefined ? Number(room.currentRound) : 0;
+
     // Prepare update data - API uses gameCode as the lookup key, not game_id
     const updateData = {
-      game_id: parseInt(room.gameId),
+      game_id: parseInt(room.gameId) || 0,
       gameCode: roomId,
       status: gameStatus,
-      current_round: parseInt(room.currentRound)|| 0
+      current_round: currentRound
     };
 
-    
     // Add Phase 2 year if available (don't require active since game might be complete)
     if (room.phase2?.currentYear) {
       updateData.currentYear = room.phase2.currentYear;
@@ -465,18 +467,20 @@ async function saveGameToDatabase(roomId) {
       updateData.endedAt = true; // API will set to NOW()
     }
 
+    console.log(`💾 Saving game ${roomId} to database with current_round=${currentRound}, phase2.year=${room.phase2?.currentYear}`);
+
     // Update game in database
     const result = await queryDatabase('updateGame', updateData);
 
     if (result) {
-      console.log(`💾 Game ${roomId} saved to database:`, {
-        game_id:  parseInt(room.gameId),
+      console.log(`✅ Game ${roomId} saved to database:`, {
         status: gameStatus,
-        current_round:  parseInt(room.currentRound) ,
-        year: room.phase2?.currentYear || 'N/A'
+        current_round: currentRound,
+        year: room.phase2?.currentYear || 'N/A',
+        result: JSON.stringify(result).substring(0, 100)
       });
     } else {
-      console.log(`⚠️ Game ${roomId} DB update returned no result`);
+      console.log(`⚠️ Game ${roomId} DB update returned no result - check PHP API logs`);
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
@@ -1922,11 +1926,22 @@ io.on('connection', (socket) => {
     if (roomId.startsWith('game_')) {
       globalState.rooms[roomId].status = 'active';
       globalState.rooms[roomId].gameCode = roomId;
-      
+
+      // Fetch the actual game_id from database and store it
+      try {
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        if (gameData && gameData.game_id) {
+          globalState.rooms[roomId].gameId = gameData.game_id;
+          console.log(`   Retrieved game_id ${gameData.game_id} from database for ${roomId}`);
+        }
+      } catch (err) {
+        console.error('Error fetching game_id:', err);
+      }
+
       // Update database to set status to active and assign host
       try {
-        await queryDatabase('updateGameStatus', { 
-          gameCode: roomId, 
+        await queryDatabase('updateGameStatus', {
+          gameCode: roomId,
           status: 'active',
           hostUserId: creatorId
         });
@@ -1962,11 +1977,25 @@ io.on('connection', (socket) => {
     
     // Store userId on socket for later reference
     socket.userId = userId;
-    
+
     const room = globalState.rooms[roomId];
-    
+
+    // Ensure we have the database game_id (not just Date.now() timestamp)
+    if (roomId.startsWith('game_') && (!room.gameId || room.gameId > 1000000000000)) {
+      // gameId looks like a timestamp, fetch the real one from database
+      try {
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        if (gameData && gameData.game_id) {
+          room.gameId = gameData.game_id;
+          console.log(`   Updated gameId from database: ${gameData.game_id}`);
+        }
+      } catch (err) {
+        console.error('Error fetching game_id on join:', err);
+      }
+    }
+
     // Debug: Log room host information
-    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}`);
+    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}, gameId=${room.gameId}`);
     
     // Check if user is superadmin
     let isSuperAdmin = false;
