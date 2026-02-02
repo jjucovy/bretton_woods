@@ -2438,22 +2438,31 @@ io.on('connection', (socket) => {
   });
   
   // Vote on current issue
-  socket.on('vote', ({ roomId, playerid, choice }) => {
+  socket.on('vote', ({ roomId, playerId, playerid, userId, choice }) => {
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const id = userId || playerId || playerid;
+
     const room = globalState.rooms[roomId];
     if (!room || !room.gameStarted) {
       console.log('Vote rejected: room not found or game not started');
       return;
     }
-    
+
     // Check player is in game
-    if (!room.players[playerid]) {
-      console.log('Vote rejected: player not in game');
+    if (!room.players[id]) {
+      console.log(`Vote rejected: player ${id} not in game. Players:`, Object.keys(room.players));
       return;
     }
-    
+
+    // Check if player has already voted this round (prevent double-voting on tie revotes)
+    if (room.votes[id]) {
+      console.log(`Vote rejected: player ${id} has already voted this round`);
+      return;
+    }
+
     // Store vote
-    room.votes[playerid] = choice;
-    console.log(`Vote received: ${playerid} voted ${choice} in room ${roomId}`);
+    room.votes[id] = choice;
+    console.log(`Vote received: ${id} voted ${choice} in room ${roomId}`);
     
     // Check if all players have voted
     const playerids = Object.keys(room.players);
@@ -3435,12 +3444,21 @@ io.on('connection', (socket) => {
       console.log('ERROR: Phase 2 not active');
       return;
     }
-    
+
     // Check if there's an active crisis that needs resolution
-    if (room.phase2.crises.active) {
-      console.log('⚠️ Cannot advance year - active crisis must be resolved first');
+    // Handle both array format and single object format
+    const activeCrises = room.phase2.crises.active;
+    const hasActiveCrisis = Array.isArray(activeCrises)
+      ? activeCrises.length > 0
+      : activeCrises !== null && activeCrises !== undefined;
+
+    if (hasActiveCrisis) {
+      const crisisTitle = Array.isArray(activeCrises)
+        ? activeCrises.map(c => c.title || c.id || 'Unknown').join(', ')
+        : (activeCrises.title || activeCrises.id || 'Unknown');
+      console.log('⚠️ Cannot advance year - active crisis must be resolved first:', crisisTitle);
       socket.emit('advanceYearError', {
-        message: `Crisis in progress: ${room.phase2.crises.active.title}. Resolve the crisis before advancing.`
+        message: `Crisis in progress: ${crisisTitle}. Resolve the crisis before advancing.`
       });
       return;
     }
