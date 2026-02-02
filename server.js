@@ -446,15 +446,17 @@ async function saveGameToDatabase(roomId) {
       gameStatus = 'active';
     }
 
+    // Get the current round value
+    const currentRound = room.currentRound !== undefined ? Number(room.currentRound) : 0;
+
     // Prepare update data - API uses gameCode as the lookup key, not game_id
     const updateData = {
-      game_id: parseInt(room.gameId),
+      game_id: parseInt(room.gameId) || 0,
       gameCode: roomId,
       status: gameStatus,
-      current_round: parseInt(room.currentRound)|| 0
+      current_round: currentRound
     };
 
-    
     // Add Phase 2 year if available (don't require active since game might be complete)
     if (room.phase2?.currentYear) {
       updateData.currentYear = room.phase2.currentYear;
@@ -465,17 +467,20 @@ async function saveGameToDatabase(roomId) {
       updateData.endedAt = true; // API will set to NOW()
     }
 
+    console.log(`💾 Saving game ${roomId} to database with current_round=${currentRound}, phase2.year=${room.phase2?.currentYear}`);
+
     // Update game in database
     const result = await queryDatabase('updateGame', updateData);
 
     if (result) {
-      console.log(`💾 Game ${roomId} saved to database:`, {
+      console.log(`✅ Game ${roomId} saved to database:`, {
         status: gameStatus,
-        current_round:  parseInt(room.currentRound) ,
-        year: room.phase2?.currentYear || 'N/A'
+        current_round: currentRound,
+        year: room.phase2?.currentYear || 'N/A',
+        result: JSON.stringify(result).substring(0, 100)
       });
     } else {
-      console.log(`⚠️ Game ${roomId} DB update returned no result`);
+      console.log(`⚠️ Game ${roomId} DB update returned no result - check PHP API logs`);
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
