@@ -2549,11 +2549,11 @@ io.on('connection', (socket) => {
   });
   
   // Advance to next round (admin only)
-  socket.on('advanceRound', async ({ roomId, playerid }) => {
+  socket.on('advanceRound', async ({ roomId, userId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
     
-    console.log('🔄 Advance round request:', { roomId, playerid, roomHost: room.hostId });
+    console.log('🔄 Advance round request:', { roomId, userId, roomHost: room.hostId });
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
