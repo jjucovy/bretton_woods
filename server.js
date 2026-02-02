@@ -1926,11 +1926,22 @@ io.on('connection', (socket) => {
     if (roomId.startsWith('game_')) {
       globalState.rooms[roomId].status = 'active';
       globalState.rooms[roomId].gameCode = roomId;
-      
+
+      // Fetch the actual game_id from database and store it
+      try {
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        if (gameData && gameData.game_id) {
+          globalState.rooms[roomId].gameId = gameData.game_id;
+          console.log(`   Retrieved game_id ${gameData.game_id} from database for ${roomId}`);
+        }
+      } catch (err) {
+        console.error('Error fetching game_id:', err);
+      }
+
       // Update database to set status to active and assign host
       try {
-        await queryDatabase('updateGameStatus', { 
-          gameCode: roomId, 
+        await queryDatabase('updateGameStatus', {
+          gameCode: roomId,
           status: 'active',
           hostUserId: creatorId
         });
@@ -1966,11 +1977,25 @@ io.on('connection', (socket) => {
     
     // Store userId on socket for later reference
     socket.userId = userId;
-    
+
     const room = globalState.rooms[roomId];
-    
+
+    // Ensure we have the database game_id (not just Date.now() timestamp)
+    if (roomId.startsWith('game_') && (!room.gameId || room.gameId > 1000000000000)) {
+      // gameId looks like a timestamp, fetch the real one from database
+      try {
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        if (gameData && gameData.game_id) {
+          room.gameId = gameData.game_id;
+          console.log(`   Updated gameId from database: ${gameData.game_id}`);
+        }
+      } catch (err) {
+        console.error('Error fetching game_id on join:', err);
+      }
+    }
+
     // Debug: Log room host information
-    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}`);
+    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}, gameId=${room.gameId}`);
     
     // Check if user is superadmin
     let isSuperAdmin = false;
