@@ -113,16 +113,35 @@ async function sendAdminNotification(subject, message, gameCode = null) {
 // Normalize country names to ensure consistent keys
 function normalizeCountryName(country) {
   const normalizations = {
+    // USSR variations
     'USS': 'USSR',
+    'SUN': 'USSR',
+    'SOV': 'USSR',
     'Soviet Union': 'USSR',
+    'Soviet': 'USSR',
+    // USA variations
     'US': 'USA',
     'United States': 'USA',
+    'America': 'USA',
+    // UK variations
     'GB': 'UK',
+    'GBR': 'UK',
     'Great Britain': 'UK',
     'United Kingdom': 'UK',
+    'Britain': 'UK',
+    // China variations
+    'CHN': 'China',
     'PRC': 'China',
     "People's Republic of China": 'China',
-    'French': 'France'
+    'Republic of China': 'China',
+    // France variations
+    'FRA': 'France',
+    'French': 'France',
+    // India variations
+    'IND': 'India',
+    'British Raj': 'India',
+    // Argentina variations
+    'ARG': 'Argentina'
   };
   return normalizations[country] || country;
 }
@@ -1542,12 +1561,19 @@ function calculateYearEconomics(roomId) {
 function calculatePhase2Scores(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
-  
+
+  console.log(`\n📊 Calculating Phase 2 scores for room ${roomId}`);
+  console.log(`   Players:`, Object.values(room.players).map(p => `${p.country} -> ${normalizeCountryName(p.country)}`));
+  console.log(`   YearlyData years:`, Object.keys(room.phase2.yearlyData || {}));
+
   const phase2Scores = {};
   const scoreBreakdowns = {};
-  
+
   Object.values(room.players).forEach(player => {
-    const country = normalizeCountryName(player.country);
+    const rawCountry = player.country;
+    const country = normalizeCountryName(rawCountry);
+    console.log(`   Processing player: raw=${rawCountry}, normalized=${country}`);
+
     let score = 0;
     const breakdown = {
       gdp: 0,
@@ -1557,21 +1583,27 @@ function calculatePhase2Scores(roomId) {
       stability: 0,
       brettonWoods: 0
     };
-    
+
     // Calculate average performance
     let totalGDP = 0, totalInflation = 0, totalUnemployment = 0, yearsCount = 0;
     let positiveTradeYears = 0;
-    
+
     for (let year = 1947; year <= 1952; year++) {
-      const data = room.phase2.yearlyData[year]?.[country];
+      // Try both normalized and raw country names
+      let data = room.phase2.yearlyData[year]?.[country];
+      if (!data && rawCountry !== country) {
+        data = room.phase2.yearlyData[year]?.[rawCountry];
+      }
       if (data) {
-        totalGDP += data.gdpGrowth;
-        totalInflation += data.inflation;
-        totalUnemployment += data.unemployment;
-        if (data.tradeBalance > 0) positiveTradeYears++;
+        totalGDP += data.gdpGrowth || 0;
+        totalInflation += data.inflation || 0;
+        totalUnemployment += data.unemployment || 0;
+        if ((data.tradeBalance || 0) > 0) positiveTradeYears++;
         yearsCount++;
       }
     }
+
+    console.log(`   ${country}: found data for ${yearsCount} years`);
     
     if (yearsCount > 0) {
       const avgGDP = totalGDP / yearsCount;
@@ -1648,13 +1680,23 @@ function calculatePhase2Scores(roomId) {
       }
     }
     
-    phase2Scores[country] = Math.round(score);
+    // Ensure score is a valid number
+    const finalScore = isNaN(score) ? 0 : Math.round(score);
+    phase2Scores[country] = finalScore;
     scoreBreakdowns[country] = breakdown;
-    room.scores[country] = (room.scores[country] || 0) + phase2Scores[country];
+
+    // Initialize room.scores if needed and add Phase 2 score
+    if (!room.scores) room.scores = {};
+    const prevScore = typeof room.scores[country] === 'number' ? room.scores[country] : 0;
+    room.scores[country] = prevScore + finalScore;
+
+    console.log(`   ${country}: Phase2 score=${finalScore}, Total score=${room.scores[country]}`);
   });
-  
+
   // Store breakdowns for display
   room.phase2.scoreBreakdowns = scoreBreakdowns;
+
+  console.log(`📊 Final scores:`, room.scores);
   
   console.log(`Phase 2 final scores:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);

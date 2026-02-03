@@ -2499,9 +2499,14 @@ function YearEndBattlePhase({
             // Normalize country codes to match scores object keys
             const codeToName = {
               'USA': 'USA',
+              'US': 'USA',
               'UK': 'UK',
+              'GB': 'UK',
+              'GBR': 'UK',
               'USS': 'USSR',
               'USSR': 'USSR',
+              'SUN': 'USSR',
+              'SOV': 'USSR',
               'FRA': 'France',
               'France': 'France',
               'CHN': 'China',
@@ -4664,12 +4669,12 @@ function YearEndBattlePhase({
                                       )}
                                     </div>
                                   </div>
-                                  <div style={{ 
-                                    fontWeight: 'bold', 
+                                  <div style={{
+                                    fontWeight: 'bold',
                                     fontSize: '1.5rem',
                                     color: idx === 0 ? '#92400e' : '#1e293b'
                                   }}>
-                                    {score} pts
+                                    {(typeof score === 'number' && !isNaN(score)) ? score : 0} pts
                                   </div>
                                 </div>
                               ))}
@@ -4695,38 +4700,38 @@ function YearEndBattlePhase({
                                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #3b82f6' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>GDP Growth</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.gdp > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.gdp > 0 ? '+' : ''}{breakdown.gdp} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.gdp || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.gdp || 0) > 0 ? '+' : ''}{breakdown.gdp || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #f59e0b' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Inflation Control</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.inflation > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.inflation > 0 ? '+' : ''}{breakdown.inflation} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.inflation || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.inflation || 0) > 0 ? '+' : ''}{breakdown.inflation || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Employment</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.unemployment > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.unemployment > 0 ? '+' : ''}{breakdown.unemployment} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.unemployment || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.unemployment || 0) > 0 ? '+' : ''}{breakdown.unemployment || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #10b981' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Trade Balance</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.trade > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.trade > 0 ? '+' : ''}{breakdown.trade} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.trade || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.trade || 0) > 0 ? '+' : ''}{breakdown.trade || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #8b5cf6' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Stability</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.stability > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.stability > 0 ? '+' : ''}{breakdown.stability} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.stability || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.stability || 0) > 0 ? '+' : ''}{breakdown.stability || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '6px', borderLeft: '3px solid #f59e0b' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#78350f', marginBottom: '4px', fontWeight: 'bold' }}>Bretton Woods</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.brettonWoods > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.brettonWoods > 0 ? '+' : ''}{breakdown.brettonWoods} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.brettonWoods || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.brettonWoods || 0) > 0 ? '+' : ''}{breakdown.brettonWoods || 0} pts
                                       </div>
                                     </div>
                                   </div>
