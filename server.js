@@ -3713,18 +3713,22 @@ io.on('connection', (socket) => {
   // NEW: Get available games (for regular users without active game)
   socket.on('getAvailableGames', async ({ playerId }) => {
     console.log('getAvailableGames request from playerId:', playerId);
-    
+
     const availableGames = [];
-    
-    // Get active games from database
-    const dbGames = await queryDatabase('getGames', { status: 'active' });
-    
-    if (dbGames && Array.isArray(dbGames)) {
+
+    // Get games from database - check both 'active' and 'lobby' status
+    const activeGames = await queryDatabase('getGames', { status: 'active' }) || [];
+    const lobbyGames = await queryDatabase('getGames', { status: 'lobby' }) || [];
+    const dbGames = [...(Array.isArray(activeGames) ? activeGames : []), ...(Array.isArray(lobbyGames) ? lobbyGames : [])];
+
+    console.log(`Found ${dbGames.length} games in database (active + lobby)`);
+
+    if (dbGames.length > 0) {
       for (const game of dbGames) {
         const roomState = globalState.rooms[game.game_code];
-        
+
         // Only show lobby games with available slots
-        if (roomState && roomState.gamePhase === 'lobby') {
+        if (roomState && roomState.gamePhase === 'lobby' && !roomState.gameStarted) {
           const playerCount = Object.keys(roomState.players).length;
           if (playerCount < 7) {
             availableGames.push({
@@ -3737,15 +3741,33 @@ io.on('connection', (socket) => {
               hostUserId: game.host_user_id
             });
           }
+        } else if (!roomState) {
+          // Game exists in DB but not in memory - create room state for it
+          console.log(`   Game ${game.game_code} not in memory, creating room state...`);
+          const newRoomState = createGameState(game.game_code, `Game ${game.game_code}`, game.host_user_id);
+          newRoomState.gameId = game.game_id;
+          newRoomState.status = game.status;
+          newRoomState.gamePhase = 'lobby';
+          globalState.rooms[game.game_code] = newRoomState;
+
+          availableGames.push({
+            gameCode: game.game_code,
+            gameId: game.game_id,
+            status: game.status,
+            playerCount: 0,
+            availableSlots: 7,
+            createdAt: game.created_at,
+            hostUserId: game.host_user_id
+          });
         }
       }
     }
-    
+
     console.log(`Returning ${availableGames.length} available games`);
-    
-    socket.emit('availableGamesResult', { 
-      success: true, 
-      games: availableGames 
+
+    socket.emit('availableGamesResult', {
+      success: true,
+      games: availableGames
     });
   });
 
