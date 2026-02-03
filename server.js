@@ -3716,12 +3716,11 @@ io.on('connection', (socket) => {
 
     const availableGames = [];
 
-    // Get games from database - check both 'active' and 'lobby' status
-    const activeGames = await queryDatabase('getGames', { status: 'active' }) || [];
+    // Get only 'lobby' status games - active games have already started and cannot be joined
     const lobbyGames = await queryDatabase('getGames', { status: 'lobby' }) || [];
-    const dbGames = [...(Array.isArray(activeGames) ? activeGames : []), ...(Array.isArray(lobbyGames) ? lobbyGames : [])];
+    const dbGames = Array.isArray(lobbyGames) ? lobbyGames : [];
 
-    console.log(`Found ${dbGames.length} games in database (active + lobby)`);
+    console.log(`Found ${dbGames.length} lobby games in database`);
 
     if (dbGames.length > 0) {
       for (const game of dbGames) {
