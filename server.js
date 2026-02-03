@@ -438,6 +438,12 @@ async function saveGameToDatabase(roomId) {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
+    // Ensure we have a valid game_id (not a timestamp)
+    if (!room.gameId || room.gameId > 1000000000000) {
+      console.log(`⚠️ Invalid game_id for ${roomId}, skipping database update`);
+      return;
+    }
+
     // Map game phase to status
     let gameStatus = 'lobby';
     if (room.gamePhase === 'complete') {
@@ -449,10 +455,9 @@ async function saveGameToDatabase(roomId) {
     // Get the current round value
     const currentRound = room.currentRound !== undefined ? Number(room.currentRound) : 0;
 
-    // Prepare update data - API uses gameCode as the lookup key, not game_id
+    // Prepare update data - use game_id as the primary key for updates
     const updateData = {
-      game_id: parseInt(room.gameId) || 0,
-      gameCode: roomId,
+      game_id: parseInt(room.gameId),
       status: gameStatus,
       current_round: currentRound
     };
@@ -467,18 +472,13 @@ async function saveGameToDatabase(roomId) {
       updateData.endedAt = true; // API will set to NOW()
     }
 
-    console.log(`💾 Saving game ${roomId} to database with current_round=${currentRound}, phase2.year=${room.phase2?.currentYear}`);
+    console.log(`💾 Saving game ${roomId} (game_id=${room.gameId}) to database: status=${gameStatus}, round=${currentRound}, year=${room.phase2?.currentYear || 'N/A'}`);
 
     // Update game in database
     const result = await queryDatabase('updateGame', updateData);
 
     if (result) {
-      console.log(`✅ Game ${roomId} saved to database:`, {
-        status: gameStatus,
-        current_round: currentRound,
-        year: room.phase2?.currentYear || 'N/A',
-        result: JSON.stringify(result).substring(0, 100)
-      });
+      console.log(`✅ Game ${roomId} saved to database`);
     } else {
       console.log(`⚠️ Game ${roomId} DB update returned no result - check PHP API logs`);
     }
@@ -1940,12 +1940,17 @@ io.on('connection', (socket) => {
 
       // Update database to set status to active and assign host
       try {
-        await queryDatabase('updateGameStatus', {
-          gameCode: roomId,
-          status: 'active',
-          hostUserId: creatorId
-        });
-        console.log(`✅ Game ${roomId} marked as active in database with host ${creatorId}`);
+        const gameIdToUpdate = globalState.rooms[roomId].gameId;
+        if (gameIdToUpdate) {
+          await queryDatabase('updateGameStatus', {
+            game_id: gameIdToUpdate,
+            status: 'active',
+            hostUserId: creatorId
+          });
+          console.log(`✅ Game ${roomId} (game_id: ${gameIdToUpdate}) marked as active in database with host ${creatorId}`);
+        } else {
+          console.log(`⚠️ Cannot update game status - no game_id available for ${roomId}`);
+        }
       } catch (err) {
         console.error('Error updating game status:', err);
       }
@@ -2028,9 +2033,9 @@ io.on('connection', (socket) => {
         let isHost = room.hostUserId === userId || room.hostId === userId;
         
         // If not found in memory, check database
-        if (!isHost) {
+        if (!isHost && room.gameId) {
           try {
-            const gameData = await queryDatabase('getGame', { gameCode: roomId });
+            const gameData = await queryDatabase('getGame', { game_id: room.gameId });
             if (gameData && gameData.host_user_id) {
               isHost = gameData.host_user_id === userId;
               // Update memory with host info
@@ -2085,7 +2090,7 @@ io.on('connection', (socket) => {
         try {
           dbAssignment = await queryDatabase('getPlayerAssignment', {
             user_id: userId,
-            game_code: roomId
+            game_id: room.gameId
           });
         } catch (err) {
           console.error('Error checking player assignment:', err);
@@ -2239,7 +2244,7 @@ io.on('connection', (socket) => {
       // Check if user already has a player assignment in this game
       const existingAssignment = await queryDatabase('getPlayerAssignment', {
         user_id: id,
-        game_code: roomId
+        game_id: room.gameId
       });
       
       if (existingAssignment && existingAssignment.player_id) {
@@ -2259,7 +2264,7 @@ io.on('connection', (socket) => {
         // Save player assignment to database
         await queryDatabase('createPlayerAssignment', {
           user_id: id,
-          game_code: roomId,
+          game_id: room.gameId,
           player_id: assignedPlayerId,
           country_id: countryId,
           country_code: country
@@ -2817,7 +2822,7 @@ io.on('connection', (socket) => {
     // Save policy to database
     try {
       const policyData = {
-        gameCode: roomId,
+        game_id: room.gameId,
         userId: playerid,
         round: room.currentRound,
         year: currentYear,
@@ -3874,7 +3879,7 @@ async function initializeFromDatabase() {
         console.log(`   ✅ Using existing state from file (has yearlyData for years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')})`);
 
         // Just update players from database in case they changed
-        const players = await queryDatabase('getPlayers', { gameCode: gameCode });
+        const players = await queryDatabase('getPlayers', { game_id: game.game_id });
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
             existingRoom.players[player.user_id] = {
@@ -3923,7 +3928,7 @@ async function initializeFromDatabase() {
       console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
 
       // Load players for this game from database
-      const players = await queryDatabase('getPlayers', { gameCode: gameCode });
+      const players = await queryDatabase('getPlayers', { game_id: game.game_id });
 
       if (players && Array.isArray(players) && players.length > 0) {
         console.log(`   Found ${players.length} player(s) in database`);
