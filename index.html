@@ -2474,8 +2474,11 @@ function YearEndBattlePhase({
 
             socket.on('militaryConflict', (conflictData) => {
               console.log('🎖️ Battle Modal Trigger: Military conflict detected', conflictData);
+              console.log('🎖️ Current showBattleModal state before:', showBattleModal);
+              alert(`⚔️ MILITARY CONFLICT!\n${conflictData.message}\nRegion: ${conflictData.region}`);
               setMilitaryConflict(conflictData);
               setShowBattleModal(true);
+              console.log('🎖️ States set - modal should appear');
             });
             
             socket.on('battleResolved', (data) => {
