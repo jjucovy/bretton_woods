@@ -1387,25 +1387,41 @@ function calculateYearEconomics(roomId) {
       
       // Marshall Plan isolation (from 1948)
       if (currentYear >= 1948) {
-        gdpGrowth -= 1.0; // Isolation from Marshall Plan
-        tradeBalance -= 400; // Additional Western trade cutoff
+        gdpGrowth -= 0.5; // Isolation from Marshall Plan (reduced from -1.0)
+        tradeBalance -= 200; // Western trade cutoff (reduced from -400)
+      }
+
+      // USSR Superpower Advantages
+      // Massive industrial base and resources
+      gdpGrowth += 0.8; // Industrial recovery and resource extraction
+      tradeBalance += 300; // Resource exports to Eastern bloc
+
+      // Command economy can achieve rapid growth through mobilization
+      if (policy.isCommandEconomy && planPriority > 70) {
+        gdpGrowth += 0.5; // Centralized planning efficiency in reconstruction
+        industrialOutput *= 1.03; // Heavy industry focus
       }
     }
     
     if (country === 'China') {
-      // Chinese Civil War (1946-1949) - intensifying effects
+      // Chinese Civil War (1946-1949) - intensifying effects (reduced for balance)
       if (currentYear <= 1949) {
         const warIntensity = {
-          1946: -1.0,  // War resumes after WWII
-          1947: -1.5,  // Escalation
-          1948: -2.5,  // Major battles
-          1949: -4.0   // Final decisive campaigns
+          1946: -0.5,  // War resumes after WWII
+          1947: -0.8,  // Escalation
+          1948: -1.2,  // Major battles
+          1949: -1.5   // Final decisive campaigns
         };
-        
-        gdpGrowth += (warIntensity[currentYear] || -1.0); // Negative growth from civil war
-        tradeBalance -= (currentYear - 1945) * 200; // Worsening trade disruption
-        // Note: Unemployment and inflation increases handled later in their respective sections
+
+        gdpGrowth += (warIntensity[currentYear] || -0.5); // Negative growth from civil war
+        tradeBalance -= (currentYear - 1945) * 100; // Trade disruption (reduced)
       }
+
+      // China's massive population = economic potential
+      gdpGrowth += 0.3; // Large domestic market
+
+      // Foreign aid (US aids Nationalists, USSR aids Communists)
+      tradeBalance += 200; // Foreign support flowing in
       
       // Communist China (post-1949) - command economy
       if (currentYear >= 1949 && policy.isCommandEconomy) {
@@ -1432,20 +1448,50 @@ function calculateYearEconomics(roomId) {
         
         // Strict plan fulfillment
         if (planPriority > 80) {
-          gdpGrowth += 0.3; // Mobilization
-          inflation += 1.2; // Severe bottlenecks in recovering economy
+          gdpGrowth += 0.5; // Mobilization (increased)
+          inflation += 0.8; // Bottlenecks (reduced)
         }
-        
-        // Post-civil war recovery penalty
-        gdpGrowth -= 1.5; // Still recovering from devastation
-        tradeBalance -= 200; // Limited foreign trade capacity
+
+        // Post-civil war recovery - peace dividend after 1950
+        if (currentYear >= 1950) {
+          gdpGrowth += 1.0; // Peace dividend - war is over!
+          tradeBalance += 150; // Trade normalizing
+        } else {
+          gdpGrowth -= 0.5; // Still consolidating power in 1949
+        }
+      }
+
+      // Communist China post-1950 rapid industrialization
+      if (currentYear >= 1950 && policy.isCommandEconomy) {
+        gdpGrowth += 0.8; // Soviet-style industrialization drive
+        industrialOutput *= 1.04; // Building factories
       }
     }
     
     if (country === 'India' && currentYear >= 1947) {
       gdpGrowth += 1.0; // Independence boost
     }
-    
+
+    if (country === 'France') {
+      // Marshall Plan recipient - major reconstruction aid
+      if (currentYear >= 1948) {
+        gdpGrowth += 1.2; // Marshall Plan boost
+        tradeBalance += 400; // US aid
+      }
+      // Despite currency crises, rapid reconstruction
+      gdpGrowth += 0.5; // Reconstruction momentum
+    }
+
+    if (country === 'UK') {
+      // Marshall Plan and special relationship with USA
+      if (currentYear >= 1948) {
+        gdpGrowth += 0.6; // Marshall Plan
+        tradeBalance += 250; // US support
+      }
+      // Commonwealth trade network
+      tradeBalance += 200; // Sterling area trade
+    }
+
     if (country === 'USA') {
       // USA benefits from being reserve currency
       tradeBalance += 400; // Dollar demand
