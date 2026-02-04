@@ -1397,7 +1397,7 @@ function calculateYearEconomics(roomId) {
       tradeBalance += 300; // Resource exports to Eastern bloc
 
       // Command economy can achieve rapid growth through mobilization
-      if (policy.isCommandEconomy && planPriority > 70) {
+      if (policy.isCommandEconomy && (policy.planFulfillmentPriority || 70) > 70) {
         gdpGrowth += 0.5; // Centralized planning efficiency in reconstruction
         industrialOutput *= 1.03; // Heavy industry focus
       }
