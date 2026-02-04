@@ -1235,10 +1235,9 @@ function calculateYearEconomics(roomId) {
       
       // Tariff barriers hurt trade
       // If they have high tariffs, you can't export to them as much
-      const theirTariffImpact = (otherPolicy.tariffRate - 15) * -20; // They block your exports
-      const yourTariffImpact = (tariffRate - 15) * -30; // You block your own imports
-      
-      tradeBalance += theirTariffImpact + yourTariffImpact;
+      // Scale down impact since this runs for each country pair
+      const theirTariffImpact = (otherPolicy.tariffRate - 15) * -3; // They block your exports
+      tradeBalance += theirTariffImpact;
       
       // If both countries have low tariffs, trade flourishes
       if (tariffRate < 20 && otherPolicy.tariffRate < 20) {
@@ -1295,7 +1294,13 @@ function calculateYearEconomics(roomId) {
         tradeBalance += 50; // Peaceful cooperation
       }
     });
-    
+
+    // Your own tariff impact (applied once, not per country)
+    // High tariffs protect domestic industry but reduce trade efficiency
+    if (tariffRate > 15) {
+      tradeBalance -= (tariffRate - 15) * 15; // High tariffs hurt imports/efficiency
+    }
+
     // Apply trade competitiveness to GDP
     gdpGrowth += tradeCompetitiveness;
     
