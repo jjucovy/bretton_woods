@@ -3158,8 +3158,19 @@ io.on('connection', (socket) => {
         
         // Emit battle modal to involved countries
         const involvedCountries = conflict.countries;
-        let sentToAnySocket = false;
 
+        // ALWAYS broadcast to entire room first (ensures delivery even with stale socket IDs)
+        console.log(`📢 Broadcasting militaryConflict to room ${roomId}`);
+        io.to(roomId).emit('militaryConflict', {
+          message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
+          region: deployment.region,
+          countries: involvedCountries,
+          year: room.phase2.currentYear,
+          battleId: conflict.battleId,
+          involvedCountries: involvedCountries
+        });
+
+        // Also try to send to specific sockets for redundancy
         involvedCountries.forEach(country => {
           const playerEntry = Object.entries(room.players).find(([id, p]) =>
             p.country === country || normalizeCountryName(p.country) === normalizeCountryName(country)
@@ -3175,15 +3186,15 @@ io.on('connection', (socket) => {
                 battleId: conflict.battleId,
                 yourCountry: country
               });
-              console.log(`📨 Sent battle modal to ${country} (socket ${playerData.socketId})`);
-              sentToAnySocket = true;
+              console.log(`📨 Also sent battle modal directly to ${country} (socket ${playerData.socketId})`);
             }
           }
         });
 
-        // Fallback: if no sockets were found, broadcast to room
+        // Legacy fallback code removed - room broadcast handles all cases
+        const sentToAnySocket = true; // Keep variable for compatibility
         if (!sentToAnySocket) {
-          console.log(`⚠️ No valid sockets found - broadcasting militaryConflict to entire room`);
+          // This block no longer needed but kept for safety
           involvedCountries.forEach(country => {
             io.to(roomId).emit('militaryConflict', {
               message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
