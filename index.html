@@ -32,6 +32,24 @@
         .leaflet-popup-content {
             margin: 16px;
         }
+
+        /* Deployment marker pulse animation */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .deployment-marker {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        /* Conflict zone warning */
+        @keyframes conflict-pulse {
+            0% { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef444466; }
+            50% { box-shadow: 0 0 20px #ef4444, 0 0 40px #ef444466; }
+            100% { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef444466; }
+        }
     </style>
 </head>
 <body>
@@ -144,12 +162,39 @@ function isCommandEconomy(country, year) {
         const socket = io();
         const { useState, useEffect } = React;
 
+        // Region coordinates for deployment visualization
+        const REGION_COORDINATES = {
+          'Western Europe': { lat: 48.8, lng: 2.3, name: 'Western Europe' },
+          'Eastern Europe': { lat: 52.2, lng: 21.0, name: 'Eastern Europe' },
+          'Middle East': { lat: 31.5, lng: 34.8, name: 'Middle East' },
+          'North Africa': { lat: 28.0, lng: 3.0, name: 'North Africa' },
+          'Sub-Saharan Africa': { lat: -2.0, lng: 23.0, name: 'Sub-Saharan Africa' },
+          'South Asia': { lat: 20.5, lng: 78.9, name: 'South Asia' },
+          'East Asia': { lat: 35.8, lng: 104.1, name: 'East Asia' },
+          'Southeast Asia': { lat: 12.8, lng: 108.0, name: 'Southeast Asia' },
+          'Pacific Islands': { lat: -5.0, lng: 152.0, name: 'Pacific Islands' },
+          'North America': { lat: 40.0, lng: -100.0, name: 'North America' },
+          'Central America': { lat: 15.0, lng: -90.0, name: 'Central America' },
+          'South America': { lat: -15.0, lng: -60.0, name: 'South America' },
+          'Caribbean': { lat: 18.0, lng: -75.0, name: 'Caribbean' },
+          'Arctic': { lat: 75.0, lng: 0.0, name: 'Arctic' },
+          'Antarctic': { lat: -75.0, lng: 0.0, name: 'Antarctic' },
+          'Korea': { lat: 37.5, lng: 127.0, name: 'Korean Peninsula' },
+          'Indochina': { lat: 16.0, lng: 108.0, name: 'Indochina' },
+          'Germany': { lat: 51.0, lng: 10.0, name: 'Germany' },
+          'Japan': { lat: 36.0, lng: 138.0, name: 'Japan' },
+          'Suez Canal': { lat: 30.5, lng: 32.3, name: 'Suez Canal Zone' },
+          'Berlin': { lat: 52.5, lng: 13.4, name: 'Berlin' }
+        };
+
         // Military Map Component using Leaflet.js
-        function MilitaryMap({ currentYear, gameState }) {
+        function MilitaryMap({ currentYear, gameState, playerCountry, socket, roomId, playerId }) {
           const [militaryData, setMilitaryData] = useState(null);
           const [selectedBase, setSelectedBase] = useState(null);
+          const [selectedRegion, setSelectedRegion] = useState(null);
           const mapRef = React.useRef(null);
           const leafletMapRef = React.useRef(null);
+          const deploymentMarkersRef = React.useRef([]);
 
           useEffect(() => {
             fetch('/military-deployments.json')
@@ -261,6 +306,85 @@ function isCommandEconomy(country, year) {
             };
           }, [militaryData]);
 
+          // Update map with player deployments
+          useEffect(() => {
+            if (!leafletMapRef.current || !gameState?.phase2?.deployments) return;
+
+            const map = leafletMapRef.current;
+            const countryColors = {
+              USA: '#3b82f6', UK: '#ef4444', USSR: '#a855f7',
+              France: '#f59e0b', China: '#22c55e', India: '#f97316', Argentina: '#06b6d4'
+            };
+
+            // Clear old deployment markers
+            deploymentMarkersRef.current.forEach(marker => map.removeLayer(marker));
+            deploymentMarkersRef.current = [];
+
+            // Add markers for player deployments
+            gameState.phase2.deployments.forEach(deployment => {
+              const regionCoords = REGION_COORDINATES[deployment.region];
+              if (!regionCoords) return;
+
+              const color = countryColors[deployment.country] || '#64748b';
+              // Offset slightly so multiple deployments to same region don't stack
+              const offset = (Math.random() - 0.5) * 3;
+
+              const icon = L.divIcon({
+                html: `
+                  <div class="deployment-marker" style="
+                    width: 24px;
+                    height: 24px;
+                    background: ${color};
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 0 10px ${color}, 0 0 20px ${color}66;
+                    animation: pulse 1.5s ease-in-out infinite;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                  ">
+                    ${deployment.branch === 'Army' ? '🪖' : deployment.branch === 'Navy' ? '⚓' : '✈️'}
+                  </div>
+                  <div style="
+                    position: absolute;
+                    top: 28px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: ${color};
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    white-space: nowrap;
+                  ">${deployment.country}: ${(deployment.troops/1000).toFixed(0)}K</div>
+                `,
+                className: '',
+                iconSize: [24, 50],
+                iconAnchor: [12, 12]
+              });
+
+              const marker = L.marker(
+                [regionCoords.lat + offset, regionCoords.lng + offset],
+                { icon }
+              ).addTo(map).bindPopup(`
+                <div style="min-width: 180px;">
+                  <h3 style="margin: 0 0 8px 0; color: ${color};">
+                    ${deployment.branch === 'Army' ? '🪖' : deployment.branch === 'Navy' ? '⚓' : '✈️'}
+                    ${deployment.country} Deployment
+                  </h3>
+                  <p><strong>Region:</strong> ${deployment.region}</p>
+                  <p><strong>Branch:</strong> ${deployment.branch}</p>
+                  <p><strong>Troops:</strong> ${deployment.troops.toLocaleString()}</p>
+                  <p><strong>Year:</strong> ${deployment.year || currentYear}</p>
+                </div>
+              `);
+
+              deploymentMarkersRef.current.push(marker);
+            });
+          }, [gameState?.phase2?.deployments, currentYear]);
+
           if (!militaryData) {
             return (
               <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
@@ -362,17 +486,50 @@ function isCommandEconomy(country, year) {
           const [troopCount, setTroopCount] = useState(50000);
           const [deploymentLog, setDeploymentLog] = useState([]);
 
+          // Strategic regions with hotspots and deployment costs
+          const strategicRegions = {
+            'Western Europe': { cost: 100, hotspot: false, description: 'NATO territory, Marshall Plan zone' },
+            'Eastern Europe': { cost: 150, hotspot: true, description: '⚠️ Soviet sphere - risk of conflict' },
+            'Germany': { cost: 80, hotspot: true, description: '⚠️ Divided occupation zones' },
+            'Berlin': { cost: 200, hotspot: true, description: '🔥 FLASHPOINT - Deep in Soviet zone' },
+            'Middle East': { cost: 180, hotspot: true, description: '⚠️ Oil resources, Suez Canal' },
+            'Suez Canal': { cost: 150, hotspot: true, description: '⚠️ Strategic chokepoint' },
+            'Korea': { cost: 250, hotspot: true, description: '🔥 FLASHPOINT - 38th parallel divide' },
+            'Indochina': { cost: 220, hotspot: true, description: '⚠️ French colonial war zone' },
+            'South Asia': { cost: 120, hotspot: false, description: 'India/Pakistan region' },
+            'East Asia': { cost: 200, hotspot: true, description: '⚠️ China, Japan, Taiwan' },
+            'Southeast Asia': { cost: 180, hotspot: false, description: 'Colonial transitions' },
+            'Pacific Islands': { cost: 150, hotspot: false, description: 'US naval dominance' },
+            'North America': { cost: 50, hotspot: false, description: 'US/Canada homeland' },
+            'Central America': { cost: 100, hotspot: false, description: 'US sphere of influence' },
+            'South America': { cost: 120, hotspot: false, description: 'Neutral, Argentine influence' },
+            'Caribbean': { cost: 80, hotspot: false, description: 'US naval bases' },
+            'North Africa': { cost: 140, hotspot: false, description: 'French colonies' },
+            'Sub-Saharan Africa': { cost: 160, hotspot: false, description: 'European colonies' }
+          };
+
+          // Calculate deployment cost
+          const getDeploymentCost = () => {
+            if (!selectedRegion) return 0;
+            const regionData = strategicRegions[selectedRegion];
+            const baseCost = regionData?.cost || 100;
+            const branchMultiplier = selectedBranch === 'Army' ? 1 : selectedBranch === 'Navy' ? 1.5 : 2;
+            return Math.round(baseCost * (troopCount / 50000) * branchMultiplier);
+          };
+
+          // Get current deployments for this country
+          const myDeployments = gameState?.phase2?.deployments?.filter(d => d.country === playerCountry) || [];
+
           const handleDeploy = () => {
-            if (!selectedRegion) {
-              // Validation: must select a region
-              return;
-            }
+            if (!selectedRegion) return;
 
             const deployment = {
               country: playerCountry,
               region: selectedRegion,
               branch: selectedBranch,
               troops: troopCount,
+              cost: getDeploymentCost(),
+              year: gameState?.phase2?.currentYear,
               timestamp: Date.now()
             };
 
@@ -387,18 +544,12 @@ function isCommandEconomy(country, year) {
               time: new Date().toLocaleTimeString()
             }]);
 
-            // Reset
             setSelectedRegion('');
             setSelectedBranch('Army');
             setTroopCount(50000);
           };
 
-          const regions = [
-            'Western Europe', 'Eastern Europe', 'Middle East', 'North Africa',
-            'Sub-Saharan Africa', 'South Asia', 'East Asia', 'Southeast Asia',
-            'Pacific Islands', 'North America', 'Central America', 'South America',
-            'Caribbean', 'Arctic', 'Antarctic'
-          ];
+          const regions = Object.keys(strategicRegions);
 
           return (
             <div style={{
@@ -412,6 +563,34 @@ function isCommandEconomy(country, year) {
                 ⚔️ Deploy Your Troops - {playerCountry}
               </h2>
 
+              {/* Current Deployments Summary */}
+              {myDeployments.length > 0 && (
+                <div style={{
+                  marginBottom: '20px',
+                  padding: '12px',
+                  background: '#f0fdf4',
+                  borderRadius: '8px',
+                  border: '1px solid #86efac'
+                }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#166534' }}>
+                    📍 Your Active Deployments ({myDeployments.length})
+                  </div>
+                  <div style={{ fontSize: '0.85rem', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {myDeployments.map((d, idx) => (
+                      <span key={idx} style={{
+                        background: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid #86efac'
+                      }}>
+                        {d.branch === 'Army' ? '🪖' : d.branch === 'Navy' ? '⚓' : '✈️'}
+                        {d.region}: {(d.troops/1000).toFixed(0)}K
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
                   Deploy To Region
@@ -423,15 +602,46 @@ function isCommandEconomy(country, year) {
                     width: '100%',
                     padding: '12px',
                     borderRadius: '6px',
-                    border: '2px solid #e2e8f0',
-                    fontSize: '1rem'
+                    border: selectedRegion && strategicRegions[selectedRegion]?.hotspot
+                      ? '2px solid #ef4444'
+                      : '2px solid #e2e8f0',
+                    fontSize: '1rem',
+                    background: selectedRegion && strategicRegions[selectedRegion]?.hotspot
+                      ? '#fef2f2'
+                      : 'white'
                   }}
                 >
-                  <option value="">Choose a region...</option>
-                  {regions.map(region => (
-                    <option key={region} value={region}>{region}</option>
-                  ))}
+                  <option value="">Choose a strategic region...</option>
+                  {regions.map(region => {
+                    const data = strategicRegions[region];
+                    return (
+                      <option key={region} value={region}>
+                        {data.hotspot ? '⚠️ ' : ''}{region} (Cost: ${data.cost})
+                      </option>
+                    );
+                  })}
                 </select>
+
+                {/* Region Info */}
+                {selectedRegion && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '10px',
+                    background: strategicRegions[selectedRegion]?.hotspot ? '#fef2f2' : '#f8fafc',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    border: strategicRegions[selectedRegion]?.hotspot ? '1px solid #fecaca' : '1px solid #e2e8f0'
+                  }}>
+                    <div style={{ color: strategicRegions[selectedRegion]?.hotspot ? '#dc2626' : '#64748b' }}>
+                      {strategicRegions[selectedRegion]?.description}
+                    </div>
+                    {strategicRegions[selectedRegion]?.hotspot && (
+                      <div style={{ marginTop: '6px', color: '#dc2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        ⚠️ Deploying here may trigger military confrontation!
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Military Branch Selection */}
@@ -481,24 +691,51 @@ function isCommandEconomy(country, year) {
               </div>
 
               {/* Deploy Button */}
+              {/* Deployment Cost Summary */}
+              {selectedRegion && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px',
+                  background: '#fef3c7',
+                  borderRadius: '8px',
+                  border: '1px solid #fbbf24',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontWeight: 'bold', color: '#92400e' }}>
+                    💰 Deployment Cost:
+                  </span>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#dc2626' }}>
+                    ${getDeploymentCost().toLocaleString()}M
+                  </span>
+                </div>
+              )}
+
               <button
                 onClick={handleDeploy}
+                disabled={!selectedRegion}
                 style={{
                   width: '100%',
                   padding: '16px',
-                  background: '#dc2626',
+                  background: selectedRegion ? (strategicRegions[selectedRegion]?.hotspot ? '#dc2626' : '#16a34a') : '#94a3b8',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
                   fontSize: '1.1rem',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
-                  marginBottom: '20px'
+                  cursor: selectedRegion ? 'pointer' : 'not-allowed',
+                  marginBottom: '20px',
+                  transition: 'all 0.2s'
                 }}
-                onMouseOver={(e) => e.currentTarget.style.background = '#b91c1c'}
-                onMouseOut={(e) => e.currentTarget.style.background = '#dc2626'}
+                onMouseOver={(e) => selectedRegion && (e.currentTarget.style.opacity = '0.9')}
+                onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
               >
-                ⚔️ Deploy Troops
+                {selectedRegion
+                  ? (strategicRegions[selectedRegion]?.hotspot
+                    ? `⚠️ Deploy to ${selectedRegion} (HOTSPOT)`
+                    : `⚔️ Deploy to ${selectedRegion}`)
+                  : '⚔️ Select a Region to Deploy'}
               </button>
 
               {/* Deployment Log */}
