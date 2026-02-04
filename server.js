@@ -1175,18 +1175,19 @@ function calculateYearEconomics(roomId) {
     // Military spending as % of GDP
     const milSpending = militarySpending || 5;
     
-    // Calculate actual cost based on branch composition
-    // Army: $1 per soldier (cheap - food, basic equipment)
-    // Navy: $4 per sailor (ships, fuel, maintenance)
-    // Air Force: $6 per airman (planes, fuel, high-tech equipment)
-    const armyCost = armySize * 1;
-    const navyCost = navySize * 4;
-    const airForceCost = airForceSize * 6;
+    // Calculate actual cost based on branch composition (costs in $millions)
+    // Army: $0.001M per soldier ($1000 per soldier - food, basic equipment)
+    // Navy: $0.004M per sailor ($4000 per sailor - ships, fuel, maintenance)
+    // Air Force: $0.006M per airman ($6000 per airman - planes, fuel, high-tech)
+    const armyCost = armySize * 0.001;
+    const navyCost = navySize * 0.004;
+    const airForceCost = airForceSize * 0.006;
     const totalMilitaryCost = armyCost + navyCost + airForceCost;
-    
-    // Calculate effective military spending based on force structure
+
+    // Calculate effective military spending as % of GDP
+    // GDP is in $millions, totalMilitaryCost is now also in $millions
     const gdp = country === 'USA' ? 210000 : country === 'UK' ? 61000 : country === 'USSR' ? 126000 : country === 'France' ? 37000 : country === 'China' ? 45000 : country === 'India' ? 55000 : 32000;
-    const effectiveMilSpending = (totalMilitaryCost / (gdp * 10)) * 100; // Convert to % of GDP
+    const effectiveMilSpending = (totalMilitaryCost / gdp) * 100; // As percentage of GDP
     
     // High military spending drains civilian economy
     if (effectiveMilSpending > 10) {
