@@ -113,16 +113,35 @@ async function sendAdminNotification(subject, message, gameCode = null) {
 // Normalize country names to ensure consistent keys
 function normalizeCountryName(country) {
   const normalizations = {
+    // USSR variations
     'USS': 'USSR',
+    'SUN': 'USSR',
+    'SOV': 'USSR',
     'Soviet Union': 'USSR',
+    'Soviet': 'USSR',
+    // USA variations
     'US': 'USA',
     'United States': 'USA',
+    'America': 'USA',
+    // UK variations
     'GB': 'UK',
+    'GBR': 'UK',
     'Great Britain': 'UK',
     'United Kingdom': 'UK',
+    'Britain': 'UK',
+    // China variations
+    'CHN': 'China',
     'PRC': 'China',
     "People's Republic of China": 'China',
-    'French': 'France'
+    'Republic of China': 'China',
+    // France variations
+    'FRA': 'France',
+    'French': 'France',
+    // India variations
+    'IND': 'India',
+    'British Raj': 'India',
+    // Argentina variations
+    'ARG': 'Argentina'
   };
   return normalizations[country] || country;
 }
@@ -1156,18 +1175,19 @@ function calculateYearEconomics(roomId) {
     // Military spending as % of GDP
     const milSpending = militarySpending || 5;
     
-    // Calculate actual cost based on branch composition
-    // Army: $1 per soldier (cheap - food, basic equipment)
-    // Navy: $4 per sailor (ships, fuel, maintenance)
-    // Air Force: $6 per airman (planes, fuel, high-tech equipment)
-    const armyCost = armySize * 1;
-    const navyCost = navySize * 4;
-    const airForceCost = airForceSize * 6;
+    // Calculate actual cost based on branch composition (costs in $millions)
+    // Army: $0.001M per soldier ($1000 per soldier - food, basic equipment)
+    // Navy: $0.004M per sailor ($4000 per sailor - ships, fuel, maintenance)
+    // Air Force: $0.006M per airman ($6000 per airman - planes, fuel, high-tech)
+    const armyCost = armySize * 0.001;
+    const navyCost = navySize * 0.004;
+    const airForceCost = airForceSize * 0.006;
     const totalMilitaryCost = armyCost + navyCost + airForceCost;
-    
-    // Calculate effective military spending based on force structure
+
+    // Calculate effective military spending as % of GDP
+    // GDP is in $millions, totalMilitaryCost is now also in $millions
     const gdp = country === 'USA' ? 210000 : country === 'UK' ? 61000 : country === 'USSR' ? 126000 : country === 'France' ? 37000 : country === 'China' ? 45000 : country === 'India' ? 55000 : 32000;
-    const effectiveMilSpending = (totalMilitaryCost / (gdp * 10)) * 100; // Convert to % of GDP
+    const effectiveMilSpending = (totalMilitaryCost / gdp) * 100; // As percentage of GDP
     
     // High military spending drains civilian economy
     if (effectiveMilSpending > 10) {
@@ -1215,10 +1235,9 @@ function calculateYearEconomics(roomId) {
       
       // Tariff barriers hurt trade
       // If they have high tariffs, you can't export to them as much
-      const theirTariffImpact = (otherPolicy.tariffRate - 15) * -20; // They block your exports
-      const yourTariffImpact = (tariffRate - 15) * -30; // You block your own imports
-      
-      tradeBalance += theirTariffImpact + yourTariffImpact;
+      // Scale down impact since this runs for each country pair
+      const theirTariffImpact = (otherPolicy.tariffRate - 15) * -3; // They block your exports
+      tradeBalance += theirTariffImpact;
       
       // If both countries have low tariffs, trade flourishes
       if (tariffRate < 20 && otherPolicy.tariffRate < 20) {
@@ -1275,7 +1294,13 @@ function calculateYearEconomics(roomId) {
         tradeBalance += 50; // Peaceful cooperation
       }
     });
-    
+
+    // Your own tariff impact (applied once, not per country)
+    // High tariffs protect domestic industry but reduce trade efficiency
+    if (tariffRate > 15) {
+      tradeBalance -= (tariffRate - 15) * 15; // High tariffs hurt imports/efficiency
+    }
+
     // Apply trade competitiveness to GDP
     gdpGrowth += tradeCompetitiveness;
     
@@ -1362,25 +1387,41 @@ function calculateYearEconomics(roomId) {
       
       // Marshall Plan isolation (from 1948)
       if (currentYear >= 1948) {
-        gdpGrowth -= 1.0; // Isolation from Marshall Plan
-        tradeBalance -= 400; // Additional Western trade cutoff
+        gdpGrowth -= 0.5; // Isolation from Marshall Plan (reduced from -1.0)
+        tradeBalance -= 200; // Western trade cutoff (reduced from -400)
+      }
+
+      // USSR Superpower Advantages
+      // Massive industrial base and resources
+      gdpGrowth += 0.8; // Industrial recovery and resource extraction
+      tradeBalance += 300; // Resource exports to Eastern bloc
+
+      // Command economy can achieve rapid growth through mobilization
+      if (policy.isCommandEconomy && planPriority > 70) {
+        gdpGrowth += 0.5; // Centralized planning efficiency in reconstruction
+        industrialOutput *= 1.03; // Heavy industry focus
       }
     }
     
     if (country === 'China') {
-      // Chinese Civil War (1946-1949) - intensifying effects
+      // Chinese Civil War (1946-1949) - intensifying effects (reduced for balance)
       if (currentYear <= 1949) {
         const warIntensity = {
-          1946: -1.0,  // War resumes after WWII
-          1947: -1.5,  // Escalation
-          1948: -2.5,  // Major battles
-          1949: -4.0   // Final decisive campaigns
+          1946: -0.5,  // War resumes after WWII
+          1947: -0.8,  // Escalation
+          1948: -1.2,  // Major battles
+          1949: -1.5   // Final decisive campaigns
         };
-        
-        gdpGrowth += (warIntensity[currentYear] || -1.0); // Negative growth from civil war
-        tradeBalance -= (currentYear - 1945) * 200; // Worsening trade disruption
-        // Note: Unemployment and inflation increases handled later in their respective sections
+
+        gdpGrowth += (warIntensity[currentYear] || -0.5); // Negative growth from civil war
+        tradeBalance -= (currentYear - 1945) * 100; // Trade disruption (reduced)
       }
+
+      // China's massive population = economic potential
+      gdpGrowth += 0.3; // Large domestic market
+
+      // Foreign aid (US aids Nationalists, USSR aids Communists)
+      tradeBalance += 200; // Foreign support flowing in
       
       // Communist China (post-1949) - command economy
       if (currentYear >= 1949 && policy.isCommandEconomy) {
@@ -1407,25 +1448,112 @@ function calculateYearEconomics(roomId) {
         
         // Strict plan fulfillment
         if (planPriority > 80) {
-          gdpGrowth += 0.3; // Mobilization
-          inflation += 1.2; // Severe bottlenecks in recovering economy
+          gdpGrowth += 0.5; // Mobilization (increased)
+          inflation += 0.8; // Bottlenecks (reduced)
         }
-        
-        // Post-civil war recovery penalty
-        gdpGrowth -= 1.5; // Still recovering from devastation
-        tradeBalance -= 200; // Limited foreign trade capacity
+
+        // Post-civil war recovery - peace dividend after 1950
+        if (currentYear >= 1950) {
+          gdpGrowth += 1.0; // Peace dividend - war is over!
+          tradeBalance += 150; // Trade normalizing
+        } else {
+          gdpGrowth -= 0.5; // Still consolidating power in 1949
+        }
+      }
+
+      // Communist China post-1950 rapid industrialization
+      if (currentYear >= 1950 && policy.isCommandEconomy) {
+        gdpGrowth += 0.8; // Soviet-style industrialization drive
+        industrialOutput *= 1.04; // Building factories
       }
     }
     
     if (country === 'India' && currentYear >= 1947) {
       gdpGrowth += 1.0; // Independence boost
     }
-    
+
+    if (country === 'France') {
+      // Marshall Plan recipient - major reconstruction aid
+      if (currentYear >= 1948) {
+        gdpGrowth += 1.2; // Marshall Plan boost
+        tradeBalance += 400; // US aid
+      }
+      // Despite currency crises, rapid reconstruction
+      gdpGrowth += 0.5; // Reconstruction momentum
+    }
+
+    if (country === 'UK') {
+      // Marshall Plan and special relationship with USA
+      if (currentYear >= 1948) {
+        gdpGrowth += 0.6; // Marshall Plan
+        tradeBalance += 250; // US support
+      }
+      // Commonwealth trade network
+      tradeBalance += 200; // Sterling area trade
+    }
+
     if (country === 'USA') {
       // USA benefits from being reserve currency
       tradeBalance += 400; // Dollar demand
     }
-    
+
+    // === ARGENTINA SPECIAL MECHANICS ===
+    if (country === 'Argentina') {
+      // Commodity Export Power - Argentina dominates global food exports
+      // Trade balance bonus based on global demand (post-war food shortages)
+      if (currentYear <= 1950) {
+        tradeBalance += 800; // Food export boom
+        gdpGrowth += 0.8; // Agricultural prosperity
+      } else {
+        // Drought and declining terms of trade after 1950
+        tradeBalance += 300;
+      }
+
+      // Third Position Bonus - Perón's "neither capitalism nor communism"
+      // Get bonus when policies differ from both USA and USSR
+      const usaPolicy = policies['USA'];
+      const ussrPolicy = policies['USSR'];
+      if (usaPolicy && ussrPolicy) {
+        let thirdPositionScore = 0;
+
+        // Check if tariff rate differs from both powers
+        if (policy.tariffRate) {
+          const usaTariff = usaPolicy.tariffRate || 10;
+          const diffFromUSA = Math.abs(policy.tariffRate - usaTariff);
+          const diffFromUSSR = policy.isCommandEconomy ? 0 : 20; // USSR has state trade monopoly
+          if (diffFromUSA > 10 && diffFromUSSR > 10) {
+            thirdPositionScore += 1;
+          }
+        }
+
+        // Check exchange rate independence
+        if (policy.exchangeRate && policy.exchangeRate !== 1.0) {
+          thirdPositionScore += 1;
+        }
+
+        // Bonus for Third Position policies
+        if (thirdPositionScore > 0) {
+          gdpGrowth += thirdPositionScore * 0.3; // Economic sovereignty bonus
+          // diplomaticPoints would be added elsewhere
+        }
+      }
+
+      // Perón's Social Programs (Import Substitution Industrialization)
+      // High government spending helps employment but causes inflation
+      if (policy.governmentSpending && policy.governmentSpending > 30) {
+        unemployment -= (policy.governmentSpending - 30) * 0.05; // Jobs from state programs
+        // Inflation effect handled separately
+      }
+
+      // Industrial development bonus
+      industrialOutput *= 1.02; // Growing industrial base under Perón
+
+      // British debt leverage - UK owes Argentina from WWII
+      if (currentYear <= 1948) {
+        tradeBalance += 200; // Debt repayments flowing in
+      }
+    }
+
     // Random shock
     const randomShock = (Math.random() - 0.5) * 2;
     gdpGrowth += randomShock;
@@ -1437,7 +1565,21 @@ function calculateYearEconomics(roomId) {
     if (country === 'China' && currentYear >= 1948 && currentYear <= 1949) {
       inflation += 3.0; // Severe shortages from agricultural collapse
     }
-    
+
+    // Argentina Peronist inflation effects
+    if (country === 'Argentina') {
+      // Perón's social programs and nationalization cause inflation
+      if (policy.governmentSpending && policy.governmentSpending > 30) {
+        inflation += (policy.governmentSpending - 30) * 0.15; // Deficit spending
+      }
+      // Post-1950 economic troubles
+      if (currentYear >= 1951) {
+        inflation += 2.0; // Drought and declining exports cause inflation
+      }
+      // IAPI (state trade monopoly) creates inefficiencies
+      inflation += 1.0; // Structural inflation from interventionist policies
+    }
+
     // Your own interest rate
     if (centralBankRate < 2.0) {
       inflation += (2.0 - centralBankRate) * 2.0;
@@ -1542,12 +1684,19 @@ function calculateYearEconomics(roomId) {
 function calculatePhase2Scores(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
-  
+
+  console.log(`\n📊 Calculating Phase 2 scores for room ${roomId}`);
+  console.log(`   Players:`, Object.values(room.players).map(p => `${p.country} -> ${normalizeCountryName(p.country)}`));
+  console.log(`   YearlyData years:`, Object.keys(room.phase2.yearlyData || {}));
+
   const phase2Scores = {};
   const scoreBreakdowns = {};
-  
+
   Object.values(room.players).forEach(player => {
-    const country = normalizeCountryName(player.country);
+    const rawCountry = player.country;
+    const country = normalizeCountryName(rawCountry);
+    console.log(`   Processing player: raw=${rawCountry}, normalized=${country}`);
+
     let score = 0;
     const breakdown = {
       gdp: 0,
@@ -1557,21 +1706,27 @@ function calculatePhase2Scores(roomId) {
       stability: 0,
       brettonWoods: 0
     };
-    
+
     // Calculate average performance
     let totalGDP = 0, totalInflation = 0, totalUnemployment = 0, yearsCount = 0;
     let positiveTradeYears = 0;
-    
+
     for (let year = 1947; year <= 1952; year++) {
-      const data = room.phase2.yearlyData[year]?.[country];
+      // Try both normalized and raw country names
+      let data = room.phase2.yearlyData[year]?.[country];
+      if (!data && rawCountry !== country) {
+        data = room.phase2.yearlyData[year]?.[rawCountry];
+      }
       if (data) {
-        totalGDP += data.gdpGrowth;
-        totalInflation += data.inflation;
-        totalUnemployment += data.unemployment;
-        if (data.tradeBalance > 0) positiveTradeYears++;
+        totalGDP += data.gdpGrowth || 0;
+        totalInflation += data.inflation || 0;
+        totalUnemployment += data.unemployment || 0;
+        if ((data.tradeBalance || 0) > 0) positiveTradeYears++;
         yearsCount++;
       }
     }
+
+    console.log(`   ${country}: found data for ${yearsCount} years`);
     
     if (yearsCount > 0) {
       const avgGDP = totalGDP / yearsCount;
@@ -1648,13 +1803,23 @@ function calculatePhase2Scores(roomId) {
       }
     }
     
-    phase2Scores[country] = Math.round(score);
+    // Ensure score is a valid number
+    const finalScore = isNaN(score) ? 0 : Math.round(score);
+    phase2Scores[country] = finalScore;
     scoreBreakdowns[country] = breakdown;
-    room.scores[country] = (room.scores[country] || 0) + phase2Scores[country];
+
+    // Initialize room.scores if needed and add Phase 2 score
+    if (!room.scores) room.scores = {};
+    const prevScore = typeof room.scores[country] === 'number' ? room.scores[country] : 0;
+    room.scores[country] = prevScore + finalScore;
+
+    console.log(`   ${country}: Phase2 score=${finalScore}, Total score=${room.scores[country]}`);
   });
-  
+
   // Store breakdowns for display
   room.phase2.scoreBreakdowns = scoreBreakdowns;
+
+  console.log(`📊 Final scores:`, room.scores);
   
   console.log(`Phase 2 final scores:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);

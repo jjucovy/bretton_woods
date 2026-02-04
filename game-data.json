@@ -71,11 +71,20 @@
       "color": "bg-cyan-600",
       "textColor": "text-cyan-600",
       "objectives": [
-        "Protect agricultural export interests",
+        "Protect agricultural export interests and commodity prices",
         "Maintain economic sovereignty from US influence",
-        "Secure fair terms for commodity exporters"
+        "Secure fair terms for commodity exporters in new order",
+        "Lead Latin American bloc in negotiations",
+        "Develop industrial base through import substitution",
+        "Resist IMF conditions that threaten social programs"
       ],
-      "economicPosition": "Prosperous neutral during war, creditor nation, strong agriculture"
+      "economicPosition": "Prosperous neutral during war, creditor nation (UK owes £150M), strong agriculture, emerging industry under Perón",
+      "specialAbilities": [
+        "Commodity Power: Can influence global grain and beef prices",
+        "Third Position: Bonus points for policies that differ from both USA and USSR",
+        "Latin American Leadership: Votes count extra on development issues"
+      ],
+      "historicalContext": "Argentina remained neutral in WWII, profiting from food exports. By 1946, Perón has nationalized British railways and created the 'Third Position' - neither capitalist nor communist. Major creditor to war-devastated Europe."
     }
   },
   "economicData": {
@@ -158,17 +167,24 @@
       }
     },
     "Argentina": {
-      "goldReserves": 1200,
-      "tradeBalance": 1500,
-      "gdp": 32000,
-      "warDebt": 5000,
-      "industrialOutput": 18,
+      "goldReserves": 1500,
+      "tradeBalance": 2000,
+      "gdp": 35000,
+      "warDebt": 0,
+      "industrialOutput": 22,
+      "foreignCredits": 1800,
+      "commodityExports": {
+        "grain": 4500,
+        "beef": 2800,
+        "wool": 800
+      },
       "military": {
-        "army": 100000,
-        "navy": 35000,
-        "airForce": 15000,
-        "total": 150000
-      }
+        "army": 130000,
+        "navy": 45000,
+        "airForce": 25000,
+        "total": 200000
+      },
+      "specialResources": ["Agricultural Surplus", "British Debt Holdings", "Strategic Neutrality"]
     }
   },
   "issues": [
@@ -192,7 +208,7 @@
         {
           "id": "c",
           "text": "Multiple reserve currencies",
-          "favors": ["USSR", "UK", "France", "India"],
+          "favors": ["USSR", "UK", "France", "India", "Argentina"],
           "opposes": []
         }
       ]
@@ -293,7 +309,13 @@
           "id": "c",
           "text": "Priority for most devastated",
           "favors": ["France", "USSR"],
-          "opposes": []
+          "opposes": ["Argentina"]
+        },
+        {
+          "id": "d",
+          "text": "Include commodity-exporting nations in aid distribution",
+          "favors": ["Argentina", "India"],
+          "opposes": ["USA"]
         }
       ]
     },
@@ -361,7 +383,7 @@
         {
           "id": "b",
           "text": "Flexible gold standard",
-          "favors": ["UK", "France"],
+          "favors": ["UK", "France", "Argentina"],
           "opposes": []
         },
         {
@@ -386,7 +408,7 @@
         {
           "id": "b",
           "text": "Participation without political strings",
-          "favors": ["USSR", "France", "India"],
+          "favors": ["USSR", "France", "India", "Argentina"],
           "opposes": []
         },
         {
@@ -428,43 +450,57 @@
       "Bretton Woods agreements officially ratified",
       "IMF and World Bank begin operations in December",
       "USSR demands $6 billion reconstruction loan (denied by USA)",
-      "Philippines gains independence from USA (July 4)"
+      "Philippines gains independence from USA (July 4)",
+      "🇦🇷 Perón elected President of Argentina - begins nationalization program",
+      "🇦🇷 Argentina nationalizes Central Bank and creates IAPI (trade monopoly)"
     ],
     "1947": [
       "India gains independence from Britain (August 15)",
       "Marshall Plan announced by USA ($13 billion for European reconstruction)",
       "GATT (General Agreement on Tariffs and Trade) negotiations begin",
-      "Truman Doctrine pledges support against Soviet expansion"
+      "Truman Doctrine pledges support against Soviet expansion",
+      "🇦🇷 Argentina nationalizes British-owned railways for £150M",
+      "🇦🇷 Eva Perón launches social aid foundation - 'Evita' becomes icon"
     ],
     "1948": [
       "USSR refuses Marshall Plan aid and blocks Eastern Europe from participating",
       "Berlin Blockade begins (June 24) - USSR blocks Western access",
       "Organization of American States (OAS) founded",
-      "State of Israel founded, Arab-Israeli War begins"
+      "State of Israel founded, Arab-Israeli War begins",
+      "🇦🇷 Argentina provides wheat to war-torn Europe on favorable terms",
+      "🇦🇷 US Ambassador Braden campaigns against Perón ('Braden or Perón')"
     ],
     "1949": [
       "NATO (North Atlantic Treaty Organization) founded (April 4)",
       "Chinese Communist Party defeats Nationalists (October 1)",
       "USSR successfully tests atomic bomb (August 29)",
-      "Germany divided into Federal Republic (West) and Democratic Republic (East)"
+      "Germany divided into Federal Republic (West) and Democratic Republic (East)",
+      "🇦🇷 New Argentine Constitution enshrines workers' rights",
+      "🇦🇷 Argentina experiences economic boom from commodity exports"
     ],
     "1950": [
       "Korean War begins (June 25) - North Korea invades South",
       "European Payments Union created to facilitate trade",
       "Schuman Plan proposed (European Coal and Steel Community)",
-      "Chinese forces enter Korean War (October)"
+      "Chinese forces enter Korean War (October)",
+      "🇦🇷 Argentina declines to join Korean War coalition",
+      "🇦🇷 Argentine economy begins to face inflation pressures"
     ],
     "1951": [
       "Treaty of Paris creates European Coal and Steel Community",
       "Iranian oil nationalization crisis - Mossadegh nationalizes Anglo-Iranian Oil",
       "Japanese Peace Treaty signed in San Francisco",
-      "European Defense Community proposed (later fails)"
+      "European Defense Community proposed (later fails)",
+      "🇦🇷 Severe drought hits Argentine grain production",
+      "🇦🇷 Evita's health declines - massive public concern"
     ],
     "1952": [
       "European Defense Community treaty signed (ratification fails 1954)",
       "Britain successfully tests atomic bomb",
       "End of post-war Allied occupation of West Germany",
-      "Eisenhower elected US President, pledges to end Korean War"
+      "Eisenhower elected US President, pledges to end Korean War",
+      "🇦🇷 Eva Perón dies (July 26) - national mourning",
+      "🇦🇷 Economic austerity measures introduced as commodity prices fall"
     ]
   }
 }

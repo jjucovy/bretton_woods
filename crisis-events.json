@@ -585,6 +585,351 @@
           }
         ]
       }
+    },
+    {
+      "id": "argentina-british-debt",
+      "year": 1947,
+      "title": "🇦🇷 British Debt to Argentina",
+      "description": "Britain owes Argentina £150M for wartime food exports. Argentina demands payment or nationalization of British assets.",
+      "affectedCountries": ["Argentina", "UK", "USA"],
+      "primaryActors": ["Argentina", "UK"],
+      "historicalContext": "Argentina supplied food to Britain throughout WWII on credit. Now demands payment as Britain faces bankruptcy.",
+      "options": {
+        "Argentina": [
+          {
+            "id": "demand-full-payment",
+            "text": "💰 Demand Full Payment Immediately",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 1500,
+              "diplomaticPoints": -8
+            },
+            "outcome": "Britain cannot pay. Seize British railway assets instead. Relations severely damaged."
+          },
+          {
+            "id": "negotiate-railways",
+            "text": "🚂 Accept Railway Nationalization as Payment",
+            "cost": 800,
+            "effects": {
+              "gdpGrowth": 1.5,
+              "tradeBalance": -800,
+              "diplomaticPoints": 5
+            },
+            "outcome": "Take control of British-owned railways. Fair deal - maintain relations."
+          },
+          {
+            "id": "extend-credit",
+            "text": "🤝 Extend Credit Terms to Britain",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": -500,
+              "diplomaticPoints": 15
+            },
+            "outcome": "Generous gesture. Britain grateful. Strengthens Argentine influence in Europe."
+          }
+        ],
+        "UK": [
+          {
+            "id": "offer-railways",
+            "text": "🚂 Offer Railway Assets as Payment",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 400,
+              "diplomaticPoints": 3
+            },
+            "outcome": "Railways were losing money anyway. Fair settlement."
+          },
+          {
+            "id": "request-us-loan",
+            "text": "💵 Request US Loan to Pay Argentina",
+            "cost": 200,
+            "effects": {
+              "tradeBalance": -200,
+              "diplomaticPoints": -5
+            },
+            "outcome": "More dependence on USA. Argentina gets paid but British prestige suffers."
+          }
+        ],
+        "USA": [
+          {
+            "id": "pressure-argentina",
+            "text": "⚠️ Pressure Argentina to Forgive Debt",
+            "cost": 100,
+            "effects": {
+              "diplomaticPoints": -10
+            },
+            "outcome": "Perón refuses. 'Yankees go home!' Latin American solidarity against US."
+          },
+          {
+            "id": "stay-out",
+            "text": "🤷 Stay Out of Bilateral Dispute",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": 3
+            },
+            "outcome": "Not your problem. Let them sort it out."
+          }
+        ]
+      }
+    },
+    {
+      "id": "argentina-commodity-boom",
+      "year": 1948,
+      "title": "🌾 Global Commodity Price Surge",
+      "description": "Post-war food shortages drive grain and beef prices to record highs. Argentina dominates global food exports.",
+      "affectedCountries": ["Argentina", "USA", "UK", "France", "India"],
+      "primaryActors": ["Argentina", "USA"],
+      "historicalContext": "Europe is starving. Argentina and USA are the only major food exporters. Argentina uses IAPI to control prices.",
+      "options": {
+        "Argentina": [
+          {
+            "id": "maximize-prices",
+            "text": "📈 Maximize Export Prices",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 3.0,
+              "tradeBalance": 2500,
+              "diplomaticPoints": -15
+            },
+            "outcome": "Huge profits! But Europe resents you. USA accuses Argentina of profiteering."
+          },
+          {
+            "id": "fair-prices",
+            "text": "⚖️ Offer Fair Prices to Europe",
+            "cost": 500,
+            "effects": {
+              "gdpGrowth": 1.5,
+              "tradeBalance": 1200,
+              "diplomaticPoints": 10
+            },
+            "outcome": "Good profits AND goodwill. Spain especially grateful."
+          },
+          {
+            "id": "food-aid",
+            "text": "🍞 Provide Food Aid to Devastated Nations",
+            "cost": 1000,
+            "effects": {
+              "gdpGrowth": 0.5,
+              "tradeBalance": 500,
+              "diplomaticPoints": 20
+            },
+            "outcome": "Evita's charitable image extended to foreign policy. Huge popularity."
+          }
+        ],
+        "USA": [
+          {
+            "id": "compete-prices",
+            "text": "🌽 Compete with Lower Prices",
+            "cost": 800,
+            "effects": {
+              "tradeBalance": -800,
+              "diplomaticPoints": 10
+            },
+            "outcome": "Undercut Argentina. Europe grateful but American farmers unhappy."
+          },
+          {
+            "id": "let-market-decide",
+            "text": "📊 Let Market Set Prices",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 1500,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Profits flow. But accused of not helping starving Europeans."
+          }
+        ],
+        "UK": [
+          {
+            "id": "buy-argentine",
+            "text": "🇦🇷 Accept Argentine Terms",
+            "cost": 600,
+            "effects": {
+              "tradeBalance": -600,
+              "diplomaticPoints": 3
+            },
+            "outcome": "Feed your people. Swallow pride."
+          },
+          {
+            "id": "seek-us-aid",
+            "text": "🇺🇸 Seek US Food Aid Instead",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": -3
+            },
+            "outcome": "Marshall Plan provides food. More dependent on USA."
+          }
+        ],
+        "France": [
+          {
+            "id": "bilateral-deal",
+            "text": "🤝 Negotiate Bilateral Deal with Argentina",
+            "cost": 400,
+            "effects": {
+              "tradeBalance": -400,
+              "diplomaticPoints": 5
+            },
+            "outcome": "Wine and culture for beef and grain. Mutual respect."
+          }
+        ],
+        "India": [
+          {
+            "id": "solidarity",
+            "text": "🤝 Express Solidarity with Argentina's Position",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": 8
+            },
+            "outcome": "Developing nations should control their resources! Third World unity."
+          }
+        ]
+      }
+    },
+    {
+      "id": "argentina-drought-1951",
+      "year": 1951,
+      "title": "🌵 Argentine Drought Crisis",
+      "description": "Severe drought devastates Argentine grain production. The economic miracle falters.",
+      "affectedCountries": ["Argentina", "UK", "USA"],
+      "primaryActors": ["Argentina"],
+      "historicalContext": "After years of abundance, nature strikes back. Grain exports plummet. Government reserves depleted.",
+      "options": {
+        "Argentina": [
+          {
+            "id": "austerity",
+            "text": "📉 Implement Austerity Measures",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": -2.0,
+              "inflation": -3.0,
+              "unemployment": 2.0,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Cut spending. Unions furious. Peronist base cracks."
+          },
+          {
+            "id": "borrow-abroad",
+            "text": "💵 Seek Foreign Loans",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 0.5,
+              "tradeBalance": -800,
+              "diplomaticPoints": -8
+            },
+            "outcome": "Compromise Third Position principles. IMF conditions hurt sovereignty."
+          },
+          {
+            "id": "maintain-spending",
+            "text": "💪 Maintain Social Spending Despite Crisis",
+            "cost": 1200,
+            "effects": {
+              "gdpGrowth": -1.0,
+              "inflation": 8.0,
+              "unemployment": -1.0,
+              "diplomaticPoints": 5
+            },
+            "outcome": "Print money to fund programs. Workers love you. Inflation soars."
+          }
+        ],
+        "USA": [
+          {
+            "id": "offer-aid",
+            "text": "🤝 Offer Emergency Food Aid",
+            "cost": 400,
+            "effects": {
+              "tradeBalance": -400,
+              "diplomaticPoints": 15
+            },
+            "outcome": "Extend olive branch. Perón reluctantly accepts. Relations improve."
+          },
+          {
+            "id": "exploit-weakness",
+            "text": "📉 Demand Political Concessions for Aid",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": -10
+            },
+            "outcome": "Perón refuses. 'We would rather starve!' Latin America rallies to Argentina."
+          }
+        ],
+        "UK": [
+          {
+            "id": "return-favor",
+            "text": "🍞 Return the Favor - Send Food to Argentina",
+            "cost": 300,
+            "effects": {
+              "tradeBalance": -300,
+              "diplomaticPoints": 12
+            },
+            "outcome": "Remember when Argentina fed us? Time to repay. Relations healed."
+          }
+        ]
+      }
+    },
+    {
+      "id": "evita-death-1952",
+      "year": 1952,
+      "title": "⚫ Death of Eva Perón",
+      "description": "Eva 'Evita' Perón dies of cancer at age 33. Argentina mourns. Political uncertainty follows.",
+      "affectedCountries": ["Argentina", "USA", "UK"],
+      "primaryActors": ["Argentina"],
+      "historicalContext": "Evita was the heart of Peronism. Her foundation helped millions. Without her, can the movement survive?",
+      "options": {
+        "Argentina": [
+          {
+            "id": "state-funeral",
+            "text": "⚰️ Grand State Funeral and National Mourning",
+            "cost": 500,
+            "effects": {
+              "gdpGrowth": -0.5,
+              "diplomaticPoints": 10
+            },
+            "outcome": "Millions mourn. Evita becomes eternal symbol. Movement unified in grief."
+          },
+          {
+            "id": "foundation-continues",
+            "text": "🏥 Foundation Continues Her Work",
+            "cost": 800,
+            "effects": {
+              "gdpGrowth": -0.3,
+              "unemployment": -1.0,
+              "diplomaticPoints": 8
+            },
+            "outcome": "Her legacy lives on. Social programs maintained. Workers remember."
+          },
+          {
+            "id": "political-reform",
+            "text": "🔄 Begin Political Reforms",
+            "cost": 200,
+            "effects": {
+              "gdpGrowth": 0.5,
+              "diplomaticPoints": 5
+            },
+            "outcome": "Use moment for reconciliation. Opposition cautiously optimistic."
+          }
+        ],
+        "USA": [
+          {
+            "id": "condolences",
+            "text": "💐 Send Official Condolences",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": 5
+            },
+            "outcome": "Diplomatic gesture. Maybe relations can improve now."
+          }
+        ],
+        "UK": [
+          {
+            "id": "condolences",
+            "text": "💐 Send Royal Condolences",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": 5
+            },
+            "outcome": "Even former enemies respect grief. Relations warming."
+          }
+        ]
+      }
     }
   ]
 }
