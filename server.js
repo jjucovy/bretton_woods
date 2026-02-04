@@ -1995,19 +1995,22 @@ io.on('connection', (socket) => {
       // Check for active game for this user
       let activeGame = null;
       if (role === 'player') {
-        const userGames = await queryDatabase('getUserGames', { 
-          user_id: dbUser.user_id,
-          status: 'active'
+        // Use getPlayerActiveGame action (matches PHP API)
+        const gameResult = await queryDatabase('getPlayerActiveGame', {
+          userId: dbUser.user_id
         });
-        
-        if (userGames && Array.isArray(userGames) && userGames.length > 0) {
-          // Get the first active game
-          const game = userGames[0];
+
+        console.log('getPlayerActiveGame result:', JSON.stringify(gameResult));
+
+        // Handle both array and single object responses
+        const game = Array.isArray(gameResult) ? gameResult[0] : gameResult;
+
+        if (game && game.game_code) {
           activeGame = {
             game_id: game.game_id,
             gameCode: game.game_code,
             country_id: game.country_id,
-            country_code: game.country_code,  // ADD THIS - the actual country code like 'FRA'
+            country_code: game.country_code,
             status: game.status
           };
           console.log(`✓ User has active game: ${activeGame.gameCode}`);
