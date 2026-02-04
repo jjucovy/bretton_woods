@@ -1444,7 +1444,64 @@ function calculateYearEconomics(roomId) {
       // USA benefits from being reserve currency
       tradeBalance += 400; // Dollar demand
     }
-    
+
+    // === ARGENTINA SPECIAL MECHANICS ===
+    if (country === 'Argentina') {
+      // Commodity Export Power - Argentina dominates global food exports
+      // Trade balance bonus based on global demand (post-war food shortages)
+      if (currentYear <= 1950) {
+        tradeBalance += 800; // Food export boom
+        gdpGrowth += 0.8; // Agricultural prosperity
+      } else {
+        // Drought and declining terms of trade after 1950
+        tradeBalance += 300;
+      }
+
+      // Third Position Bonus - Perón's "neither capitalism nor communism"
+      // Get bonus when policies differ from both USA and USSR
+      const usaPolicy = policies['USA'];
+      const ussrPolicy = policies['USSR'];
+      if (usaPolicy && ussrPolicy) {
+        let thirdPositionScore = 0;
+
+        // Check if tariff rate differs from both powers
+        if (policy.tariffRate) {
+          const usaTariff = usaPolicy.tariffRate || 10;
+          const diffFromUSA = Math.abs(policy.tariffRate - usaTariff);
+          const diffFromUSSR = policy.isCommandEconomy ? 0 : 20; // USSR has state trade monopoly
+          if (diffFromUSA > 10 && diffFromUSSR > 10) {
+            thirdPositionScore += 1;
+          }
+        }
+
+        // Check exchange rate independence
+        if (policy.exchangeRate && policy.exchangeRate !== 1.0) {
+          thirdPositionScore += 1;
+        }
+
+        // Bonus for Third Position policies
+        if (thirdPositionScore > 0) {
+          gdpGrowth += thirdPositionScore * 0.3; // Economic sovereignty bonus
+          // diplomaticPoints would be added elsewhere
+        }
+      }
+
+      // Perón's Social Programs (Import Substitution Industrialization)
+      // High government spending helps employment but causes inflation
+      if (policy.governmentSpending && policy.governmentSpending > 30) {
+        unemployment -= (policy.governmentSpending - 30) * 0.05; // Jobs from state programs
+        // Inflation effect handled separately
+      }
+
+      // Industrial development bonus
+      industrialOutput *= 1.02; // Growing industrial base under Perón
+
+      // British debt leverage - UK owes Argentina from WWII
+      if (currentYear <= 1948) {
+        tradeBalance += 200; // Debt repayments flowing in
+      }
+    }
+
     // Random shock
     const randomShock = (Math.random() - 0.5) * 2;
     gdpGrowth += randomShock;
@@ -1456,7 +1513,21 @@ function calculateYearEconomics(roomId) {
     if (country === 'China' && currentYear >= 1948 && currentYear <= 1949) {
       inflation += 3.0; // Severe shortages from agricultural collapse
     }
-    
+
+    // Argentina Peronist inflation effects
+    if (country === 'Argentina') {
+      // Perón's social programs and nationalization cause inflation
+      if (policy.governmentSpending && policy.governmentSpending > 30) {
+        inflation += (policy.governmentSpending - 30) * 0.15; // Deficit spending
+      }
+      // Post-1950 economic troubles
+      if (currentYear >= 1951) {
+        inflation += 2.0; // Drought and declining exports cause inflation
+      }
+      // IAPI (state trade monopoly) creates inefficiencies
+      inflation += 1.0; // Structural inflation from interventionist policies
+    }
+
     // Your own interest rate
     if (centralBankRate < 2.0) {
       inflation += (2.0 - centralBankRate) * 2.0;
