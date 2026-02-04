@@ -1134,11 +1134,21 @@ function calculateYearEconomics(roomId) {
     const prevData = prevYearData[country];
     
     if (!policy || !prevData) {
-      // If no policy submitted, use defaults with penalty
+      // If no policy submitted or no previous data, use defaults with penalty
+      const defaultData = prevData || {
+        gdp: 100,
+        gdpGrowth: 0,
+        goldReserves: 1000,
+        unemployment: 5,
+        tradeBalance: 0,
+        inflation: 5,
+        industrialOutput: 100,
+        military: { army: 500000, navy: 100000, airForce: 50000, total: 650000 }
+      };
       tempResults[country] = {
-        ...prevData,
+        ...defaultData,
         gdpGrowth: -2.0,
-        industrialOutput: prevData.industrialOutput * 0.98
+        industrialOutput: (defaultData.industrialOutput || 100) * 0.98
       };
       return;
     }
