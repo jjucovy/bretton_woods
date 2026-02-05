@@ -1961,9 +1961,23 @@ io.on('connection', (socket) => {
         displayName: username
       });
 
-      const userId = result?.user_id || result?.id;
+      // PHP returns { exists: true, user_id } if already exists
+      if (result?.exists && result?.user_id) {
+        console.log(`User already exists: ${username}, user_id: ${result.user_id}`);
+        socket.emit('registerResult', { success: false, message: 'Username already exists' });
+        return;
+      }
+
+      // PHP INSERT returns { affected: 1 } without user_id
+      // Fetch the newly created user to get their user_id
+      let userId = result?.user_id || result?.id;
       if (!userId) {
-        console.error('Registration failed - no user_id returned:', result);
+        const dbUser = await queryDatabase('getUser', { username });
+        userId = dbUser?.user_id;
+      }
+
+      if (!userId) {
+        console.error('Registration failed - could not retrieve user_id after creation:', result);
         socket.emit('registerResult', { success: false, message: 'Registration failed - please try again' });
         return;
       }
