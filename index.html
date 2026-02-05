@@ -2523,8 +2523,9 @@ function YearEndBattlePhase({
             const formData = new FormData(e.target);
             const username = formData.get('username');
             const password = formData.get('password');
+            const email = formData.get('email');
 
-            socket.emit('register', { username, password });
+            socket.emit('register', { username, password, email });
             
             socket.once('registerResult', ({ success, userId: newUserId, role, message }) => {
               if (success) {
@@ -3155,6 +3156,27 @@ function YearEndBattlePhase({
                         }}
                       />
                     </div>
+
+                    {showRegister && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          name="email"
+                          required
+                          placeholder="your@email.com"
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            border: '2px solid #e2e8f0',
+                            borderRadius: '6px',
+                            fontSize: '1rem'
+                          }}
+                        />
+                      </div>
+                    )}
 
                     <button type="submit" className="btn-primary" style={{ width: '100%' }}>
                       {showRegister ? 'Register' : 'Login'}
