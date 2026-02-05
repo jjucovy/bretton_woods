@@ -2526,14 +2526,14 @@ function YearEndBattlePhase({
 
             socket.emit('register', { username, password });
             
-            socket.once('registerResult', ({ success, playerId: newPlayerId, role, message }) => {
+            socket.once('registerResult', ({ success, userId: newUserId, role, message }) => {
               if (success) {
                 setUsername(username);
-                setPlayerId(newPlayerId);
+                setPlayerId(newUserId);
                 setUserRole(role || 'player');
                 setIsAuthenticated(true);
                 sessionStorage.setItem('brettonWoodsUsername', username);
-                sessionStorage.setItem('brettonWoodsPlayerId', newPlayerId);
+                sessionStorage.setItem('brettonWoodsPlayerId', newUserId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
 
                 console.log('Registration successful. Role:', role);
@@ -2544,7 +2544,7 @@ function YearEndBattlePhase({
                   setShowGameSelection(true);
                   setLoadingGames(true);
 
-                  socket.emit('getActiveGames', { playerId: newPlayerId });
+                  socket.emit('getActiveGames', { playerId: newUserId });
                   socket.once('activeGamesResult', ({ success, games }) => {
                     setLoadingGames(false);
                     if (success) {
@@ -2559,7 +2559,7 @@ function YearEndBattlePhase({
                 setShowGameSelection(true);
                 setLoadingGames(true);
 
-                socket.emit('getAvailableGames', { playerId: newPlayerId });
+                socket.emit('getAvailableGames', { playerId: newUserId });
                 socket.once('availableGamesResult', ({ success, games, message: gamesMessage }) => {
                   setLoadingGames(false);
                   console.log('Available games result:', { success, games, gamesMessage });
