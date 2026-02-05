@@ -1941,9 +1941,9 @@ io.on('connection', (socket) => {
   socket.emit('roomListUpdate', globalState.roomList);
   
   // Register new user
-  socket.on('register', async ({ username, password }) => {
-    if (!username || !password) {
-      socket.emit('registerResult', { success: false, message: 'Username and password required' });
+  socket.on('register', async ({ username, password, email }) => {
+    if (!username || !password || !email) {
+      socket.emit('registerResult', { success: false, message: 'Username, password, and email are required' });
       return;
     }
 
@@ -1957,7 +1957,7 @@ io.on('connection', (socket) => {
         username: username,
         password: password,
         role: isSuperAdmin ? 'teacher' : 'student',
-        email: username.includes('@') ? username : '',
+        email: email,
         displayName: username
       });
 
