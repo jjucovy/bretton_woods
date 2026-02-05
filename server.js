@@ -2335,23 +2335,25 @@ io.on('connection', (socket) => {
         let dbAssignment = null;
         try {
           dbAssignment = await queryDatabase('getPlayerAssignment', {
-            user_id: userId,
-            game_id: room.gameId
+            user_id: parseInt(userId),
+            game_id: parseInt(room.gameId)
           });
+          console.log(`   getPlayerAssignment result:`, JSON.stringify(dbAssignment));
         } catch (err) {
           console.error('Error checking player assignment:', err);
         }
 
-        if (dbAssignment && dbAssignment.country_code) {
+        if (dbAssignment && (dbAssignment.country_code || dbAssignment.country_name)) {
           // Player has an existing assignment in database - restore them
-          console.log(`   ✓ Found player assignment in database: ${dbAssignment.country_code}`);
+          const assignedCountry = dbAssignment.country_code || dbAssignment.country_name;
+          console.log(`   ✓ Found player assignment in database: ${assignedCountry}`);
 
           // Add player back to room state
           room.players[userId] = {
             id: userId,
             userId: userId,
             playerId: dbAssignment.player_id,
-            country: dbAssignment.country_code,
+            country: assignedCountry,
             socketId: socket.id,
             joinedAt: Date.now(),
             role: 'player',
@@ -2484,15 +2486,21 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Get or create player_id from database
+    // Get or create player assignment in database
     let assignedPlayerId = null;
     try {
       // Check if user already has a player assignment in this game
-      const existingAssignment = await queryDatabase('getPlayerAssignment', {
-        user_id: id,
-        game_id: room.gameId
-      });
-      
+      let existingAssignment = null;
+      try {
+        existingAssignment = await queryDatabase('getPlayerAssignment', {
+          user_id: parseInt(id || userId),
+          game_id: parseInt(room.gameId)
+        });
+      } catch (err) {
+        // Not found is OK - we'll create one
+        console.log(`   No existing assignment found (${err.message})`);
+      }
+
       if (existingAssignment && existingAssignment.player_id) {
         assignedPlayerId = existingAssignment.player_id;
         console.log(`   User already has player_id ${assignedPlayerId} in this game`);
@@ -2500,23 +2508,23 @@ io.on('connection', (socket) => {
         // Get next available player_id from database
         const nextPlayerId = await queryDatabase('getNextPlayerId', {});
         assignedPlayerId = nextPlayerId?.next_id || `player_${Date.now()}`;
-        
+
         console.log(`   Assigned new player_id: ${assignedPlayerId}`);
-        
+
         // Get country_id from country code
         const countryData = await queryDatabase('getCountryByCode', { country_code: country });
         const countryId = countryData?.country_id || null;
-        
+
         // Save player assignment to database
-        await queryDatabase('createPlayerAssignment', {
+        const result = await queryDatabase('createPlayerAssignment', {
           user_id: id,
-          game_id: room.gameId,
+          game_code: roomId,
           player_id: assignedPlayerId,
           country_id: countryId,
           country_code: country
         });
-        
-        console.log(`   Created player assignment in database: user_id=${id}, player_id=${assignedPlayerId}, country=${country}`);
+
+        console.log(`   Created player assignment in database: user_id=${id}, player_id=${assignedPlayerId}, game_code=${roomId}, country=${country}`);
       }
     } catch (err) {
       console.error('Error managing player assignment:', err);
