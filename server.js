@@ -2504,16 +2504,15 @@ io.on('connection', (socket) => {
         assignedPlayerId = existingAssignment.player_id;
         console.log(`   User already has player_id ${assignedPlayerId} in this game`);
       } else {
-        // Save player assignment using addPlayer API action
-        const result = await queryDatabase('addPlayer', {
-          gameCode: roomId,
-          userId: id,
-          countryCode: country,
-          countryName: country
+        // Save player assignment to database (game_code, not game_id)
+        const result = await queryDatabase('createPlayerAssignment', {
+          user_id: id,
+          game_code: roomId,
+          country_code: country
         });
 
         assignedPlayerId = result?.player_id || `player_${Date.now()}`;
-        console.log(`   Created player assignment in database: userId=${id}, country=${country}`);
+        console.log(`   Created player assignment in database: user_id=${id}, game_code=${roomId}, country=${country}`);
       }
     } catch (err) {
       console.error('Error managing player assignment:', err);
