@@ -1941,39 +1941,46 @@ io.on('connection', (socket) => {
   socket.emit('roomListUpdate', globalState.roomList);
   
   // Register new user
-  socket.on('register', ({ username, password }) => {
+  socket.on('register', async ({ username, password }) => {
     if (!username || !password) {
       socket.emit('registerResult', { success: false, message: 'Username and password required' });
       return;
     }
-    
-    if (globalState.users[username]) {
-      socket.emit('registerResult', { success: false, message: 'Username already exists' });
-      return;
-    }
-    const playerid = playerId;
-    const userId = player.userid // Simple numeric ID for now
-    
+
     // Only jjucovy@gmail.com is the super admin
     const isSuperAdmin = username.toLowerCase() === 'jjucovy@gmail.com' || username.toLowerCase() === 'jjucovy';
-    
-    globalState.users[username] = {
-      password: hashPassword(password),
-      playerid: player.id,
-      userId: userId,
-      createdAt: Date.now(),
-      role: isSuperAdmin ? 'superadmin' : 'player'
-    };
-    
-    socket.emit('registerResult', { 
-      success: true, 
-      playerid: player.id,
-      username: username,
-      role: isSuperAdmin ? 'superadmin' : 'player'
-    });
-    
-    saveState();
-    //console.log(`User registered: ${username} (${isSuperAdmin ? 'SUPER ADMIN' : 'player'})`);
+    const role = isSuperAdmin ? 'superadmin' : 'player';
+
+    try {
+      // Create user in database
+      const result = await queryDatabase('createUser', {
+        username: username,
+        password: password,
+        role: isSuperAdmin ? 'teacher' : 'student',
+        email: username.includes('@') ? username : '',
+        displayName: username
+      });
+
+      const userId = result?.user_id || result?.id;
+      if (!userId) {
+        console.error('Registration failed - no user_id returned:', result);
+        socket.emit('registerResult', { success: false, message: 'Registration failed - please try again' });
+        return;
+      }
+
+      console.log(`User registered: ${username} (${role}), user_id: ${userId}`);
+
+      socket.emit('registerResult', {
+        success: true,
+        userId: userId,
+        username: username,
+        role: role
+      });
+    } catch (err) {
+      console.error('Registration error:', err);
+      const message = err.message?.includes('exists') ? 'Username already exists' : 'Registration failed';
+      socket.emit('registerResult', { success: false, message });
+    }
   });
   
   // Login existing user
