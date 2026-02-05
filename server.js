@@ -2437,13 +2437,19 @@ io.on('connection', (socket) => {
   
   // Join game in room
   socket.on('joinGame', async ({ roomId, userId, playerid, country }) => {
-    // Support both userId (new) and playerid (legacy)
-    const id = userId || playerid;
-    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerid=${playerid}, country=${country}`);
+    // Support both userId (new) and playerid (legacy), fall back to socket.userId from joinRoom
+    const id = userId || playerid || socket.userId;
+    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerid=${playerid}, socket.userId=${socket.userId}, resolved id=${id}, country=${country}`);
     console.log(`   Available rooms:`, Object.keys(globalState.rooms));
-    
+
+    if (!id) {
+      console.error(`❌ joinGame: No user ID available (userId=${userId}, playerid=${playerid}, socket.userId=${socket.userId})`);
+      socket.emit('joinResult', { success: false, message: 'No user ID - please log in again' });
+      return;
+    }
+
     const room = globalState.rooms[roomId];
-    
+
     if (!room) {
       console.error(`❌ Room not found: ${roomId}`);
       console.error(`   Available rooms:`, Object.keys(globalState.rooms));
