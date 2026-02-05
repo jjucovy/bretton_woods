@@ -2151,11 +2151,79 @@ io.on('connection', (socket) => {
   // Join existing room
   socket.on('joinRoom', async ({ roomId, userId }) => {
     console.log(`📥 joinRoom request: roomId=${roomId}, userId=${userId}`);
-    
+
+    // If room not in memory, try to reconstruct from database + saved state
     if (!globalState.rooms[roomId]) {
-      console.log(`❌ Room not found: ${roomId}`);
-      socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
-      return;
+      console.log(`⚠️ Room ${roomId} not in memory - attempting to load from database...`);
+
+      try {
+        // 1. Check if game exists in database
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+
+        if (gameData && gameData.game_code) {
+          console.log(`   ✅ Found game in database: game_id=${gameData.game_id}, status=${gameData.status}`);
+
+          // 2. Create room state from database info
+          const restoredRoom = createGameState(roomId, roomId, gameData.host_user_id);
+          restoredRoom.gameId = gameData.game_id;
+          restoredRoom.hostUserId = gameData.host_user_id;
+          restoredRoom.gameStarted = gameData.status === 'active' || gameData.status === 'phase2';
+          restoredRoom.gamePhase = gameData.status === 'phase2' ? 'phase2' : (gameData.status === 'active' ? 'phase1' : 'lobby');
+          restoredRoom.currentRound = gameData.current_round || 0;
+
+          // 3. Load players from database
+          const dbPlayers = await queryDatabase('getPlayers', { gameCode: roomId });
+          if (dbPlayers && Array.isArray(dbPlayers)) {
+            dbPlayers.forEach(p => {
+              const playerId = p.user_id || p.player_id;
+              restoredRoom.players[playerId] = {
+                id: playerId,
+                userId: p.user_id,
+                playerId: p.player_id,
+                country: p.country_code || p.country_name,
+                socketId: null,
+                joinedAt: Date.now(),
+                role: 'player',
+                disconnected: true
+              };
+              console.log(`   ✅ Restored player: ${playerId} as ${p.country_code}`);
+            });
+          }
+
+          // 4. Load Phase 2 state from saved file if it exists
+          const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
+          if (fs.existsSync(gameStateFile)) {
+            try {
+              const phase2Data = JSON.parse(fs.readFileSync(gameStateFile, 'utf8'));
+              restoredRoom.phase2 = {
+                ...restoredRoom.phase2,
+                active: phase2Data.active !== undefined ? phase2Data.active : true,
+                currentYear: phase2Data.currentYear || 1946,
+                yearlyData: phase2Data.yearlyData || {},
+                policies: phase2Data.policies || {},
+                achievements: phase2Data.achievements || {},
+                crises: phase2Data.crises || restoredRoom.phase2.crises
+              };
+              console.log(`   ✅ Restored Phase 2 state: year=${restoredRoom.phase2.currentYear}, active=${restoredRoom.phase2.active}`);
+            } catch (err) {
+              console.error(`   ❌ Error loading Phase 2 state file:`, err.message);
+            }
+          }
+
+          // 5. Store in memory
+          globalState.rooms[roomId] = restoredRoom;
+          console.log(`   ✅ Room ${roomId} reconstructed in memory with ${Object.keys(restoredRoom.players).length} players`);
+          saveState();
+        } else {
+          console.log(`❌ Game ${roomId} not found in database either`);
+          socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
+          return;
+        }
+      } catch (err) {
+        console.error(`❌ Error reconstructing room ${roomId}:`, err);
+        socket.emit('joinRoomResult', { success: false, message: 'Room not found and could not be restored' });
+        return;
+      }
     }
     
     // Store userId on socket for later reference
