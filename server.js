@@ -2334,12 +2334,11 @@ io.on('connection', (socket) => {
 
         let dbAssignment = null;
         try {
-          const allPlayers = await queryDatabase('getPlayers', { gameCode: roomId });
-          if (allPlayers && Array.isArray(allPlayers)) {
-            dbAssignment = allPlayers.find(p =>
-              String(p.user_id) === String(userId)
-            );
-          }
+          dbAssignment = await queryDatabase('getPlayerAssignment', {
+            user_id: parseInt(userId),
+            game_id: parseInt(room.gameId)
+          });
+          console.log(`   getPlayerAssignment result:`, JSON.stringify(dbAssignment));
         } catch (err) {
           console.error('Error checking player assignment:', err);
         }
@@ -2491,13 +2490,15 @@ io.on('connection', (socket) => {
     let assignedPlayerId = null;
     try {
       // Check if user already has a player assignment in this game
-      const existingPlayers = await queryDatabase('getPlayers', { gameCode: roomId });
-
       let existingAssignment = null;
-      if (existingPlayers && Array.isArray(existingPlayers)) {
-        existingAssignment = existingPlayers.find(p =>
-          String(p.user_id) === String(id) || String(p.user_id) === String(userId)
-        );
+      try {
+        existingAssignment = await queryDatabase('getPlayerAssignment', {
+          user_id: parseInt(id || userId),
+          game_id: parseInt(room.gameId)
+        });
+      } catch (err) {
+        // Not found is OK - we'll create one
+        console.log(`   No existing assignment found (${err.message})`);
       }
 
       if (existingAssignment && existingAssignment.player_id) {
