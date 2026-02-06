@@ -2540,8 +2540,10 @@ io.on('connection', (socket) => {
         console.log(`   Assigned new player_id: ${assignedPlayerId}`);
 
         // Get country_id from country code
-        const countryData = await queryDatabase('getCountryByCode', { country_code: country });
+
+        
         const countryId = countryData?.country_id || null;
+        const countryData = await queryDatabase('getCountryByCode', { country_code: countryId });
 
         // Save player assignment to database
         const result = await queryDatabase('createPlayerAssignment', {
