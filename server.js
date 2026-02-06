@@ -2542,9 +2542,9 @@ io.on('connection', (socket) => {
         // Get country_id from country code
 
         
-        const countryId = countryData?.country_id || null;
-        const countryData = await queryDatabase('getCountryByCode', { country_code: countryId });
-
+        const countryData = await queryDatabase('getCountryByCode', { country_code: country });
+const countryId = countryData?.country_id || null;
+        
         // Save player assignment to database
         const result = await queryDatabase('createPlayerAssignment', {
           user_id: id,
