@@ -3229,9 +3229,12 @@ function YearEndBattlePhase({
 
           // Main Game View
           const playerList = gameState?.players ? Object.values(gameState.players) : [];
+          console.log('🎮 Player list for filtering:', playerList.map(p => ({ id: p.id, country: p.country })));
+          console.log('🎮 Countries keys:', Object.keys(countries));
           const availableCountries = Object.keys(countries).filter(
             country => !playerList.some(p => p.country === country)
           );
+          console.log('🎮 Available countries after filter:', availableCountries);
 
           return (
             <div className="container">
