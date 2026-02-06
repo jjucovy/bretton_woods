@@ -762,7 +762,11 @@ function broadcastToRoom(roomId) {
       console.log(`   ⚠️ yearlyData[1946] is ${typeof room.phase2.yearlyData[1946]}`);
     }
   }
-  
+
+  // Debug: Log players being broadcast
+  console.log(`📡 Broadcasting to ${roomId}: ${Object.keys(room.players).length} players:`,
+    Object.values(room.players).map(p => ({ id: p.id, country: p.country })));
+
   io.to(roomId).emit('stateUpdate', room);
 }
 
