@@ -132,6 +132,7 @@ function normalizeCountryName(country) {
     // China variations
     'CHN': 'China',
     'PRC': 'China',
+    'CHI': 'China',
     "People's Republic of China": 'China',
     'Republic of China': 'China',
     // France variations
