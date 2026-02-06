@@ -763,7 +763,11 @@ function broadcastToRoom(roomId) {
       console.log(`   ⚠️ yearlyData[1946] is ${typeof room.phase2.yearlyData[1946]}`);
     }
   }
-  
+
+  // Debug: Log players being broadcast
+  console.log(`📡 Broadcasting to ${roomId}: ${Object.keys(room.players).length} players:`,
+    Object.values(room.players).map(p => ({ id: p.id, country: p.country })));
+
   io.to(roomId).emit('stateUpdate', room);
 }
 
@@ -2011,13 +2015,14 @@ io.on('connection', (socket) => {
     try {
       // Query database for user by username
       const dbUser = await queryDatabase('getUser', { username });
-      
-      if (!dbUser) {
-        console.log('ERROR: User not found in database');
+
+      // Check for valid user with user_id (reject empty objects, null, undefined)
+      if (!dbUser || !dbUser.user_id) {
+        console.log('ERROR: User not found in database or missing user_id:', dbUser);
         socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
         return;
       }
-      
+
       console.log('User found in database:', dbUser.username, 'user_id:', dbUser.user_id);
       
       // For now, accept the password (in production, verify against password_hash)
