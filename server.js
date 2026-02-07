@@ -1184,6 +1184,7 @@ function calculateYearEconomics(roomId) {
     // Base growth rate (post-war boom)
     let gdpGrowth = 4.0;
     let tradeBalance = prevData.tradeBalance; // Initialize early - used in military effects
+    let industrialOutput = prevData.industrialOutput || 100; // Initialize early - modified in policy blocks
     
     // === MILITARY ECONOMIC IMPACT (BRANCH-SPECIFIC) ===
     // Military spending as % of GDP
@@ -1635,8 +1636,7 @@ function calculateYearEconomics(roomId) {
     
     unemployment = Math.max(0, Math.min(15, unemployment));
     
-    // === INDUSTRIAL OUTPUT ===
-    let industrialOutput = prevData.industrialOutput;
+    // === INDUSTRIAL OUTPUT (final adjustments) ===
     industrialOutput *= (1 + gdpGrowth / 100);
     
     // === GOLD RESERVES ===
