@@ -3110,13 +3110,21 @@ const countryId = countryData?.country_id || null;
     
     // Save policy to database
     try {
+      // Map game policy fields to PHP API expected fields
       const policyData = {
-        game_id: room.gameId,
+        gameCode: room.gameId,
         userId: playerid,
         round: room.currentRound,
         year: currentYear,
-        ...policy,
-        submittedAt: new Date().toISOString()
+        interestRate: policy.centralBankRate || 0,
+        govtSpending: policy.militarySpending || 0,
+        tradePolicy: policy.tariffRate > 20 ? 'protectionist' : policy.tariffRate > 10 ? 'moderate' : 'free_trade',
+        currencyPolicy: policy.exchangeRate > 1.5 ? 'devalue' : policy.exchangeRate < 0.8 ? 'strengthen' : 'stable',
+        policyFocus: policy.isCommandEconomy ? 'command_economy' : 'market_economy',
+        rationale: `Military: ${policy.militarySpending}%, Army: ${policy.armySize || 0}, Navy: ${policy.navySize || 0}, Air: ${policy.airForceSize || 0}`,
+        gdpChange: 0,
+        inflationChange: 0,
+        pointsEarned: 0
       };
 
       await queryDatabase('savePolicy', policyData);
@@ -3152,13 +3160,8 @@ const countryId = countryData?.country_id || null;
             return;
           }
 
-          // Check for crisis
-          if (currentRoom.phase2.crises.active) {
-            console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
-            return;
-          }
-
-          // Check for pending conflict zones - trigger diplomatic phase before advancing
+          // Check for pending conflict zones FIRST - trigger diplomatic phase before advancing
+          // (Military conflicts take priority over economic crises)
           const pendingConflicts = currentRoom.phase2.pendingConflictZones || {};
           const conflictRegions = Object.keys(pendingConflicts);
 
@@ -3189,6 +3192,12 @@ const countryId = countryData?.country_id || null;
             broadcastToRoom(roomId);
             saveState();
             return; // Don't advance year yet - wait for diplomatic phase to complete
+          }
+
+          // Check for crisis (only if no military conflicts)
+          if (currentRoom.phase2.crises.active) {
+            console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
+            return;
           }
 
           const currentYear = currentRoom.phase2.currentYear;
