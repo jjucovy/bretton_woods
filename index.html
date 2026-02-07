@@ -2515,19 +2515,25 @@ function YearEndBattlePhase({
             socket.on('diplomaticStanceRequired', (data) => {
               console.log('🤝 Diplomatic stance required:', data);
               // Only show modal if this player's country is in the conflict
-              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsPlayerCountry');
-              if (data.countries.includes(myCountry)) {
+              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsCountry');
+              console.log('🤝 My country:', myCountry, 'Countries in conflict:', data.countries);
+              if (myCountry && data.countries.includes(myCountry)) {
+                console.log('🤝 Showing diplomatic modal for', myCountry);
                 setDiplomaticStances({}); // Reset stances for new conflict
                 setDiplomaticConflict(data);
                 setShowDiplomaticModal(true);
+              } else {
+                console.log('🤝 Not showing modal - country not in conflict or no country set');
               }
             });
 
             // Battle options required - after all stances submitted
             socket.on('battleOptionsRequired', (data) => {
               console.log('⚔️ Battle options required:', data);
-              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsPlayerCountry');
-              if (data.countries.includes(myCountry)) {
+              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsCountry');
+              console.log('⚔️ My country:', myCountry, 'Countries in conflict:', data.countries);
+              if (myCountry && data.countries.includes(myCountry)) {
+                console.log('⚔️ Showing battle options modal for', myCountry);
                 setBattleOptionsData(data);
                 setShowBattleOptionsModal(true);
                 setShowDiplomaticModal(false); // Close diplomatic modal
@@ -5577,7 +5583,7 @@ function YearEndBattlePhase({
 
                 {/* Diplomatic Stance Modal */}
                 {showDiplomaticModal && diplomaticConflict && (() => {
-                  const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsPlayerCountry');
+                  const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsCountry');
                   const otherCountries = diplomaticConflict.countries.filter(c => c !== myCountry);
 
                   return (
