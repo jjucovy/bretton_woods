@@ -22,8 +22,16 @@ const DB_API = {
 
 // Normalize country names to ensure consistent keys
 function normalizeCountryName(country) {
+  if (!country) return '';
   const normalizations = {
+    // 3-letter codes that might come from database
     'USS': 'USSR',
+    'FRA': 'France',
+    'CHN': 'China',
+    'IND': 'India',
+    'ARG': 'Argentina',
+    'GBR': 'UK',
+    // Long form names
     'Soviet Union': 'USSR',
     'US': 'USA',
     'United States': 'USA',
@@ -32,6 +40,7 @@ function normalizeCountryName(country) {
     'United Kingdom': 'UK',
     'PRC': 'China',
     "People's Republic of China": 'China',
+    'India (British Raj)': 'India',
     'French': 'France'
   };
   return normalizations[country] || country;

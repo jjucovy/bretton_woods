@@ -73,17 +73,24 @@
 function normalizeCountryName(country) {
   if (!country) return '';
   const mapping = {
+    // 3-letter codes that might come from database
+    'USS': 'USSR',
+    'FRA': 'France',
+    'CHN': 'China',
+    'IND': 'India',
+    'ARG': 'Argentina',
+    'GBR': 'UK',
+    // Long form names
     'Soviet Union': 'USSR',
-    'USS': 'USSR',  // Added
     'United Kingdom': 'UK',
-    'Great Britain': 'UK',  // Added
-    'GB': 'UK',  // Added
+    'Great Britain': 'UK',
+    'GB': 'UK',
     'United States': 'USA',
-    'US': 'USA',  // Added
+    'US': 'USA',
     'India (British Raj)': 'India',
-    'PRC': 'China',  // Added
-    "People's Republic of China": 'China',  // Added
-    'French': 'France'  // Added
+    'PRC': 'China',
+    "People's Republic of China": 'China',
+    'French': 'France'
   };
   return mapping[country] || country;
 }
@@ -3799,12 +3806,31 @@ function YearEndBattlePhase({
                       console.log(`   myData=`, myData);
                       const hasSubmitted = gameState.readyPlayers?.includes(playerId);
 
-                      // Normalize country name for crisis matching
-                      const normalizeCountry = (c) => {
-                        const map = { 'USS': 'USSR', 'US': 'USA', 'United States': 'USA', 'United Kingdom': 'UK' };
+                      // Normalize country name for crisis matching - comprehensive mapping
+                      const normalizeCountryForCrisis = (c) => {
+                        if (!c) return '';
+                        const map = {
+                          // 3-letter codes to full names (as used in crisis-events.json)
+                          'USS': 'USSR',
+                          'FRA': 'France',
+                          'CHN': 'China',
+                          'IND': 'India',
+                          'ARG': 'Argentina',
+                          'GBR': 'UK',
+                          // Long form names
+                          'Soviet Union': 'USSR',
+                          'United States': 'USA',
+                          'US': 'USA',
+                          'United Kingdom': 'UK',
+                          'Great Britain': 'UK',
+                          'GB': 'UK',
+                          'India (British Raj)': 'India',
+                          "People's Republic of China": 'China',
+                          'PRC': 'China'
+                        };
                         return map[c] || c;
                       };
-                      const normalizedPlayerCountry = normalizeCountry(playerCountry);
+                      const normalizedPlayerCountry = normalizeCountryForCrisis(playerCountry);
 
                       // Handle both old single-crisis format and new array format
                       let activeCrises = gameState.phase2?.crises?.active;
@@ -3819,7 +3845,7 @@ function YearEndBattlePhase({
                         const hasOptions = c.options?.[playerCountry] || c.options?.[normalizedPlayerCountry];
                         const isAffected = affected.includes(playerCountry) ||
                                           affected.includes(normalizedPlayerCountry) ||
-                                          affected.some(ac => normalizeCountry(ac) === normalizedPlayerCountry);
+                                          affected.some(ac => normalizeCountryForCrisis(ac) === normalizedPlayerCountry);
                         return isAffected || hasOptions;
                       }) || (activeCrises.length > 0 ? activeCrises[0] : null);
 
@@ -3833,9 +3859,13 @@ function YearEndBattlePhase({
                         console.log('🔍 Crisis Debug:');
                         console.log('  Title:', activeCrisis.title);
                         console.log('  Affected countries:', activeCrisis.affectedCountries);
-                        console.log('  My country:', playerCountry);
+                        console.log('  My country (raw):', playerCountry);
+                        console.log('  My country (normalized):', normalizedPlayerCountry);
                         console.log('  Options keys:', Object.keys(activeCrisis.options || {}));
-                        console.log('  My options:', myCountryOptions);
+                        console.log('  Looking for options at:', playerCountry, 'or', normalizedPlayerCountry);
+                        console.log('  Options[playerCountry]:', activeCrisis.options?.[playerCountry]);
+                        console.log('  Options[normalized]:', activeCrisis.options?.[normalizedPlayerCountry]);
+                        console.log('  My options found:', myCountryOptions);
                       }
                       
                       return (
@@ -4061,7 +4091,7 @@ function YearEndBattlePhase({
                                 📜 Crisis History
                               </h3>
                               {gameState.phase2.crises.history.slice(-3).reverse().map((crisis, idx) => {
-                                const myResponse = crisis.responses?.[playerCountry];
+                                const myResponse = crisis.responses?.[playerCountry] || crisis.responses?.[normalizedPlayerCountry];
                                 const myChoice = myResponse?.choice;
                                 
                                 return (
