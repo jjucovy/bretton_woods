@@ -112,6 +112,7 @@ async function sendAdminNotification(subject, message, gameCode = null) {
 
 // Normalize country names to ensure consistent keys
 function normalizeCountryName(country) {
+  if (!country) return '';
   const normalizations = {
     // USSR variations
     'USS': 'USSR',
@@ -3145,7 +3146,7 @@ const countryId = countryData?.country_id || null;
     const readyCount = room.readyPlayers.length;
     
     console.log(`Policy submissions: ${readyCount}/${activePlayers} players ready`);
-    
+
     // Auto-advance if all players submitted
     if (readyCount === activePlayers && activePlayers > 0) {
       console.log('🎯 All players have submitted policies!');
