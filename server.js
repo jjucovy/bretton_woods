@@ -112,6 +112,7 @@ async function sendAdminNotification(subject, message, gameCode = null) {
 
 // Normalize country names to ensure consistent keys
 function normalizeCountryName(country) {
+  if (!country) return '';
   const normalizations = {
     // USSR variations
     'USS': 'USSR',
@@ -132,6 +133,7 @@ function normalizeCountryName(country) {
     // China variations
     'CHN': 'China',
     'PRC': 'China',
+    'CHI': 'China',
     "People's Republic of China": 'China',
     'Republic of China': 'China',
     // France variations
@@ -2544,9 +2546,11 @@ io.on('connection', (socket) => {
         console.log(`   Assigned new player_id: ${assignedPlayerId}`);
 
         // Get country_id from country code
-        const countryData = await queryDatabase('getCountryByCode', { country_code: country });
-        const countryId = countryData?.country_id || null;
 
+        
+        const countryData = await queryDatabase('getCountryByCode', { country_code: country });
+const countryId = countryData?.country_id || null;
+        
         // Save player assignment to database
         const result = await queryDatabase('createPlayerAssignment', {
           user_id: id,
@@ -3109,7 +3113,7 @@ io.on('connection', (socket) => {
     try {
       // Map game policy fields to PHP API expected fields
       const policyData = {
-        gameCode: room.gameId,
+        gameId: room.gameId,
         userId: playerid,
         round: room.currentRound,
         year: currentYear,
@@ -3142,7 +3146,7 @@ io.on('connection', (socket) => {
     const readyCount = room.readyPlayers.length;
     
     console.log(`Policy submissions: ${readyCount}/${activePlayers} players ready`);
-    
+
     // Auto-advance if all players submitted
     if (readyCount === activePlayers && activePlayers > 0) {
       console.log('🎯 All players have submitted policies!');

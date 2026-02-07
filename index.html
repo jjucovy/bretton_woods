@@ -91,17 +91,24 @@
 function normalizeCountryName(country) {
   if (!country) return '';
   const mapping = {
+    // 3-letter codes that might come from database
+    'USS': 'USSR',
+    'FRA': 'France',
+    'CHN': 'China',
+    'IND': 'India',
+    'ARG': 'Argentina',
+    'GBR': 'UK',
+    // Long form names
     'Soviet Union': 'USSR',
-    'USS': 'USSR',  // Added
     'United Kingdom': 'UK',
-    'Great Britain': 'UK',  // Added
-    'GB': 'UK',  // Added
+    'Great Britain': 'UK',
+    'GB': 'UK',
     'United States': 'USA',
-    'US': 'USA',  // Added
+    'US': 'USA',
     'India (British Raj)': 'India',
-    'PRC': 'China',  // Added
-    "People's Republic of China": 'China',  // Added
-    'French': 'France'  // Added
+    'PRC': 'China',
+    "People's Republic of China": 'China',
+    'French': 'France'
   };
   return mapping[country] || country;
 }
@@ -795,20 +802,23 @@ function isCommandEconomy(country, year) {
           const [foreignTradeOrientation, setForeignTradeOrientation] = useState(50); // COMECON vs West trade
           const [planFulfillmentPriority, setPlanFulfillmentPriority] = useState(70); // Credit allocation rigor
           const [militarySpending, setMilitarySpending] = useState(15);
-          
+          const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double-submit
+
           // Initialize military branches from previous year's data
           const prevMilitary = myData?.military || { army: 2400000, navy: 300000, airForce: 200000 };
           const [armySize, setArmySize] = useState(prevMilitary.army);
           const [navySize, setNavySize] = useState(prevMilitary.navy);
           const [airForceSize, setAirForceSize] = useState(prevMilitary.airForce);
-          
+
           const totalMilitary = armySize + navySize + airForceSize;
 
           const handleSubmit = () => {
+            if (isSubmitting) return; // Prevent double-click
+            setIsSubmitting(true);
             socket.emit('submitPolicy', {
               roomId,
               playerid: playerId,
-              policy: { 
+              policy: {
                 fiveYearPlanTarget,
                 heavyIndustryAllocation,
                 foreignTradeOrientation,
@@ -1056,22 +1066,24 @@ function isCommandEconomy(country, year) {
 
               <button
                 onClick={handleSubmit}
+                disabled={isSubmitting}
                 style={{
                   width: '100%',
                   padding: '18px',
-                  background: '#7c3aed',
+                  background: isSubmitting ? '#9ca3af' : '#7c3aed',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
                   fontSize: '1.1rem',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: isSubmitting ? 0.7 : 1
                 }}
-                onMouseOver={(e) => e.currentTarget.style.background = '#6d28d9'}
-                onMouseOut={(e) => e.currentTarget.style.background = '#7c3aed'}
+                onMouseOver={(e) => !isSubmitting && (e.currentTarget.style.background = '#6d28d9')}
+                onMouseOut={(e) => !isSubmitting && (e.currentTarget.style.background = '#7c3aed')}
               >
-                📋 Submit Five-Year Plan to Politburo
+                {isSubmitting ? '⏳ Submitting...' : '📋 Submit Five-Year Plan to Politburo'}
               </button>
 
               <div style={{
@@ -1097,23 +1109,26 @@ function isCommandEconomy(country, year) {
           const [exchangeRate, setExchangeRate] = useState(1.0);
           const [tariffRate, setTariffRate] = useState(10);
           const [militarySpending, setMilitarySpending] = useState(5); // % of GDP
-          
+          const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double-submit
+
           // Initialize military branches from previous year's data
           const prevMilitary = myData?.military || { army: 500000, navy: 100000, airForce: 100000 };
           const [armySize, setArmySize] = useState(prevMilitary.army);
           const [navySize, setNavySize] = useState(prevMilitary.navy);
           const [airForceSize, setAirForceSize] = useState(prevMilitary.airForce);
-          
+
           const totalMilitary = armySize + navySize + airForceSize;
 
           const handleSubmit = () => {
+            if (isSubmitting) return; // Prevent double-click
+            setIsSubmitting(true);
             console.log('📤 Submitting policy for player:', playerId);
             socket.emit('submitPolicy', {
               roomId,
               playerid: playerId,
-              policy: { 
-                centralBankRate, 
-                exchangeRate, 
+              policy: {
+                centralBankRate,
+                exchangeRate,
                 tariffRate,
                 militarySpending,
                 armySize,
@@ -1291,43 +1306,35 @@ function isCommandEconomy(country, year) {
               </div>
 
              <button
-  type="button"  // ← ADD THIS - prevents form submission
+  type="button"
+  disabled={isSubmitting}
   onClick={(e) => {
-    e.preventDefault();  // ← ADD THIS
-    e.stopPropagation();  // ← ADD THIS
+    e.preventDefault();
+    e.stopPropagation();
+    if (isSubmitting) return;
     console.log('🔵 Button click fired!', e);
-    console.log('📤 Submitting with:', {
-      playerid: playerId,
-      roomId,
-      centralBankRate,
-      exchangeRate,
-      tariffRate,
-      militarySpending,
-      armySize,
-      navySize,
-      airForceSize
-    });
     handleSubmit();
   }}
   style={{
     width: '100%',
     padding: '18px',
-    background: '#3b82f6',
+    background: isSubmitting ? '#9ca3af' : '#3b82f6',
     color: 'white',
     border: 'none',
     borderRadius: '8px',
     fontSize: '1.1rem',
     fontWeight: 'bold',
-    cursor: 'pointer',
+    cursor: isSubmitting ? 'not-allowed' : 'pointer',
     transition: 'all 0.2s',
-    zIndex: 1000,  // ← INCREASE from 100 to 1000
+    zIndex: 1000,
     position: 'relative',
-    pointerEvents: 'auto'  // ← ADD THIS
+    pointerEvents: 'auto',
+    opacity: isSubmitting ? 0.7 : 1
   }}
-                onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
-                onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
+                onMouseOver={(e) => !isSubmitting && (e.currentTarget.style.background = '#2563eb')}
+                onMouseOut={(e) => !isSubmitting && (e.currentTarget.style.background = '#3b82f6')}
               >
-                📊 Submit Economic & Military Policy
+                {isSubmitting ? '⏳ Submitting...' : '📊 Submit Economic & Military Policy'}
               </button>
             </div>
           );
@@ -4212,6 +4219,32 @@ function YearEndBattlePhase({
                       console.log(`   myData=`, myData);
                       const hasSubmitted = gameState.readyPlayers?.includes(playerId);
 
+                      // Normalize country name for crisis matching - comprehensive mapping
+                      const normalizeCountryForCrisis = (c) => {
+                        if (!c) return '';
+                        const map = {
+                          // 3-letter codes to full names (as used in crisis-events.json)
+                          'USS': 'USSR',
+                          'FRA': 'France',
+                          'CHN': 'China',
+                          'IND': 'India',
+                          'ARG': 'Argentina',
+                          'GBR': 'UK',
+                          // Long form names
+                          'Soviet Union': 'USSR',
+                          'United States': 'USA',
+                          'US': 'USA',
+                          'United Kingdom': 'UK',
+                          'Great Britain': 'UK',
+                          'GB': 'UK',
+                          'India (British Raj)': 'India',
+                          "People's Republic of China": 'China',
+                          'PRC': 'China'
+                        };
+                        return map[c] || c;
+                      };
+                      const normalizedPlayerCountry = normalizeCountryForCrisis(playerCountry);
+
                       // Handle both old single-crisis format and new array format
                       let activeCrises = gameState.phase2?.crises?.active;
                       if (activeCrises && !Array.isArray(activeCrises)) {
@@ -4264,7 +4297,8 @@ function YearEndBattlePhase({
                         console.log('🔍 Crisis Debug:');
                         console.log('  Title:', activeCrisis.title);
                         console.log('  Affected countries:', activeCrisis.affectedCountries);
-                        console.log('  My country:', playerCountry);
+                        console.log('  My country (raw):', playerCountry);
+                        console.log('  My country (normalized):', normalizedPlayerCountry);
                         console.log('  Options keys:', Object.keys(activeCrisis.options || {}));
                         console.log('  My options:', myCountryOptions);
                         console.log('  Has responded:', hasRespondedToCrisis);
@@ -4494,7 +4528,7 @@ function YearEndBattlePhase({
                                 📜 Crisis History
                               </h3>
                               {gameState.phase2.crises.history.slice(-3).reverse().map((crisis, idx) => {
-                                const myResponse = crisis.responses?.[playerCountry];
+                                const myResponse = crisis.responses?.[playerCountry] || crisis.responses?.[normalizedPlayerCountry];
                                 const myChoice = myResponse?.choice;
                                 
                                 return (
