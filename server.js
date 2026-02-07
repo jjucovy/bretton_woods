@@ -3107,14 +3107,21 @@ io.on('connection', (socket) => {
     
     // Save policy to database
     try {
+      // Map game policy fields to PHP API expected fields
       const policyData = {
-        game_id: room.gameId,
-        user_id: playerid,
-        country: normalizeCountryName(player.country),
+        gameCode: room.gameId,
+        userId: playerid,
         round: room.currentRound,
         year: currentYear,
-        ...policy,
-        submittedAt: new Date().toISOString()
+        interestRate: policy.centralBankRate || 0,
+        govtSpending: policy.militarySpending || 0,
+        tradePolicy: policy.tariffRate > 20 ? 'protectionist' : policy.tariffRate > 10 ? 'moderate' : 'free_trade',
+        currencyPolicy: policy.exchangeRate > 1.5 ? 'devalue' : policy.exchangeRate < 0.8 ? 'strengthen' : 'stable',
+        policyFocus: policy.isCommandEconomy ? 'command_economy' : 'market_economy',
+        rationale: `Military: ${policy.militarySpending}%, Army: ${policy.armySize || 0}, Navy: ${policy.navySize || 0}, Air: ${policy.airForceSize || 0}`,
+        gdpChange: 0,
+        inflationChange: 0,
+        pointsEarned: 0
       };
 
       await queryDatabase('savePolicy', policyData);
