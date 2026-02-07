@@ -3112,7 +3112,7 @@ const countryId = countryData?.country_id || null;
     try {
       // Map game policy fields to PHP API expected fields
       const policyData = {
-        gameCode: room.gameId,
+        gameId: room.gameId,
         userId: playerid,
         round: room.currentRound,
         year: currentYear,
