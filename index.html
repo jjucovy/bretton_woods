@@ -3799,6 +3799,13 @@ function YearEndBattlePhase({
                       console.log(`   myData=`, myData);
                       const hasSubmitted = gameState.readyPlayers?.includes(playerId);
 
+                      // Normalize country name for crisis matching
+                      const normalizeCountry = (c) => {
+                        const map = { 'USS': 'USSR', 'US': 'USA', 'United States': 'USA', 'United Kingdom': 'UK' };
+                        return map[c] || c;
+                      };
+                      const normalizedPlayerCountry = normalizeCountry(playerCountry);
+
                       // Handle both old single-crisis format and new array format
                       let activeCrises = gameState.phase2?.crises?.active;
                       if (activeCrises && !Array.isArray(activeCrises)) {
@@ -3806,16 +3813,20 @@ function YearEndBattlePhase({
                       }
                       activeCrises = activeCrises || [];
 
-                      // Find the first crisis that affects the current player
-                      const activeCrisis = activeCrises.find(c =>
-                        c.affectedCountries?.includes(playerCountry) ||
-                        c.options?.[playerCountry]
-                      ) || activeCrises[0]; // fallback to first crisis if any
+                      // Find the first crisis that affects the current player (check both original and normalized names)
+                      const activeCrisis = activeCrises.find(c => {
+                        const affected = c.affectedCountries || [];
+                        const hasOptions = c.options?.[playerCountry] || c.options?.[normalizedPlayerCountry];
+                        const isAffected = affected.includes(playerCountry) ||
+                                          affected.includes(normalizedPlayerCountry) ||
+                                          affected.some(ac => normalizeCountry(ac) === normalizedPlayerCountry);
+                        return isAffected || hasOptions;
+                      }) || (activeCrises.length > 0 ? activeCrises[0] : null);
 
                       // Get responses from the crisis itself (new format) or from parent (old format)
                       const crisisResponses = activeCrisis?.responses || gameState.phase2?.crises?.responses || {};
-                      const myCountryOptions = activeCrisis?.options?.[playerCountry] || [];
-                      const hasRespondedToCrisis = crisisResponses[playerCountry];
+                      const myCountryOptions = activeCrisis?.options?.[playerCountry] || activeCrisis?.options?.[normalizedPlayerCountry] || [];
+                      const hasRespondedToCrisis = crisisResponses[playerCountry] || crisisResponses[normalizedPlayerCountry];
 
                       // Debug crisis options
                       if (activeCrisis) {
