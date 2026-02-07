@@ -3162,6 +3162,10 @@ const countryId = countryData?.country_id || null;
           const pendingConflicts = currentRoom.phase2.pendingConflictZones || {};
           const conflictRegions = Object.keys(pendingConflicts);
 
+          console.log(`🔍 Checking for pending conflicts...`);
+          console.log(`   pendingConflictZones: ${JSON.stringify(pendingConflicts)}`);
+          console.log(`   conflictRegions: ${conflictRegions.join(', ') || 'none'}`);
+
           if (conflictRegions.length > 0) {
             console.log(`⚔️ Found ${conflictRegions.length} pending conflict zone(s): ${conflictRegions.join(', ')}`);
             console.log('   Triggering diplomatic phase before year advance...');
