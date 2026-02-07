@@ -3109,7 +3109,8 @@ io.on('connection', (socket) => {
     try {
       const policyData = {
         game_id: room.gameId,
-        userId: playerid,
+        user_id: playerid,
+        country: normalizeCountryName(player.country),
         round: room.currentRound,
         year: currentYear,
         ...policy,
