@@ -3137,9 +3137,9 @@ io.on('connection', (socket) => {
     
     // Auto-advance if all players submitted
     if (readyCount === activePlayers && activePlayers > 0) {
-      console.log('🎯 All players have submitted policies! Auto-advancing year...');
-      
-      // Wait a moment then auto-advance
+      console.log('🎯 All players have submitted policies!');
+
+      // Wait a moment then check for conflicts or auto-advance
       setTimeout(async () => {
         try {
           // Re-fetch room in case state changed
@@ -3153,6 +3153,35 @@ io.on('connection', (socket) => {
           if (currentRoom.phase2.crises.active) {
             console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
             return;
+          }
+
+          // Check for pending conflict zones - trigger diplomatic phase before advancing
+          const pendingConflicts = currentRoom.phase2.pendingConflictZones || {};
+          const conflictRegions = Object.keys(pendingConflicts);
+
+          if (conflictRegions.length > 0) {
+            console.log(`⚔️ Found ${conflictRegions.length} pending conflict zone(s): ${conflictRegions.join(', ')}`);
+            console.log('   Triggering diplomatic phase before year advance...');
+
+            // Mark that we're waiting for diplomatic resolutions
+            currentRoom.phase2.awaitingDiplomaticResolution = true;
+
+            // Emit diplomatic stance requirement for each conflict zone
+            conflictRegions.forEach(region => {
+              const conflict = pendingConflicts[region];
+              io.to(roomId).emit('diplomaticStanceRequired', {
+                region,
+                countries: conflict.countries,
+                deployments: conflict.deployments,
+                year: conflict.year,
+                message: `Multiple nations have forces in ${region}. Declare your diplomatic stance toward each country.`
+              });
+              console.log(`   📢 Sent diplomaticStanceRequired for ${region} to: ${conflict.countries.join(', ')}`);
+            });
+
+            broadcastToRoom(roomId);
+            saveState();
+            return; // Don't advance year yet - wait for diplomatic phase to complete
           }
 
           const currentYear = currentRoom.phase2.currentYear;
@@ -3212,112 +3241,89 @@ io.on('connection', (socket) => {
   socket.on('deployTroops', ({ roomId, playerid, deployment }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
+
     const player = room.players[playerid];
     if (!player) return;
-    
+
     // Verify the deployment is for the player's own country
     if (deployment.country !== player.country) {
       console.log('Deploy troops rejected: country mismatch');
       return;
     }
-    
-    // Initialize deployments array if doesn't exist
-    if (!room.phase2.deployments) {
-      room.phase2.deployments = [];
+
+    // Initialize cumulative deployments structure if doesn't exist
+    // Structure: { regionName: { countryName: { army: X, navy: Y, airForce: Z, total: T } } }
+    if (!room.phase2.cumulativeDeployments) {
+      room.phase2.cumulativeDeployments = {};
     }
-    
-    // Add deployment with timestamp
-    const deploymentRecord = {
+
+    // Initialize deployment history if doesn't exist
+    if (!room.phase2.deploymentHistory) {
+      room.phase2.deploymentHistory = [];
+    }
+
+    const region = deployment.region;
+    const country = deployment.country;
+    const branch = deployment.branch || 'Army';
+    const troops = parseInt(deployment.troops) || 0;
+
+    // Initialize region if doesn't exist
+    if (!room.phase2.cumulativeDeployments[region]) {
+      room.phase2.cumulativeDeployments[region] = {};
+    }
+
+    // Initialize country in region if doesn't exist
+    if (!room.phase2.cumulativeDeployments[region][country]) {
+      room.phase2.cumulativeDeployments[region][country] = {
+        army: 0,
+        navy: 0,
+        airForce: 0,
+        total: 0
+      };
+    }
+
+    // Add to cumulative deployment (not replace)
+    const branchKey = branch.toLowerCase().replace(' ', '');
+    const branchMap = { 'army': 'army', 'navy': 'navy', 'airforce': 'airForce', 'air force': 'airForce' };
+    const normalizedBranch = branchMap[branchKey] || 'army';
+
+    room.phase2.cumulativeDeployments[region][country][normalizedBranch] += troops;
+    room.phase2.cumulativeDeployments[region][country].total += troops;
+
+    // Add to deployment history for record keeping
+    room.phase2.deploymentHistory.push({
       ...deployment,
       timestamp: Date.now(),
       year: room.phase2.currentYear
-    };
-    
-    room.phase2.deployments.push(deploymentRecord);
-    
-    // Check for conflicts
-    const conflictZones = ['Eastern Europe', 'East Asia', 'Middle East', 'Southeast Asia'];
-    if (conflictZones.includes(deployment.region)) {
-      // Find if another country has troops there
-      const otherDeployments = room.phase2.deployments.filter(d => 
-        d.region === deployment.region && 
-        d.country !== deployment.country &&
-        d.year === room.phase2.currentYear
-      );
-      
-      if (otherDeployments.length > 0) {
-        // Create conflict alert
-        if (!room.phase2.conflicts) {
-          room.phase2.conflicts = [];
-        }
-        
-        const conflict = {
-          region: deployment.region,
-          countries: [deployment.country, ...otherDeployments.map(d => d.country)],
-          year: room.phase2.currentYear,
-          timestamp: Date.now(),
-          battleId: `${deployment.region}-${room.phase2.currentYear}-${Date.now()}`
-        };
-        
-        room.phase2.conflicts.push(conflict);
-        
-        console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
-        
-        // Emit battle modal to involved countries
-        const involvedCountries = conflict.countries;
+    });
 
-        // ALWAYS broadcast to entire room first (ensures delivery even with stale socket IDs)
-        console.log(`📢 Broadcasting militaryConflict to room ${roomId}`);
-        io.to(roomId).emit('militaryConflict', {
-          message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
-          region: deployment.region,
-          countries: involvedCountries,
-          year: room.phase2.currentYear,
-          battleId: conflict.battleId,
-          involvedCountries: involvedCountries
-        });
+    console.log(`✅ ${country} deployed ${troops} ${branch} to ${region}`);
+    console.log(`   Cumulative in ${region}: ${JSON.stringify(room.phase2.cumulativeDeployments[region][country])}`);
 
-        // Also try to send to specific sockets for redundancy
-        involvedCountries.forEach(country => {
-          const playerEntry = Object.entries(room.players).find(([id, p]) =>
-            p.country === country || normalizeCountryName(p.country) === normalizeCountryName(country)
-          );
-          if (playerEntry) {
-            const [odName, playerData] = playerEntry;
-            if (playerData.socketId) {
-              io.to(playerData.socketId).emit('militaryConflict', {
-                message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
-                region: deployment.region,
-                countries: involvedCountries,
-                year: room.phase2.currentYear,
-                battleId: conflict.battleId,
-                yourCountry: country
-              });
-              console.log(`📨 Also sent battle modal directly to ${country} (socket ${playerData.socketId})`);
-            }
-          }
-        });
-
-        // Legacy fallback code removed - room broadcast handles all cases
-        const sentToAnySocket = true; // Keep variable for compatibility
-        if (!sentToAnySocket) {
-          // This block no longer needed but kept for safety
-          involvedCountries.forEach(country => {
-            io.to(roomId).emit('militaryConflict', {
-              message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
-              region: deployment.region,
-              countries: involvedCountries,
-              year: room.phase2.currentYear,
-              battleId: conflict.battleId,
-              yourCountry: country
-            });
-          });
-        }
+    // Check for potential conflicts but DON'T trigger battle yet
+    // Store pending conflicts to be resolved after all policies submitted
+    const countriesInRegion = Object.keys(room.phase2.cumulativeDeployments[region]);
+    if (countriesInRegion.length > 1) {
+      // Multiple countries in same region - mark as potential conflict zone
+      if (!room.phase2.pendingConflictZones) {
+        room.phase2.pendingConflictZones = {};
       }
+
+      room.phase2.pendingConflictZones[region] = {
+        countries: countriesInRegion,
+        year: room.phase2.currentYear,
+        deployments: room.phase2.cumulativeDeployments[region]
+      };
+
+      console.log(`⚠️ POTENTIAL CONFLICT: Multiple countries in ${region}: ${countriesInRegion.join(', ')}`);
+
+      // Notify all players in the region about the tension (but no battle yet)
+      io.to(roomId).emit('tensionAlert', {
+        region: region,
+        countries: countriesInRegion,
+        message: `Military tension rising in ${region}! Multiple nations have forces deployed.`
+      });
     }
-    
-    console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
 
     broadcastToRoom(roomId);
     saveState();
@@ -3498,6 +3504,366 @@ io.on('connection', (socket) => {
     saveGamePhase2State(roomId);
     saveGameToDatabase(roomId);
   });
+
+  // DIPLOMATIC STANCE: Submit stance for each country in conflict zone
+  socket.on('submitDiplomaticStance', ({ roomId, playerid, region, stances }) => {
+    const room = globalState.rooms[roomId];
+    if (!room || !room.phase2?.active) return;
+
+    const player = room.players[playerid];
+    if (!player) return;
+
+    const country = player.country;
+    console.log(`🤝 Diplomatic stance from ${country} for ${region}:`, stances);
+
+    // Initialize diplomatic stances storage
+    if (!room.phase2.diplomaticStances) {
+      room.phase2.diplomaticStances = {};
+    }
+
+    if (!room.phase2.diplomaticStances[region]) {
+      room.phase2.diplomaticStances[region] = {};
+    }
+
+    // Store this country's stances toward others
+    // stances = { "USA": "ally", "USSR": "enemy", "China": "neutral" }
+    room.phase2.diplomaticStances[region][country] = {
+      stances: stances,
+      timestamp: Date.now()
+    };
+
+    // Check if all countries in this conflict zone have submitted stances
+    const conflictZone = room.phase2.pendingConflictZones?.[region];
+    if (conflictZone) {
+      const allCountries = conflictZone.countries;
+      const submittedCountries = Object.keys(room.phase2.diplomaticStances[region]);
+      const allSubmitted = allCountries.every(c => submittedCountries.includes(c));
+
+      console.log(`   Stances submitted: ${submittedCountries.length}/${allCountries.length}`);
+
+      if (allSubmitted) {
+        console.log(`✅ All diplomatic stances submitted for ${region} - proceeding to battle phase`);
+
+        // Analyze stances to determine alliances and enemies
+        const stanceAnalysis = analyzeDiplomaticStances(room.phase2.diplomaticStances[region], allCountries);
+
+        // Create battle with stance information
+        const battleId = `${region}-${room.phase2.currentYear}-${Date.now()}`;
+        const conflict = {
+          battleId,
+          region,
+          countries: allCountries,
+          year: room.phase2.currentYear,
+          stances: room.phase2.diplomaticStances[region],
+          alliances: stanceAnalysis.alliances,
+          enemies: stanceAnalysis.enemies,
+          phase: 'battle_options', // Now waiting for attack/retreat/negotiate
+          timestamp: Date.now()
+        };
+
+        if (!room.phase2.activeConflicts) {
+          room.phase2.activeConflicts = [];
+        }
+        room.phase2.activeConflicts.push(conflict);
+
+        // Notify all countries in the conflict to select battle options
+        io.to(roomId).emit('battleOptionsRequired', {
+          battleId,
+          region,
+          countries: allCountries,
+          stances: room.phase2.diplomaticStances[region],
+          alliances: stanceAnalysis.alliances,
+          enemies: stanceAnalysis.enemies,
+          deployments: conflictZone.deployments,
+          message: `Diplomatic stances set in ${region}. Choose your military action.`
+        });
+      }
+    }
+
+    broadcastToRoom(roomId);
+    saveState();
+  });
+
+  // Helper function to analyze diplomatic stances
+  function analyzeDiplomaticStances(stances, countries) {
+    const alliances = []; // Groups of allied countries
+    const enemies = {}; // { "USA": ["USSR", "China"], "USSR": ["USA"] }
+
+    countries.forEach(country => {
+      enemies[country] = [];
+      const countryStances = stances[country]?.stances || {};
+
+      countries.forEach(otherCountry => {
+        if (country === otherCountry) return;
+
+        const stance = countryStances[otherCountry];
+        if (stance === 'enemy') {
+          enemies[country].push(otherCountry);
+        }
+      });
+    });
+
+    // Find mutual alliances (both countries mark each other as ally)
+    const processedPairs = new Set();
+    countries.forEach(country => {
+      const countryStances = stances[country]?.stances || {};
+
+      countries.forEach(otherCountry => {
+        if (country === otherCountry) return;
+        const pairKey = [country, otherCountry].sort().join('-');
+        if (processedPairs.has(pairKey)) return;
+        processedPairs.add(pairKey);
+
+        const otherStances = stances[otherCountry]?.stances || {};
+        if (countryStances[otherCountry] === 'ally' && otherStances[country] === 'ally') {
+          // Mutual alliance - add to alliance groups
+          let foundGroup = false;
+          for (const group of alliances) {
+            if (group.includes(country) || group.includes(otherCountry)) {
+              if (!group.includes(country)) group.push(country);
+              if (!group.includes(otherCountry)) group.push(otherCountry);
+              foundGroup = true;
+              break;
+            }
+          }
+          if (!foundGroup) {
+            alliances.push([country, otherCountry]);
+          }
+        }
+      });
+    });
+
+    return { alliances, enemies };
+  }
+
+  // BATTLE OPTIONS: Submit attack/retreat/negotiate after stance selection
+  socket.on('submitBattleOption', ({ roomId, playerid, battleId, option, region }) => {
+    const room = globalState.rooms[roomId];
+    if (!room || !room.phase2?.active) return;
+
+    const player = room.players[playerid];
+    if (!player) return;
+
+    const country = player.country;
+    console.log(`⚔️ Battle option from ${country}: ${option} in ${region}`);
+
+    // Store battle option
+    if (!room.phase2.battleOptions) {
+      room.phase2.battleOptions = {};
+    }
+
+    if (!room.phase2.battleOptions[battleId]) {
+      room.phase2.battleOptions[battleId] = {};
+    }
+
+    room.phase2.battleOptions[battleId][country] = {
+      option, // 'attack', 'retreat', 'negotiate'
+      timestamp: Date.now()
+    };
+
+    // Find the active conflict
+    const conflict = room.phase2.activeConflicts?.find(c => c.battleId === battleId);
+    if (!conflict) {
+      console.log(`Conflict not found: ${battleId}`);
+      return;
+    }
+
+    // Check if all countries have submitted options
+    const allCountries = conflict.countries;
+    const submittedCountries = Object.keys(room.phase2.battleOptions[battleId]);
+    const allSubmitted = allCountries.every(c => submittedCountries.includes(c));
+
+    console.log(`   Battle options submitted: ${submittedCountries.length}/${allCountries.length}`);
+
+    if (allSubmitted) {
+      console.log(`✅ All battle options submitted for ${battleId} - resolving battle`);
+      resolveBattleWithStances(room, roomId, battleId, conflict);
+    }
+
+    broadcastToRoom(roomId);
+    saveState();
+  });
+
+  // Resolve battle with diplomatic stances and battle options
+  function resolveBattleWithStances(room, roomId, battleId, conflict) {
+    const options = room.phase2.battleOptions[battleId];
+    const stances = conflict.stances;
+    const deployments = room.phase2.cumulativeDeployments[conflict.region] || {};
+    const yearData = room.phase2.yearlyData[conflict.year];
+
+    const battleResult = {
+      battleId,
+      region: conflict.region,
+      year: conflict.year,
+      alliances: conflict.alliances,
+      participants: []
+    };
+
+    // Calculate combat power for each country/alliance
+    conflict.countries.forEach(country => {
+      const countryDeployment = deployments[country] || { total: 0 };
+      const countryOption = options[country]?.option || 'retreat';
+      const countryData = yearData?.[country];
+
+      // Calculate base combat power from deployed troops
+      let combatPower = countryDeployment.total;
+
+      // Add allied power
+      const countryStances = stances[country]?.stances || {};
+      conflict.countries.forEach(otherCountry => {
+        if (country === otherCountry) return;
+        const otherStances = stances[otherCountry]?.stances || {};
+        // Mutual alliance provides combat bonus
+        if (countryStances[otherCountry] === 'ally' && otherStances[country] === 'ally') {
+          const otherDeployment = deployments[otherCountry] || { total: 0 };
+          combatPower += otherDeployment.total * 0.3; // 30% of ally's power as bonus
+        }
+      });
+
+      // Modify by battle option
+      if (countryOption === 'attack') {
+        combatPower *= 1.0; // Full power
+      } else if (countryOption === 'negotiate') {
+        combatPower *= 0.4; // Reduced power but lower casualties
+      } else { // retreat
+        combatPower = 0; // No combat
+      }
+
+      battleResult.participants.push({
+        country,
+        option: countryOption,
+        deployedTroops: countryDeployment.total,
+        combatPower: Math.round(combatPower),
+        stances: countryStances
+      });
+    });
+
+    // Determine outcomes
+    const attackers = battleResult.participants.filter(p => p.option === 'attack');
+    const negotiators = battleResult.participants.filter(p => p.option === 'negotiate');
+    const retreaters = battleResult.participants.filter(p => p.option === 'retreat');
+
+    // If everyone retreats or negotiates, no battle
+    if (attackers.length === 0) {
+      battleResult.outcome = 'standoff';
+      battleResult.participants.forEach(p => {
+        p.outcome = p.option === 'retreat' ? 'withdrew safely' : 'diplomatic resolution';
+        p.casualties = 0;
+      });
+    } else {
+      // Calculate battle
+      const totalAttackPower = attackers.reduce((sum, p) => sum + p.combatPower, 0);
+
+      battleResult.participants.forEach(p => {
+        const isAttacker = p.option === 'attack';
+        const isRetreater = p.option === 'retreat';
+
+        if (isRetreater) {
+          // Retreaters take some casualties from attackers
+          const casualtyRate = attackers.length > 0 ? 0.1 : 0;
+          p.casualties = Math.floor(p.deployedTroops * casualtyRate);
+          p.outcome = 'withdrew under fire';
+        } else if (isAttacker) {
+          // Check if this attacker won
+          const isTopAttacker = p.combatPower >= Math.max(...attackers.map(a => a.combatPower));
+          if (isTopAttacker && attackers.length === 1) {
+            p.casualties = Math.floor(p.deployedTroops * 0.1);
+            p.outcome = 'military victory';
+            battleResult.winner = p.country;
+          } else if (isTopAttacker) {
+            p.casualties = Math.floor(p.deployedTroops * 0.15);
+            p.outcome = 'contested victory';
+            battleResult.winner = p.country;
+          } else {
+            p.casualties = Math.floor(p.deployedTroops * 0.25);
+            p.outcome = 'military defeat';
+          }
+        } else { // negotiate
+          p.casualties = Math.floor(p.deployedTroops * 0.05);
+          p.outcome = 'held position through diplomacy';
+        }
+
+        // Apply casualties to cumulative deployments
+        if (p.casualties > 0 && deployments[p.country]) {
+          const totalBefore = deployments[p.country].total;
+          deployments[p.country].total = Math.max(0, totalBefore - p.casualties);
+          // Distribute casualties proportionally across branches
+          const ratio = deployments[p.country].total / Math.max(1, totalBefore);
+          deployments[p.country].army = Math.floor(deployments[p.country].army * ratio);
+          deployments[p.country].navy = Math.floor(deployments[p.country].navy * ratio);
+          deployments[p.country].airForce = Math.floor(deployments[p.country].airForce * ratio);
+        }
+      });
+    }
+
+    // Store battle result
+    if (!room.phase2.battleResults) {
+      room.phase2.battleResults = [];
+    }
+    room.phase2.battleResults.push(battleResult);
+
+    // Remove from active conflicts
+    room.phase2.activeConflicts = room.phase2.activeConflicts.filter(c => c.battleId !== battleId);
+
+    // Clear pending conflict zone
+    if (room.phase2.pendingConflictZones) {
+      delete room.phase2.pendingConflictZones[conflict.region];
+    }
+
+    console.log('⚔️ Battle resolved:', JSON.stringify(battleResult, null, 2));
+
+    // Notify all players of battle result
+    io.to(roomId).emit('battleResolved', {
+      battleId,
+      result: battleResult
+    });
+
+    // Check if all conflicts are resolved - if so, continue with year advance
+    const remainingConflicts = Object.keys(room.phase2.pendingConflictZones || {}).length;
+    const activeConflictCount = (room.phase2.activeConflicts || []).length;
+
+    console.log(`   Remaining conflicts: ${remainingConflicts} pending, ${activeConflictCount} active`);
+
+    if (remainingConflicts === 0 && activeConflictCount === 0 && room.phase2.awaitingDiplomaticResolution) {
+      console.log('✅ All diplomatic/battle phases complete! Proceeding with year advance...');
+      room.phase2.awaitingDiplomaticResolution = false;
+
+      // Now do the year advance that was postponed
+      try {
+        const currentYear = room.phase2.currentYear;
+        console.log(`🔍 Post-battle year advance: currentYear=${currentYear}`);
+
+        // Check if we're already at the end (1952)
+        if (currentYear >= 1952) {
+          calculatePhase2Scores(roomId);
+          room.gamePhase = 'complete';
+          room.phase2.active = false;
+          console.log('Phase 2 complete! Final scores calculated.');
+        } else {
+          // Calculate economics
+          calculateYearEconomics(roomId);
+
+          // Advance year and round
+          room.phase2.currentYear++;
+          room.currentRound++;
+          room.readyPlayers = [];
+
+          // Check for new crisis
+          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+
+          console.log(`✅ Advanced to year ${room.phase2.currentYear} after battle resolution`);
+        }
+
+        broadcastToRoom(roomId);
+      } catch (err) {
+        console.error('❌ Post-battle year advance failed:', err);
+      }
+    }
+
+    saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
+  }
 
   // CRISIS: Submit response to active crisis
   // Now supports multiple active crises - crisisId identifies which one

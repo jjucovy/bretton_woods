@@ -2275,6 +2275,14 @@ function YearEndBattlePhase({
           const [showBattleResultModal, setShowBattleResultModal] = useState(false);
           const [battleResultData, setBattleResultData] = useState(null);
 
+          // Diplomatic stance and battle options state
+          const [showDiplomaticModal, setShowDiplomaticModal] = useState(false);
+          const [diplomaticConflict, setDiplomaticConflict] = useState(null);
+          const [diplomaticStances, setDiplomaticStances] = useState({});
+          const [showBattleOptionsModal, setShowBattleOptionsModal] = useState(false);
+          const [battleOptionsData, setBattleOptionsData] = useState(null);
+          const [tensionAlerts, setTensionAlerts] = useState([]);
+
           // Check for existing session
           useEffect(() => {
             const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
@@ -2489,6 +2497,8 @@ function YearEndBattlePhase({
               // Close the battle decision modal
               setShowBattleModal(false);
               setMilitaryConflict(null);
+              setShowBattleOptionsModal(false);
+              setBattleOptionsData(null);
 
               // Show the battle results modal
               if (data.result) {
@@ -2499,6 +2509,39 @@ function YearEndBattlePhase({
               } else {
                 console.error('⚔️ No result data in battleResolved event!');
               }
+            });
+
+            // Diplomatic stance required - triggered after all policies submitted
+            socket.on('diplomaticStanceRequired', (data) => {
+              console.log('🤝 Diplomatic stance required:', data);
+              // Only show modal if this player's country is in the conflict
+              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsPlayerCountry');
+              if (data.countries.includes(myCountry)) {
+                setDiplomaticStances({}); // Reset stances for new conflict
+                setDiplomaticConflict(data);
+                setShowDiplomaticModal(true);
+              }
+            });
+
+            // Battle options required - after all stances submitted
+            socket.on('battleOptionsRequired', (data) => {
+              console.log('⚔️ Battle options required:', data);
+              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsPlayerCountry');
+              if (data.countries.includes(myCountry)) {
+                setBattleOptionsData(data);
+                setShowBattleOptionsModal(true);
+                setShowDiplomaticModal(false); // Close diplomatic modal
+              }
+            });
+
+            // Tension alert - warning about military buildup
+            socket.on('tensionAlert', (data) => {
+              console.log('⚠️ Tension alert:', data);
+              setTensionAlerts(prev => [...prev, { ...data, id: Date.now() }]);
+              // Auto-dismiss after 5 seconds
+              setTimeout(() => {
+                setTensionAlerts(prev => prev.filter(a => a.id !== data.id));
+              }, 5000);
             });
 
             return () => {
@@ -2514,8 +2557,11 @@ function YearEndBattlePhase({
               socket.off('policySubmitted');
               socket.off('militaryConflict');
               socket.off('battleResolved');
+              socket.off('diplomaticStanceRequired');
+              socket.off('battleOptionsRequired');
+              socket.off('tensionAlert');
             };
-          }, [playerId, isAuthenticated]);
+          }, [playerId, isAuthenticated, playerCountry]);
 
           // Authentication handlers
           const handleRegister = (e) => {
@@ -5526,6 +5572,341 @@ function YearEndBattlePhase({
                         Close
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Diplomatic Stance Modal */}
+                {showDiplomaticModal && diplomaticConflict && (() => {
+                  const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsPlayerCountry');
+                  const otherCountries = diplomaticConflict.countries.filter(c => c !== myCountry);
+
+                  return (
+                    <div style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'rgba(0,0,0,0.8)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 1002
+                    }}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%)',
+                        borderRadius: '16px',
+                        padding: '24px',
+                        maxWidth: '600px',
+                        width: '90%',
+                        border: '2px solid #8b5cf6',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+                      }}>
+                        <h2 style={{ color: '#c4b5fd', margin: '0 0 16px 0', textAlign: 'center' }}>
+                          🤝 Diplomatic Stance - {diplomaticConflict.region}
+                        </h2>
+
+                        <div style={{
+                          background: 'rgba(139, 92, 246, 0.1)',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          marginBottom: '16px',
+                          border: '1px solid rgba(139, 92, 246, 0.3)'
+                        }}>
+                          <p style={{ color: '#d1d5db', margin: 0, fontSize: '0.95rem' }}>
+                            {diplomaticConflict.message}
+                          </p>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                          <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '12px' }}>
+                            Select your diplomatic stance toward each nation:
+                          </p>
+
+                          {otherCountries.map(country => (
+                            <div key={country} style={{
+                              background: 'rgba(255,255,255,0.05)',
+                              borderRadius: '8px',
+                              padding: '12px',
+                              marginBottom: '8px'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ color: 'white', fontWeight: 'bold' }}>{country}</span>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={() => setDiplomaticStances(prev => ({ ...prev, [country]: 'ally' }))}
+                                    style={{
+                                      padding: '6px 12px',
+                                      background: diplomaticStances[country] === 'ally' ? '#22c55e' : '#374151',
+                                      color: 'white',
+                                      border: diplomaticStances[country] === 'ally' ? '2px solid #86efac' : '2px solid transparent',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem'
+                                    }}
+                                  >
+                                    🤝 Ally
+                                  </button>
+                                  <button
+                                    onClick={() => setDiplomaticStances(prev => ({ ...prev, [country]: 'neutral' }))}
+                                    style={{
+                                      padding: '6px 12px',
+                                      background: diplomaticStances[country] === 'neutral' ? '#6b7280' : '#374151',
+                                      color: 'white',
+                                      border: diplomaticStances[country] === 'neutral' ? '2px solid #9ca3af' : '2px solid transparent',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem'
+                                    }}
+                                  >
+                                    🔘 Neutral
+                                  </button>
+                                  <button
+                                    onClick={() => setDiplomaticStances(prev => ({ ...prev, [country]: 'enemy' }))}
+                                    style={{
+                                      padding: '6px 12px',
+                                      background: diplomaticStances[country] === 'enemy' ? '#dc2626' : '#374151',
+                                      color: 'white',
+                                      border: diplomaticStances[country] === 'enemy' ? '2px solid #fca5a5' : '2px solid transparent',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem'
+                                    }}
+                                  >
+                                    ⚔️ Enemy
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            // Check all stances are set
+                            const allSet = otherCountries.every(c => diplomaticStances[c]);
+                            if (!allSet) {
+                              alert('Please select a stance for each country');
+                              return;
+                            }
+
+                            console.log('🤝 Submitting diplomatic stances:', diplomaticStances);
+                            socket.emit('submitDiplomaticStance', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              region: diplomaticConflict.region,
+                              stances: diplomaticStances
+                            });
+                            setShowDiplomaticModal(false);
+                            setDiplomaticConflict(null);
+                            setDiplomaticStances({});
+                          }}
+                          disabled={!otherCountries.every(c => diplomaticStances[c])}
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: otherCountries.every(c => diplomaticStances[c]) ? '#8b5cf6' : '#374151',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: otherCountries.every(c => diplomaticStances[c]) ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Submit Diplomatic Stances
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Battle Options Modal */}
+                {showBattleOptionsModal && battleOptionsData && (
+                  <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1003
+                  }}>
+                    <div style={{
+                      background: 'linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)',
+                      borderRadius: '16px',
+                      padding: '24px',
+                      maxWidth: '600px',
+                      width: '90%',
+                      border: '2px solid #dc2626',
+                      boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+                    }}>
+                      <h2 style={{ color: '#fca5a5', margin: '0 0 16px 0', textAlign: 'center' }}>
+                        ⚔️ Battle Options - {battleOptionsData.region}
+                      </h2>
+
+                      <div style={{
+                        background: 'rgba(220, 38, 38, 0.1)',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        marginBottom: '16px',
+                        border: '1px solid rgba(220, 38, 38, 0.3)'
+                      }}>
+                        <p style={{ color: '#d1d5db', margin: 0, fontSize: '0.95rem' }}>
+                          {battleOptionsData.message}
+                        </p>
+
+                        {battleOptionsData.alliances && battleOptionsData.alliances.length > 0 && (
+                          <div style={{ marginTop: '8px', fontSize: '0.85rem' }}>
+                            <span style={{ color: '#22c55e' }}>Alliances: </span>
+                            <span style={{ color: '#86efac' }}>
+                              {battleOptionsData.alliances.map(a => a.join(' + ')).join(' | ')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '16px', textAlign: 'center' }}>
+                        Choose your military action:
+                      </p>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                        <button
+                          onClick={() => {
+                            console.log('⚔️ Player chose ATTACK');
+                            socket.emit('submitBattleOption', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              battleId: battleOptionsData.battleId,
+                              region: battleOptionsData.region,
+                              option: 'attack'
+                            });
+                            setShowBattleOptionsModal(false);
+                            setBattleOptionsData(null);
+                          }}
+                          style={{
+                            padding: '16px',
+                            background: '#dc2626',
+                            color: 'white',
+                            border: '2px solid #fca5a5',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          ⚔️ Attack
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>
+                            Full military engagement
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            console.log('🤝 Player chose NEGOTIATE');
+                            socket.emit('submitBattleOption', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              battleId: battleOptionsData.battleId,
+                              region: battleOptionsData.region,
+                              option: 'negotiate'
+                            });
+                            setShowBattleOptionsModal(false);
+                            setBattleOptionsData(null);
+                          }}
+                          style={{
+                            padding: '16px',
+                            background: '#2563eb',
+                            color: 'white',
+                            border: '2px solid #93c5fd',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          🤝 Negotiate
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>
+                            Diplomatic resolution
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            console.log('🏃 Player chose RETREAT');
+                            socket.emit('submitBattleOption', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              battleId: battleOptionsData.battleId,
+                              region: battleOptionsData.region,
+                              option: 'retreat'
+                            });
+                            setShowBattleOptionsModal(false);
+                            setBattleOptionsData(null);
+                          }}
+                          style={{
+                            padding: '16px',
+                            background: '#f59e0b',
+                            color: 'white',
+                            border: '2px solid #fcd34d',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          🏃 Retreat
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>
+                            Withdraw forces
+                          </div>
+                        </button>
+                      </div>
+
+                      <p style={{ color: '#6b7280', fontSize: '0.75rem', textAlign: 'center', margin: 0 }}>
+                        Attack: Full power, high casualties | Negotiate: Reduced power, low casualties | Retreat: No combat, minimal losses
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tension Alerts */}
+                {tensionAlerts.length > 0 && (
+                  <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '20px',
+                    zIndex: 900,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    {tensionAlerts.map(alert => (
+                      <div key={alert.id} style={{
+                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        color: 'white',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        maxWidth: '300px',
+                        animation: 'slideIn 0.3s ease-out'
+                      }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                          ⚠️ Military Tension
+                        </div>
+                        <div style={{ fontSize: '0.9rem' }}>
+                          {alert.message}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.8 }}>
+                          Region: {alert.region}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
