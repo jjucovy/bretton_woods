@@ -19,29 +19,131 @@ const DB_API = {
   apiKey: 'bretton-woods-secret-key-2024'
 };
 
+// Email configuration using nodemailer
+const nodemailer = require('nodemailer');
+
+// Email transporter configuration
+// Configure via environment variables or use these defaults
+const EMAIL_CONFIG = {
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: process.env.SMTP_PORT || 587,
+  secure: false, // true for 465, false for other ports
+  auth: {
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || ''
+  }
+};
+
+// Create reusable transporter object
+let emailTransporter = null;
+if (EMAIL_CONFIG.auth.user && EMAIL_CONFIG.auth.pass) {
+  emailTransporter = nodemailer.createTransport(EMAIL_CONFIG);
+  console.log('📧 Email notifications enabled');
+} else {
+  console.log('📧 Email notifications disabled (SMTP_USER and SMTP_PASS not configured)');
+}
+
+// Function to send email notification to superadmin
+async function sendAdminNotification(subject, message, gameCode = null) {
+  if (!emailTransporter) {
+    console.log('📧 Email skipped - transporter not configured');
+    return false;
+  }
+
+  try {
+    // Get superadmin email from database
+    const dbUsers = await queryDatabase('getAllUsers', {});
+    if (!dbUsers || !Array.isArray(dbUsers)) {
+      console.error('📧 Could not fetch users for email notification');
+      return false;
+    }
+
+    // Find superadmin users (is_teacher = 1)
+    const superadmins = dbUsers.filter(u => u.is_teacher === '1' || u.is_teacher === 1);
+    if (superadmins.length === 0) {
+      console.log('📧 No superadmins found to notify');
+      return false;
+    }
+
+    // Get superadmin emails from the email field in Users table
+    const adminEmails = superadmins
+      .map(u => u.email || u.username) // Use email field, fall back to username
+      .filter(email => email && email.includes('@'));
+
+    if (adminEmails.length === 0) {
+      console.log('📧 No valid superadmin email addresses found');
+      return false;
+    }
+
+    // Build email content
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: white; margin: 0;">🌍 Bretton Woods 1944</h1>
+          <p style="color: #cbd5e1; margin: 8px 0 0 0;">Game Notification</p>
+        </div>
+        <div style="background: #f8fafc; padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+          <h2 style="color: #1e293b; margin-top: 0;">${subject}</h2>
+          <p style="color: #475569; line-height: 1.6;">${message}</p>
+          ${gameCode ? `<p style="color: #64748b; font-size: 0.875rem;">Game Code: <strong>${gameCode}</strong></p>` : ''}
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+          <p style="color: #94a3b8; font-size: 0.75rem; margin: 0;">
+            This is an automated notification from the Bretton Woods simulation.
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Send email
+    const info = await emailTransporter.sendMail({
+      from: `"Bretton Woods Game" <${EMAIL_CONFIG.auth.user}>`,
+      to: adminEmails.join(', '),
+      subject: `[Bretton Woods] ${subject}`,
+      html: htmlContent
+    });
+
+    console.log(`📧 Email sent to ${adminEmails.join(', ')}: ${info.messageId}`);
+    return true;
+  } catch (error) {
+    console.error('📧 Failed to send email:', error.message);
+    return false;
+  }
+}
 
 // Normalize country names to ensure consistent keys
 function normalizeCountryName(country) {
   if (!country) return '';
   const normalizations = {
-    // 3-letter codes that might come from database
+    // USSR variations
     'USS': 'USSR',
-    'FRA': 'France',
-    'CHN': 'China',
-    'IND': 'India',
-    'ARG': 'Argentina',
-    'GBR': 'UK',
-    // Long form names
+    'SUN': 'USSR',
+    'SOV': 'USSR',
     'Soviet Union': 'USSR',
+    'Soviet': 'USSR',
+    // USA variations
     'US': 'USA',
     'United States': 'USA',
+    'America': 'USA',
+    // UK variations
     'GB': 'UK',
+    'GBR': 'UK',
     'Great Britain': 'UK',
     'United Kingdom': 'UK',
+    'Britain': 'UK',
+    // China variations
+    'CHN': 'China',
     'PRC': 'China',
+    'CHI': 'China',
     "People's Republic of China": 'China',
-    'India (British Raj)': 'India',
-    'French': 'France'
+    'Republic of China': 'China',
+    // France variations
+    'FRA': 'France',
+    'French': 'France',
+    // India variations
+    'IND': 'India',
+    'British Raj': 'India',
+    // Argentina variations
+    'ARG': 'Argentina'
   };
   return normalizations[country] || country;
 }
@@ -357,6 +459,12 @@ async function saveGameToDatabase(roomId) {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
+    // Ensure we have a valid game_id (not a timestamp)
+    if (!room.gameId || room.gameId > 1000000000000) {
+      console.log(`⚠️ Invalid game_id for ${roomId}, skipping database update`);
+      return;
+    }
+
     // Map game phase to status
     let gameStatus = 'lobby';
     if (room.gamePhase === 'complete') {
@@ -365,14 +473,16 @@ async function saveGameToDatabase(roomId) {
       gameStatus = 'active';
     }
 
-    // Prepare update data - API uses gameCode as the lookup key, not game_id
+    // Get the current round value
+    const currentRound = room.currentRound !== undefined ? Number(room.currentRound) : 0;
+
+    // Prepare update data - use game_id as the primary key for updates
     const updateData = {
-      gameCode: roomId,
+      game_id: parseInt(room.gameId),
       status: gameStatus,
-      current_round: parseInt(room.currentRound)|| 0
+      current_round: currentRound
     };
 
-    
     // Add Phase 2 year if available (don't require active since game might be complete)
     if (room.phase2?.currentYear) {
       updateData.currentYear = room.phase2.currentYear;
@@ -383,17 +493,15 @@ async function saveGameToDatabase(roomId) {
       updateData.endedAt = true; // API will set to NOW()
     }
 
+    console.log(`💾 Saving game ${roomId} (game_id=${room.gameId}) to database: status=${gameStatus}, round=${currentRound}, year=${room.phase2?.currentYear || 'N/A'}`);
+
     // Update game in database
     const result = await queryDatabase('updateGame', updateData);
 
     if (result) {
-      console.log(`💾 Game ${roomId} saved to database:`, {
-        status: gameStatus,
-        current_round:  parseInt(room.currentRound) ,
-        year: room.phase2?.currentYear || 'N/A'
-      });
+      console.log(`✅ Game ${roomId} saved to database`);
     } else {
-      console.log(`⚠️ Game ${roomId} DB update returned no result`);
+      console.log(`⚠️ Game ${roomId} DB update returned no result - check PHP API logs`);
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
@@ -656,7 +764,11 @@ function broadcastToRoom(roomId) {
       console.log(`   ⚠️ yearlyData[1946] is ${typeof room.phase2.yearlyData[1946]}`);
     }
   }
-  
+
+  // Debug: Log players being broadcast
+  console.log(`📡 Broadcasting to ${roomId}: ${Object.keys(room.players).length} players:`,
+    Object.values(room.players).map(p => ({ id: p.id, country: p.country })));
+
   io.to(roomId).emit('stateUpdate', room);
 }
 
@@ -1028,11 +1140,21 @@ function calculateYearEconomics(roomId) {
     const prevData = prevYearData[country];
     
     if (!policy || !prevData) {
-      // If no policy submitted, use defaults with penalty
+      // If no policy submitted or no previous data, use defaults with penalty
+      const defaultData = prevData || {
+        gdp: 100,
+        gdpGrowth: 0,
+        goldReserves: 1000,
+        unemployment: 5,
+        tradeBalance: 0,
+        inflation: 5,
+        industrialOutput: 100,
+        military: { army: 500000, navy: 100000, airForce: 50000, total: 650000 }
+      };
       tempResults[country] = {
-        ...prevData,
+        ...defaultData,
         gdpGrowth: -2.0,
-        industrialOutput: prevData.industrialOutput * 0.98
+        industrialOutput: (defaultData.industrialOutput || 100) * 0.98
       };
       return;
     }
@@ -1064,23 +1186,25 @@ function calculateYearEconomics(roomId) {
     // Base growth rate (post-war boom)
     let gdpGrowth = 4.0;
     let tradeBalance = prevData.tradeBalance; // Initialize early - used in military effects
+    let industrialOutput = prevData.industrialOutput || 100; // Initialize early - modified in policy blocks
     
     // === MILITARY ECONOMIC IMPACT (BRANCH-SPECIFIC) ===
     // Military spending as % of GDP
     const milSpending = militarySpending || 5;
     
-    // Calculate actual cost based on branch composition
-    // Army: $1 per soldier (cheap - food, basic equipment)
-    // Navy: $4 per sailor (ships, fuel, maintenance)
-    // Air Force: $6 per airman (planes, fuel, high-tech equipment)
-    const armyCost = armySize * 1;
-    const navyCost = navySize * 4;
-    const airForceCost = airForceSize * 6;
+    // Calculate actual cost based on branch composition (costs in $millions)
+    // Army: $0.001M per soldier ($1000 per soldier - food, basic equipment)
+    // Navy: $0.004M per sailor ($4000 per sailor - ships, fuel, maintenance)
+    // Air Force: $0.006M per airman ($6000 per airman - planes, fuel, high-tech)
+    const armyCost = armySize * 0.001;
+    const navyCost = navySize * 0.004;
+    const airForceCost = airForceSize * 0.006;
     const totalMilitaryCost = armyCost + navyCost + airForceCost;
-    
-    // Calculate effective military spending based on force structure
+
+    // Calculate effective military spending as % of GDP
+    // GDP is in $millions, totalMilitaryCost is now also in $millions
     const gdp = country === 'USA' ? 210000 : country === 'UK' ? 61000 : country === 'USSR' ? 126000 : country === 'France' ? 37000 : country === 'China' ? 45000 : country === 'India' ? 55000 : 32000;
-    const effectiveMilSpending = (totalMilitaryCost / (gdp * 10)) * 100; // Convert to % of GDP
+    const effectiveMilSpending = (totalMilitaryCost / gdp) * 100; // As percentage of GDP
     
     // High military spending drains civilian economy
     if (effectiveMilSpending > 10) {
@@ -1128,10 +1252,9 @@ function calculateYearEconomics(roomId) {
       
       // Tariff barriers hurt trade
       // If they have high tariffs, you can't export to them as much
-      const theirTariffImpact = (otherPolicy.tariffRate - 15) * -20; // They block your exports
-      const yourTariffImpact = (tariffRate - 15) * -30; // You block your own imports
-      
-      tradeBalance += theirTariffImpact + yourTariffImpact;
+      // Scale down impact since this runs for each country pair
+      const theirTariffImpact = (otherPolicy.tariffRate - 15) * -3; // They block your exports
+      tradeBalance += theirTariffImpact;
       
       // If both countries have low tariffs, trade flourishes
       if (tariffRate < 20 && otherPolicy.tariffRate < 20) {
@@ -1188,7 +1311,13 @@ function calculateYearEconomics(roomId) {
         tradeBalance += 50; // Peaceful cooperation
       }
     });
-    
+
+    // Your own tariff impact (applied once, not per country)
+    // High tariffs protect domestic industry but reduce trade efficiency
+    if (tariffRate > 15) {
+      tradeBalance -= (tariffRate - 15) * 15; // High tariffs hurt imports/efficiency
+    }
+
     // Apply trade competitiveness to GDP
     gdpGrowth += tradeCompetitiveness;
     
@@ -1275,25 +1404,41 @@ function calculateYearEconomics(roomId) {
       
       // Marshall Plan isolation (from 1948)
       if (currentYear >= 1948) {
-        gdpGrowth -= 1.0; // Isolation from Marshall Plan
-        tradeBalance -= 400; // Additional Western trade cutoff
+        gdpGrowth -= 0.5; // Isolation from Marshall Plan (reduced from -1.0)
+        tradeBalance -= 200; // Western trade cutoff (reduced from -400)
+      }
+
+      // USSR Superpower Advantages
+      // Massive industrial base and resources
+      gdpGrowth += 0.8; // Industrial recovery and resource extraction
+      tradeBalance += 300; // Resource exports to Eastern bloc
+
+      // Command economy can achieve rapid growth through mobilization
+      if (policy.isCommandEconomy && (policy.planFulfillmentPriority || 70) > 70) {
+        gdpGrowth += 0.5; // Centralized planning efficiency in reconstruction
+        industrialOutput *= 1.03; // Heavy industry focus
       }
     }
     
     if (country === 'China') {
-      // Chinese Civil War (1946-1949) - intensifying effects
+      // Chinese Civil War (1946-1949) - intensifying effects (reduced for balance)
       if (currentYear <= 1949) {
         const warIntensity = {
-          1946: -1.0,  // War resumes after WWII
-          1947: -1.5,  // Escalation
-          1948: -2.5,  // Major battles
-          1949: -4.0   // Final decisive campaigns
+          1946: -0.5,  // War resumes after WWII
+          1947: -0.8,  // Escalation
+          1948: -1.2,  // Major battles
+          1949: -1.5   // Final decisive campaigns
         };
-        
-        gdpGrowth += (warIntensity[currentYear] || -1.0); // Negative growth from civil war
-        tradeBalance -= (currentYear - 1945) * 200; // Worsening trade disruption
-        // Note: Unemployment and inflation increases handled later in their respective sections
+
+        gdpGrowth += (warIntensity[currentYear] || -0.5); // Negative growth from civil war
+        tradeBalance -= (currentYear - 1945) * 100; // Trade disruption (reduced)
       }
+
+      // China's massive population = economic potential
+      gdpGrowth += 0.3; // Large domestic market
+
+      // Foreign aid (US aids Nationalists, USSR aids Communists)
+      tradeBalance += 200; // Foreign support flowing in
       
       // Communist China (post-1949) - command economy
       if (currentYear >= 1949 && policy.isCommandEconomy) {
@@ -1320,25 +1465,112 @@ function calculateYearEconomics(roomId) {
         
         // Strict plan fulfillment
         if (planPriority > 80) {
-          gdpGrowth += 0.3; // Mobilization
-          inflation += 1.2; // Severe bottlenecks in recovering economy
+          gdpGrowth += 0.5; // Mobilization (increased)
+          inflation += 0.8; // Bottlenecks (reduced)
         }
-        
-        // Post-civil war recovery penalty
-        gdpGrowth -= 1.5; // Still recovering from devastation
-        tradeBalance -= 200; // Limited foreign trade capacity
+
+        // Post-civil war recovery - peace dividend after 1950
+        if (currentYear >= 1950) {
+          gdpGrowth += 1.0; // Peace dividend - war is over!
+          tradeBalance += 150; // Trade normalizing
+        } else {
+          gdpGrowth -= 0.5; // Still consolidating power in 1949
+        }
+      }
+
+      // Communist China post-1950 rapid industrialization
+      if (currentYear >= 1950 && policy.isCommandEconomy) {
+        gdpGrowth += 0.8; // Soviet-style industrialization drive
+        industrialOutput *= 1.04; // Building factories
       }
     }
     
     if (country === 'India' && currentYear >= 1947) {
       gdpGrowth += 1.0; // Independence boost
     }
-    
+
+    if (country === 'France') {
+      // Marshall Plan recipient - major reconstruction aid
+      if (currentYear >= 1948) {
+        gdpGrowth += 1.2; // Marshall Plan boost
+        tradeBalance += 400; // US aid
+      }
+      // Despite currency crises, rapid reconstruction
+      gdpGrowth += 0.5; // Reconstruction momentum
+    }
+
+    if (country === 'UK') {
+      // Marshall Plan and special relationship with USA
+      if (currentYear >= 1948) {
+        gdpGrowth += 0.6; // Marshall Plan
+        tradeBalance += 250; // US support
+      }
+      // Commonwealth trade network
+      tradeBalance += 200; // Sterling area trade
+    }
+
     if (country === 'USA') {
       // USA benefits from being reserve currency
       tradeBalance += 400; // Dollar demand
     }
-    
+
+    // === ARGENTINA SPECIAL MECHANICS ===
+    if (country === 'Argentina') {
+      // Commodity Export Power - Argentina dominates global food exports
+      // Trade balance bonus based on global demand (post-war food shortages)
+      if (currentYear <= 1950) {
+        tradeBalance += 800; // Food export boom
+        gdpGrowth += 0.8; // Agricultural prosperity
+      } else {
+        // Drought and declining terms of trade after 1950
+        tradeBalance += 300;
+      }
+
+      // Third Position Bonus - Perón's "neither capitalism nor communism"
+      // Get bonus when policies differ from both USA and USSR
+      const usaPolicy = policies['USA'];
+      const ussrPolicy = policies['USSR'];
+      if (usaPolicy && ussrPolicy) {
+        let thirdPositionScore = 0;
+
+        // Check if tariff rate differs from both powers
+        if (policy.tariffRate) {
+          const usaTariff = usaPolicy.tariffRate || 10;
+          const diffFromUSA = Math.abs(policy.tariffRate - usaTariff);
+          const diffFromUSSR = policy.isCommandEconomy ? 0 : 20; // USSR has state trade monopoly
+          if (diffFromUSA > 10 && diffFromUSSR > 10) {
+            thirdPositionScore += 1;
+          }
+        }
+
+        // Check exchange rate independence
+        if (policy.exchangeRate && policy.exchangeRate !== 1.0) {
+          thirdPositionScore += 1;
+        }
+
+        // Bonus for Third Position policies
+        if (thirdPositionScore > 0) {
+          gdpGrowth += thirdPositionScore * 0.3; // Economic sovereignty bonus
+          // diplomaticPoints would be added elsewhere
+        }
+      }
+
+      // Perón's Social Programs (Import Substitution Industrialization)
+      // High government spending helps employment but causes inflation
+      if (policy.governmentSpending && policy.governmentSpending > 30) {
+        unemployment -= (policy.governmentSpending - 30) * 0.05; // Jobs from state programs
+        // Inflation effect handled separately
+      }
+
+      // Industrial development bonus
+      industrialOutput *= 1.02; // Growing industrial base under Perón
+
+      // British debt leverage - UK owes Argentina from WWII
+      if (currentYear <= 1948) {
+        tradeBalance += 200; // Debt repayments flowing in
+      }
+    }
+
     // Random shock
     const randomShock = (Math.random() - 0.5) * 2;
     gdpGrowth += randomShock;
@@ -1350,7 +1582,21 @@ function calculateYearEconomics(roomId) {
     if (country === 'China' && currentYear >= 1948 && currentYear <= 1949) {
       inflation += 3.0; // Severe shortages from agricultural collapse
     }
-    
+
+    // Argentina Peronist inflation effects
+    if (country === 'Argentina') {
+      // Perón's social programs and nationalization cause inflation
+      if (policy.governmentSpending && policy.governmentSpending > 30) {
+        inflation += (policy.governmentSpending - 30) * 0.15; // Deficit spending
+      }
+      // Post-1950 economic troubles
+      if (currentYear >= 1951) {
+        inflation += 2.0; // Drought and declining exports cause inflation
+      }
+      // IAPI (state trade monopoly) creates inefficiencies
+      inflation += 1.0; // Structural inflation from interventionist policies
+    }
+
     // Your own interest rate
     if (centralBankRate < 2.0) {
       inflation += (2.0 - centralBankRate) * 2.0;
@@ -1392,8 +1638,7 @@ function calculateYearEconomics(roomId) {
     
     unemployment = Math.max(0, Math.min(15, unemployment));
     
-    // === INDUSTRIAL OUTPUT ===
-    let industrialOutput = prevData.industrialOutput;
+    // === INDUSTRIAL OUTPUT (final adjustments) ===
     industrialOutput *= (1 + gdpGrowth / 100);
     
     // === GOLD RESERVES ===
@@ -1455,12 +1700,19 @@ function calculateYearEconomics(roomId) {
 function calculatePhase2Scores(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
-  
+
+  console.log(`\n📊 Calculating Phase 2 scores for room ${roomId}`);
+  console.log(`   Players:`, Object.values(room.players).map(p => `${p.country} -> ${normalizeCountryName(p.country)}`));
+  console.log(`   YearlyData years:`, Object.keys(room.phase2.yearlyData || {}));
+
   const phase2Scores = {};
   const scoreBreakdowns = {};
-  
+
   Object.values(room.players).forEach(player => {
-    const country = normalizeCountryName(player.country);
+    const rawCountry = player.country;
+    const country = normalizeCountryName(rawCountry);
+    console.log(`   Processing player: raw=${rawCountry}, normalized=${country}`);
+
     let score = 0;
     const breakdown = {
       gdp: 0,
@@ -1470,21 +1722,27 @@ function calculatePhase2Scores(roomId) {
       stability: 0,
       brettonWoods: 0
     };
-    
+
     // Calculate average performance
     let totalGDP = 0, totalInflation = 0, totalUnemployment = 0, yearsCount = 0;
     let positiveTradeYears = 0;
-    
+
     for (let year = 1947; year <= 1952; year++) {
-      const data = room.phase2.yearlyData[year]?.[country];
+      // Try both normalized and raw country names
+      let data = room.phase2.yearlyData[year]?.[country];
+      if (!data && rawCountry !== country) {
+        data = room.phase2.yearlyData[year]?.[rawCountry];
+      }
       if (data) {
-        totalGDP += data.gdpGrowth;
-        totalInflation += data.inflation;
-        totalUnemployment += data.unemployment;
-        if (data.tradeBalance > 0) positiveTradeYears++;
+        totalGDP += data.gdpGrowth || 0;
+        totalInflation += data.inflation || 0;
+        totalUnemployment += data.unemployment || 0;
+        if ((data.tradeBalance || 0) > 0) positiveTradeYears++;
         yearsCount++;
       }
     }
+
+    console.log(`   ${country}: found data for ${yearsCount} years`);
     
     if (yearsCount > 0) {
       const avgGDP = totalGDP / yearsCount;
@@ -1561,13 +1819,23 @@ function calculatePhase2Scores(roomId) {
       }
     }
     
-    phase2Scores[country] = Math.round(score);
+    // Ensure score is a valid number
+    const finalScore = isNaN(score) ? 0 : Math.round(score);
+    phase2Scores[country] = finalScore;
     scoreBreakdowns[country] = breakdown;
-    room.scores[country] = (room.scores[country] || 0) + phase2Scores[country];
+
+    // Initialize room.scores if needed and add Phase 2 score
+    if (!room.scores) room.scores = {};
+    const prevScore = typeof room.scores[country] === 'number' ? room.scores[country] : 0;
+    room.scores[country] = prevScore + finalScore;
+
+    console.log(`   ${country}: Phase2 score=${finalScore}, Total score=${room.scores[country]}`);
   });
-  
+
   // Store breakdowns for display
   room.phase2.scoreBreakdowns = scoreBreakdowns;
+
+  console.log(`📊 Final scores:`, room.scores);
   
   console.log(`Phase 2 final scores:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);
@@ -1679,39 +1947,60 @@ io.on('connection', (socket) => {
   socket.emit('roomListUpdate', globalState.roomList);
   
   // Register new user
-  socket.on('register', ({ username, password }) => {
-    if (!username || !password) {
-      socket.emit('registerResult', { success: false, message: 'Username and password required' });
+  socket.on('register', async ({ username, password, email }) => {
+    if (!username || !password || !email) {
+      socket.emit('registerResult', { success: false, message: 'Username, password, and email are required' });
       return;
     }
-    
-    if (globalState.users[username]) {
-      socket.emit('registerResult', { success: false, message: 'Username already exists' });
-      return;
-    }
-    const playerid = playerId;
-    const userId = player.userid // Simple numeric ID for now
-    
+
     // Only jjucovy@gmail.com is the super admin
     const isSuperAdmin = username.toLowerCase() === 'jjucovy@gmail.com' || username.toLowerCase() === 'jjucovy';
-    
-    globalState.users[username] = {
-      password: hashPassword(password),
-      playerid: player.id,
-      userId: userId,
-      createdAt: Date.now(),
-      role: isSuperAdmin ? 'superadmin' : 'player'
-    };
-    
-    socket.emit('registerResult', { 
-      success: true, 
-      playerid: player.id,
-      username: username,
-      role: isSuperAdmin ? 'superadmin' : 'player'
-    });
-    
-    saveState();
-    //console.log(`User registered: ${username} (${isSuperAdmin ? 'SUPER ADMIN' : 'player'})`);
+    const role = isSuperAdmin ? 'superadmin' : 'player';
+
+    try {
+      // Create user in database
+      const result = await queryDatabase('createUser', {
+        username: username,
+        password: password,
+        role: isSuperAdmin ? 'teacher' : 'student',
+        email: email,
+        displayName: username
+      });
+
+      // PHP returns { exists: true, user_id } if already exists
+      if (result?.exists && result?.user_id) {
+        console.log(`User already exists: ${username}, user_id: ${result.user_id}`);
+        socket.emit('registerResult', { success: false, message: 'Username already exists' });
+        return;
+      }
+
+      // PHP INSERT returns { affected: 1 } without user_id
+      // Fetch the newly created user to get their user_id
+      let userId = result?.user_id || result?.id;
+      if (!userId) {
+        const dbUser = await queryDatabase('getUser', { username });
+        userId = dbUser?.user_id;
+      }
+
+      if (!userId) {
+        console.error('Registration failed - could not retrieve user_id after creation:', result);
+        socket.emit('registerResult', { success: false, message: 'Registration failed - please try again' });
+        return;
+      }
+
+      console.log(`User registered: ${username} (${role}), user_id: ${userId}`);
+
+      socket.emit('registerResult', {
+        success: true,
+        userId: userId,
+        username: username,
+        role: role
+      });
+    } catch (err) {
+      console.error('Registration error:', err);
+      const message = err.message?.includes('exists') ? 'Username already exists' : 'Registration failed';
+      socket.emit('registerResult', { success: false, message });
+    }
   });
   
   // Login existing user
@@ -1727,13 +2016,14 @@ io.on('connection', (socket) => {
     try {
       // Query database for user by username
       const dbUser = await queryDatabase('getUser', { username });
-      
-      if (!dbUser) {
-        console.log('ERROR: User not found in database');
+
+      // Check for valid user with user_id (reject empty objects, null, undefined)
+      if (!dbUser || !dbUser.user_id) {
+        console.log('ERROR: User not found in database or missing user_id:', dbUser);
         socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
         return;
       }
-      
+
       console.log('User found in database:', dbUser.username, 'user_id:', dbUser.user_id);
       
       // For now, accept the password (in production, verify against password_hash)
@@ -1743,19 +2033,22 @@ io.on('connection', (socket) => {
       // Check for active game for this user
       let activeGame = null;
       if (role === 'player') {
-        const userGames = await queryDatabase('getUserGames', { 
-          user_id: dbUser.user_id,
-          status: 'active'
+        // Use getPlayerActiveGame action (matches PHP API)
+        const gameResult = await queryDatabase('getPlayerActiveGame', {
+          userId: dbUser.user_id
         });
-        
-        if (userGames && Array.isArray(userGames) && userGames.length > 0) {
-          // Get the first active game
-          const game = userGames[0];
+
+        console.log('getPlayerActiveGame result:', JSON.stringify(gameResult));
+
+        // Handle both array and single object responses
+        const game = Array.isArray(gameResult) ? gameResult[0] : gameResult;
+
+        if (game && game.game_code) {
           activeGame = {
             game_id: game.game_id,
             gameCode: game.game_code,
             country_id: game.country_id,
-            country_code: game.country_code,  // ADD THIS - the actual country code like 'FRA'
+            country_code: game.country_code,
             status: game.status
           };
           console.log(`✓ User has active game: ${activeGame.gameCode}`);
@@ -1766,13 +2059,25 @@ io.on('connection', (socket) => {
       // Get available lobby games if user is a player and doesn't have active game
       let availableGames = [];
       if (role === 'player' && !activeGame) {
-        const lobbyGames = Object.values(globalState.rooms).filter(room => !room.gameStarted);
+        // Filter games that are in lobby phase and have room for new players
+        const lobbyGames = Object.values(globalState.rooms).filter(room => {
+          // Must be in lobby phase (not started)
+          if (room.gamePhase !== 'lobby' || room.gameStarted) return false;
+          // Must have room for new players (less than 7)
+          const playerCount = Object.keys(room.players).length;
+          if (playerCount >= 7) return false;
+          return true;
+        });
         availableGames = lobbyGames.map(room => ({
           roomId: room.roomId,
           gameCode: room.gameCode || room.roomId,
           playerCount: Object.keys(room.players).length,
-          maxPlayers: 7
+          maxPlayers: 7,
+          availableSlots: 7 - Object.keys(room.players).length,
+          hostUserId: room.hostUserId || room.hostId,
+          createdAt: room.createdAt
         }));
+        console.log(`   Found ${availableGames.length} available lobby games for player`);
       }
       
       socket.emit('loginResult', { 
@@ -1827,15 +2132,31 @@ io.on('connection', (socket) => {
     if (roomId.startsWith('game_')) {
       globalState.rooms[roomId].status = 'active';
       globalState.rooms[roomId].gameCode = roomId;
-      
+
+      // Fetch the actual game_id from database and store it
+      try {
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        if (gameData && gameData.game_id) {
+          globalState.rooms[roomId].gameId = gameData.game_id;
+          console.log(`   Retrieved game_id ${gameData.game_id} from database for ${roomId}`);
+        }
+      } catch (err) {
+        console.error('Error fetching game_id:', err);
+      }
+
       // Update database to set status to active and assign host
       try {
-        await queryDatabase('updateGameStatus', { 
-          gameCode: roomId, 
-          status: 'active',
-          hostUserId: creatorId
-        });
-        console.log(`✅ Game ${roomId} marked as active in database with host ${creatorId}`);
+        const gameIdToUpdate = globalState.rooms[roomId].gameId;
+        if (gameIdToUpdate) {
+          await queryDatabase('updateGameStatus', {
+            game_id: gameIdToUpdate,
+            status: 'active',
+            hostUserId: creatorId
+          });
+          console.log(`✅ Game ${roomId} (game_id: ${gameIdToUpdate}) marked as active in database with host ${creatorId}`);
+        } else {
+          console.log(`⚠️ Cannot update game status - no game_id available for ${roomId}`);
+        }
       } catch (err) {
         console.error('Error updating game status:', err);
       }
@@ -1858,20 +2179,102 @@ io.on('connection', (socket) => {
   // Join existing room
   socket.on('joinRoom', async ({ roomId, userId }) => {
     console.log(`📥 joinRoom request: roomId=${roomId}, userId=${userId}`);
-    
+
+    // If room not in memory, try to reconstruct from database + saved state
     if (!globalState.rooms[roomId]) {
-      console.log(`❌ Room not found: ${roomId}`);
-      socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
-      return;
+      console.log(`⚠️ Room ${roomId} not in memory - attempting to load from database...`);
+
+      try {
+        // 1. Check if game exists in database
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+
+        if (gameData && gameData.game_code) {
+          console.log(`   ✅ Found game in database: game_id=${gameData.game_id}, status=${gameData.status}`);
+
+          // 2. Create room state from database info
+          const restoredRoom = createGameState(roomId, roomId, gameData.host_user_id);
+          restoredRoom.gameId = gameData.game_id;
+          restoredRoom.hostUserId = gameData.host_user_id;
+          restoredRoom.gameStarted = gameData.status === 'active' || gameData.status === 'phase2';
+          restoredRoom.gamePhase = gameData.status === 'phase2' ? 'phase2' : (gameData.status === 'active' ? 'phase1' : 'lobby');
+          restoredRoom.currentRound = gameData.current_round || 0;
+
+          // 3. Load players from database
+          const dbPlayers = await queryDatabase('getPlayers', { gameCode: roomId });
+          if (dbPlayers && Array.isArray(dbPlayers)) {
+            dbPlayers.forEach(p => {
+              const playerId = p.user_id || p.player_id;
+              restoredRoom.players[playerId] = {
+                id: playerId,
+                userId: p.user_id,
+                playerId: p.player_id,
+                country: p.country_code || p.country_name,
+                socketId: null,
+                joinedAt: Date.now(),
+                role: 'player',
+                disconnected: true
+              };
+              console.log(`   ✅ Restored player: ${playerId} as ${p.country_code}`);
+            });
+          }
+
+          // 4. Load Phase 2 state from saved file if it exists
+          const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
+          if (fs.existsSync(gameStateFile)) {
+            try {
+              const phase2Data = JSON.parse(fs.readFileSync(gameStateFile, 'utf8'));
+              restoredRoom.phase2 = {
+                ...restoredRoom.phase2,
+                active: phase2Data.active !== undefined ? phase2Data.active : true,
+                currentYear: phase2Data.currentYear || 1946,
+                yearlyData: phase2Data.yearlyData || {},
+                policies: phase2Data.policies || {},
+                achievements: phase2Data.achievements || {},
+                crises: phase2Data.crises || restoredRoom.phase2.crises
+              };
+              console.log(`   ✅ Restored Phase 2 state: year=${restoredRoom.phase2.currentYear}, active=${restoredRoom.phase2.active}`);
+            } catch (err) {
+              console.error(`   ❌ Error loading Phase 2 state file:`, err.message);
+            }
+          }
+
+          // 5. Store in memory
+          globalState.rooms[roomId] = restoredRoom;
+          console.log(`   ✅ Room ${roomId} reconstructed in memory with ${Object.keys(restoredRoom.players).length} players`);
+          saveState();
+        } else {
+          console.log(`❌ Game ${roomId} not found in database either`);
+          socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
+          return;
+        }
+      } catch (err) {
+        console.error(`❌ Error reconstructing room ${roomId}:`, err);
+        socket.emit('joinRoomResult', { success: false, message: 'Room not found and could not be restored' });
+        return;
+      }
     }
     
     // Store userId on socket for later reference
     socket.userId = userId;
-    
+
     const room = globalState.rooms[roomId];
-    
+
+    // Ensure we have the database game_id (not just Date.now() timestamp)
+    if (roomId.startsWith('game_') && (!room.gameId || room.gameId > 1000000000000)) {
+      // gameId looks like a timestamp, fetch the real one from database
+      try {
+        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        if (gameData && gameData.game_id) {
+          room.gameId = gameData.game_id;
+          console.log(`   Updated gameId from database: ${gameData.game_id}`);
+        }
+      } catch (err) {
+        console.error('Error fetching game_id on join:', err);
+      }
+    }
+
     // Debug: Log room host information
-    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}`);
+    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}, gameId=${room.gameId}`);
     
     // Check if user is superadmin
     let isSuperAdmin = false;
@@ -1904,9 +2307,9 @@ io.on('connection', (socket) => {
         let isHost = room.hostUserId === userId || room.hostId === userId;
         
         // If not found in memory, check database
-        if (!isHost) {
+        if (!isHost && room.gameId) {
           try {
-            const gameData = await queryDatabase('getGame', { gameCode: roomId });
+            const gameData = await queryDatabase('getGame', { game_id: room.gameId });
             if (gameData && gameData.host_user_id) {
               isHost = gameData.host_user_id === userId;
               // Update memory with host info
@@ -1954,15 +2357,61 @@ io.on('connection', (socket) => {
           country: existingPlayer.country
         });
       } else {
-        console.log(`   Player ${userId} not found in room - will need to select country`);
-        
-        socket.emit('joinRoomResult', { 
-          success: true, 
-          roomId: roomId,
-          actualRoomId: roomId,
-          role: 'player',
-          needsCountrySelection: true
-        });
+        // Player not found in memory - check database for existing assignment
+        console.log(`   Player ${userId} not found in memory - checking database...`);
+
+        let dbAssignment = null;
+        try {
+          dbAssignment = await queryDatabase('getPlayerAssignment', {
+            user_id: parseInt(userId),
+            game_id: parseInt(room.gameId)
+          });
+          console.log(`   getPlayerAssignment result:`, JSON.stringify(dbAssignment));
+        } catch (err) {
+          console.error('Error checking player assignment:', err);
+        }
+
+        if (dbAssignment && (dbAssignment.country_code || dbAssignment.country_name)) {
+          // Player has an existing assignment in database - restore them
+          const assignedCountry = dbAssignment.country_code || dbAssignment.country_name;
+          console.log(`   ✓ Found player assignment in database: ${assignedCountry}`);
+
+          // Add player back to room state
+          room.players[userId] = {
+            id: userId,
+            userId: userId,
+            playerId: dbAssignment.player_id,
+            country: assignedCountry,
+            socketId: socket.id,
+            joinedAt: Date.now(),
+            role: 'player',
+            reconnected: true
+          };
+
+          socket.emit('joinRoomResult', {
+            success: true,
+            roomId: roomId,
+            actualRoomId: roomId,
+            role: 'player',
+            reconnected: true,
+            country: dbAssignment.country_code
+          });
+
+          broadcastToRoom(roomId);
+          saveState();
+          console.log(`✅ User ${userId} restored to game ${roomId} as ${dbAssignment.country_code} from database`);
+        } else {
+          // Player has no assignment - they need to select a country
+          console.log(`   Player ${userId} not found in database - needs country selection`);
+
+          socket.emit('joinRoomResult', {
+            success: true,
+            roomId: roomId,
+            actualRoomId: roomId,
+            role: 'player',
+            needsCountrySelection: true
+          });
+        }
       }
     } else {
       socket.emit('joinRoomResult', { 
@@ -1984,15 +2433,19 @@ io.on('connection', (socket) => {
   });
   
   // Delete room (host only)
-  socket.on('deleteRoom', ({ roomId, playerid }) => {
+  socket.on('deleteRoom', ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+
     const room = globalState.rooms[roomId];
-    
+
     if (!room) {
       socket.emit('deleteRoomResult', { success: false, message: 'Room not found' });
       return;
     }
-    
-    if (room.hostId !== playerid) {
+
+    // Check using hostUserId (which is always user_id)
+    if (room.hostUserId !== id && room.hostId !== id) {
       socket.emit('deleteRoomResult', { success: false, message: 'Only host can delete room' });
       return;
     }
@@ -2012,13 +2465,19 @@ io.on('connection', (socket) => {
   
   // Join game in room
   socket.on('joinGame', async ({ roomId, userId, playerid, country }) => {
-    // Support both userId (new) and playerid (legacy)
-    const id = userId || playerid;
-    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerid=${playerid}, country=${country}`);
+    // Support both userId (new) and playerid (legacy), fall back to socket.userId from joinRoom
+    const id = userId || playerid || socket.userId;
+    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerid=${playerid}, socket.userId=${socket.userId}, resolved id=${id}, country=${country}`);
     console.log(`   Available rooms:`, Object.keys(globalState.rooms));
-    
+
+    if (!id) {
+      console.error(`❌ joinGame: No user ID available (userId=${userId}, playerid=${playerid}, socket.userId=${socket.userId})`);
+      socket.emit('joinResult', { success: false, message: 'No user ID - please log in again' });
+      return;
+    }
+
     const room = globalState.rooms[roomId];
-    
+
     if (!room) {
       console.error(`❌ Room not found: ${roomId}`);
       console.error(`   Available rooms:`, Object.keys(globalState.rooms));
@@ -2061,15 +2520,21 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Get or create player_id from database
+    // Get or create player assignment in database
     let assignedPlayerId = null;
     try {
       // Check if user already has a player assignment in this game
-      const existingAssignment = await queryDatabase('getPlayerAssignment', {
-        user_id: id,
-        game_code: roomId
-      });
-      
+      let existingAssignment = null;
+      try {
+        existingAssignment = await queryDatabase('getPlayerAssignment', {
+          user_id: parseInt(id || userId),
+          game_id: parseInt(room.gameId)
+        });
+      } catch (err) {
+        // Not found is OK - we'll create one
+        console.log(`   No existing assignment found (${err.message})`);
+      }
+
       if (existingAssignment && existingAssignment.player_id) {
         assignedPlayerId = existingAssignment.player_id;
         console.log(`   User already has player_id ${assignedPlayerId} in this game`);
@@ -2077,23 +2542,25 @@ io.on('connection', (socket) => {
         // Get next available player_id from database
         const nextPlayerId = await queryDatabase('getNextPlayerId', {});
         assignedPlayerId = nextPlayerId?.next_id || `player_${Date.now()}`;
-        
+
         console.log(`   Assigned new player_id: ${assignedPlayerId}`);
-        
+
         // Get country_id from country code
+
+        
         const countryData = await queryDatabase('getCountryByCode', { country_code: country });
-        const countryId = countryData?.country_id || null;
+const countryId = countryData?.country_id || null;
         
         // Save player assignment to database
-        await queryDatabase('createPlayerAssignment', {
+        const result = await queryDatabase('createPlayerAssignment', {
           user_id: id,
           game_code: roomId,
           player_id: assignedPlayerId,
           country_id: countryId,
           country_code: country
         });
-        
-        console.log(`   Created player assignment in database: user_id=${id}, player_id=${assignedPlayerId}, country=${country}`);
+
+        console.log(`   Created player assignment in database: user_id=${id}, player_id=${assignedPlayerId}, game_code=${roomId}, country=${country}`);
       }
     } catch (err) {
       console.error('Error managing player assignment:', err);
@@ -2204,30 +2671,32 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', async ({ roomId, playerid, skipPhase1 }) => {
+  socket.on('startGame', async ({ roomId, playerId, playerid, userId, skipPhase1 }) => {
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const id = userId || playerId || playerid;
+
     console.log('=== START GAME REQUEST ===');
     console.log('Room ID:', roomId);
-    console.log('Player ID:', playerid);
+    console.log('User ID:', id);
     console.log('Skip Phase 1:', skipPhase1 || false);
-    
+
     const room = globalState.rooms[roomId];
     if (!room) {
       console.log('ERROR: Room not found');
       socket.emit('startGameResult', { success: false, message: 'Room not found' });
       return;
     }
-    
-    // Check if user is superadmin by querying database
-    // We need to find the user by their user_id (which is playerid in our case)
+
+    // Check if user is superadmin by querying database using user_id
     let isSuperAdmin = false;
-    
+
     try {
       // Query database to get user info
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
           console.log('User found in DB:', {
@@ -2237,16 +2706,17 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', playerid);
+          console.log('User not found in database with user_id:', id);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
-    const isRoomHost = room.hostId === playerid;
+
+    // Check if user is the room host using hostUserId (which is always user_id)
+    const isRoomHost = room.hostUserId === id || room.hostId === id;
     console.log('Is superadmin:', isSuperAdmin);
-    console.log('Is room host:', isRoomHost);
+    console.log('Is room host:', isRoomHost, '| Checking id:', id, '| hostUserId:', room.hostUserId, '| hostId:', room.hostId);
     
     if (!isSuperAdmin && !isRoomHost) {
       console.log('ERROR: Not superadmin or room host');
@@ -2293,22 +2763,31 @@ io.on('connection', (socket) => {
   });
   
   // Vote on current issue
-  socket.on('vote', ({ roomId, playerid, choice }) => {
+  socket.on('vote', ({ roomId, playerId, playerid, userId, choice }) => {
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const id = userId || playerId || playerid;
+
     const room = globalState.rooms[roomId];
     if (!room || !room.gameStarted) {
       console.log('Vote rejected: room not found or game not started');
       return;
     }
-    
+
     // Check player is in game
-    if (!room.players[playerid]) {
-      console.log('Vote rejected: player not in game');
+    if (!room.players[id]) {
+      console.log(`Vote rejected: player ${id} not in game. Players:`, Object.keys(room.players));
       return;
     }
-    
+
+    // Check if player has already voted this round (prevent double-voting on tie revotes)
+    if (room.votes[id]) {
+      console.log(`Vote rejected: player ${id} has already voted this round`);
+      return;
+    }
+
     // Store vote
-    room.votes[playerid] = choice;
-    console.log(`Vote received: ${playerid} voted ${choice} in room ${roomId}`);
+    room.votes[id] = choice;
+    console.log(`Vote received: ${id} voted ${choice} in room ${roomId}`);
     
     // Check if all players have voted
     const playerids = Object.keys(room.players);
@@ -2381,6 +2860,17 @@ io.on('connection', (socket) => {
           
           room.roundScores = roundScores;
           room.gamePhase = 'results';
+
+          // Send email notification for tie result
+          const playerCount = Object.keys(room.players).length;
+          sendAdminNotification(
+            `Round ${room.currentRound} - Tie After Revotes`,
+            `All ${playerCount} players have voted in Round ${room.currentRound}, but no decision was reached after 3 voting attempts.<br><br>
+             <strong>Result:</strong> ${room.roundOutcome}<br>
+             <strong>Final Vote Tally:</strong> A: ${voteTally.a}, B: ${voteTally.b}, C: ${voteTally.c}<br><br>
+             Please log in to advance to the next round.`,
+            roomId
+          );
         }
       } else {
         // Clear winner - no tie
@@ -2488,35 +2978,49 @@ io.on('connection', (socket) => {
           timestamp: Date.now()
         });
         
-        console.log(`Round ${room.currentRound} results:`, { 
-          voteTally, 
-          winningOption: room.roundOutcome 
+        console.log(`Round ${room.currentRound} results:`, {
+          voteTally,
+          winningOption: room.roundOutcome
         });
         console.log(`✅ Saved to round history for Phase 2 calculations`);
+
+        // Send email notification to superadmin that round is ready to advance
+        const playerCount = Object.keys(room.players).length;
+        sendAdminNotification(
+          `Round ${room.currentRound} Voting Complete`,
+          `All ${playerCount} players have voted in Round ${room.currentRound}.<br><br>
+           <strong>Result:</strong> ${room.roundOutcome}<br>
+           <strong>Vote Tally:</strong> A: ${voteTally.a}, B: ${voteTally.b}, C: ${voteTally.c}<br><br>
+           Please log in to advance to the next round.`,
+          roomId
+        );
       }
     }
-    
+
     broadcastToRoom(roomId);
     saveState();
   });
   
   // Advance to next round (admin only)
-  socket.on('advanceRound', async ({ roomId, playerid }) => {
+  socket.on('advanceRound', async ({ roomId, playerId, playerid, userId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
-    console.log('🔄 Advance round request:', { roomId, playerid, roomHost: room.hostId });
-    
-    // Check if user is superadmin by querying database
+
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const id = userId || playerId || playerid;
+
+    console.log('🔄 Advance round request:', { roomId, receivedId: id, hostUserId: room.hostUserId, hostId: room.hostId });
+
+    // Check if user is superadmin by querying database using user_id
     let isSuperAdmin = false;
-    
- try {
-      // Query database to get user info
+
+    try {
+      // Query database to get user info by user_id
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
           console.log('User found in DB:', {
@@ -2526,20 +3030,22 @@ io.on('connection', (socket) => {
             isSuperAdmin
           });
         } else {
-          console.log('User not found in database with user_id:', playerid);
+          console.log('User not found in database with user_id:', id);
         }
       }
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    const isRoomHost = room.hostId === playerid;
-    console.log('Permission check:', { isSuperAdmin, isRoomHost });
-    
+
+    // Check if user is the room host using hostUserId (which is always user_id)
+    const isRoomHost = room.hostUserId === id || room.hostId === id;
+    console.log('Permission check:', { isSuperAdmin, isRoomHost, checkingId: id, hostUserId: room.hostUserId, hostId: room.hostId });
+
     // Allow either superadmin OR room host to advance round
     if (!isSuperAdmin && !isRoomHost) {
       console.log('❌ Advance round rejected - not admin or host');
-      socket.emit('advanceRoundError', { 
-        message: 'Only the game admin can advance the round.' 
+      socket.emit('advanceRoundError', {
+        message: 'Only the game admin can advance the round.'
       });
       return;
     }
@@ -2605,16 +3111,24 @@ io.on('connection', (socket) => {
     
     // Save policy to database
     try {
+      // Map game policy fields to PHP API expected fields
       const policyData = {
-        gameCode: roomId,
-        playerId: playerid,
-        year: currentYear,
+        gameId: room.gameId,
+        userId: playerid,
         round: room.currentRound,
-        ...policy,
-        submittedAt: new Date().toISOString()
+        year: currentYear,
+        interestRate: policy.centralBankRate || 0,
+        govtSpending: policy.militarySpending || 0,
+        tradePolicy: policy.tariffRate > 20 ? 'protectionist' : policy.tariffRate > 10 ? 'moderate' : 'free_trade',
+        currencyPolicy: policy.exchangeRate > 1.5 ? 'devalue' : policy.exchangeRate < 0.8 ? 'strengthen' : 'stable',
+        policyFocus: policy.isCommandEconomy ? 'command_economy' : 'market_economy',
+        rationale: `Military: ${policy.militarySpending}%, Army: ${policy.armySize || 0}, Navy: ${policy.navySize || 0}, Air: ${policy.airForceSize || 0}`,
+        gdpChange: 0,
+        inflationChange: 0,
+        pointsEarned: 0
       };
-      
-    await queryDatabase('savePolicyDecision', policyData);
+
+      await queryDatabase('savePolicy', policyData);
       console.log(`✅ Policy saved to database for ${player.country}`);
     } catch (error) {
       console.error('⚠️ Failed to save policy to database:', error);
@@ -2635,13 +3149,9 @@ io.on('connection', (socket) => {
 
     // Auto-advance if all players submitted
     if (readyCount === activePlayers && activePlayers > 0) {
-      console.log('🎯 All players have submitted policies! Auto-advancing year...');
+      console.log('🎯 All players have submitted policies!');
 
-      // Store expected year BEFORE setTimeout to detect if manual advance happened
-      const expectedYear = room.phase2.currentYear;
-      const expectedRound = room.currentRound;
-
-      // Wait a moment then auto-advance
+      // Wait a moment then check for conflicts or auto-advance
       setTimeout(async () => {
         try {
           // Re-fetch room in case state changed
@@ -2651,17 +3161,42 @@ io.on('connection', (socket) => {
             return;
           }
 
-          // Check if year was already advanced (by manual advanceYear call)
-          if (currentRoom.phase2.currentYear !== expectedYear || currentRoom.currentRound !== expectedRound) {
-            console.log(`⚠️ Year already advanced (expected ${expectedYear}, now ${currentRoom.phase2.currentYear}) - skipping auto-advance`);
-            return;
+          // Check for pending conflict zones FIRST - trigger diplomatic phase before advancing
+          // (Military conflicts take priority over economic crises)
+          const pendingConflicts = currentRoom.phase2.pendingConflictZones || {};
+          const conflictRegions = Object.keys(pendingConflicts);
+
+          console.log(`🔍 Checking for pending conflicts...`);
+          console.log(`   pendingConflictZones: ${JSON.stringify(pendingConflicts)}`);
+          console.log(`   conflictRegions: ${conflictRegions.join(', ') || 'none'}`);
+
+          if (conflictRegions.length > 0) {
+            console.log(`⚔️ Found ${conflictRegions.length} pending conflict zone(s): ${conflictRegions.join(', ')}`);
+            console.log('   Triggering diplomatic phase before year advance...');
+
+            // Mark that we're waiting for diplomatic resolutions
+            currentRoom.phase2.awaitingDiplomaticResolution = true;
+
+            // Emit diplomatic stance requirement for each conflict zone
+            conflictRegions.forEach(region => {
+              const conflict = pendingConflicts[region];
+              io.to(roomId).emit('diplomaticStanceRequired', {
+                region,
+                countries: conflict.countries,
+                deployments: conflict.deployments,
+                year: conflict.year,
+                message: `Multiple nations have forces in ${region}. Declare your diplomatic stance toward each country.`
+              });
+              console.log(`   📢 Sent diplomaticStanceRequired for ${region} to: ${conflict.countries.join(', ')}`);
+            });
+
+            broadcastToRoom(roomId);
+            saveState();
+            return; // Don't advance year yet - wait for diplomatic phase to complete
           }
 
-          // Check for crisis (now an array - check length)
-          const hasActiveCrisis = Array.isArray(currentRoom.phase2.crises.active)
-            ? currentRoom.phase2.crises.active.length > 0
-            : !!currentRoom.phase2.crises.active;
-          if (hasActiveCrisis) {
+          // Check for crisis (only if no military conflicts)
+          if (currentRoom.phase2.crises.active) {
             console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
             return;
           }
@@ -2723,101 +3258,89 @@ io.on('connection', (socket) => {
   socket.on('deployTroops', ({ roomId, playerid, deployment }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
+
     const player = room.players[playerid];
     if (!player) return;
-    
+
     // Verify the deployment is for the player's own country
     if (deployment.country !== player.country) {
       console.log('Deploy troops rejected: country mismatch');
       return;
     }
-    
-    // Initialize deployments array if doesn't exist
-    if (!room.phase2.deployments) {
-      room.phase2.deployments = [];
+
+    // Initialize cumulative deployments structure if doesn't exist
+    // Structure: { regionName: { countryName: { army: X, navy: Y, airForce: Z, total: T } } }
+    if (!room.phase2.cumulativeDeployments) {
+      room.phase2.cumulativeDeployments = {};
     }
-    
-    // Add deployment with timestamp
-    const deploymentRecord = {
+
+    // Initialize deployment history if doesn't exist
+    if (!room.phase2.deploymentHistory) {
+      room.phase2.deploymentHistory = [];
+    }
+
+    const region = deployment.region;
+    const country = deployment.country;
+    const branch = deployment.branch || 'Army';
+    const troops = parseInt(deployment.troops) || 0;
+
+    // Initialize region if doesn't exist
+    if (!room.phase2.cumulativeDeployments[region]) {
+      room.phase2.cumulativeDeployments[region] = {};
+    }
+
+    // Initialize country in region if doesn't exist
+    if (!room.phase2.cumulativeDeployments[region][country]) {
+      room.phase2.cumulativeDeployments[region][country] = {
+        army: 0,
+        navy: 0,
+        airForce: 0,
+        total: 0
+      };
+    }
+
+    // Add to cumulative deployment (not replace)
+    const branchKey = branch.toLowerCase().replace(' ', '');
+    const branchMap = { 'army': 'army', 'navy': 'navy', 'airforce': 'airForce', 'air force': 'airForce' };
+    const normalizedBranch = branchMap[branchKey] || 'army';
+
+    room.phase2.cumulativeDeployments[region][country][normalizedBranch] += troops;
+    room.phase2.cumulativeDeployments[region][country].total += troops;
+
+    // Add to deployment history for record keeping
+    room.phase2.deploymentHistory.push({
       ...deployment,
       timestamp: Date.now(),
       year: room.phase2.currentYear
-    };
-    
-    room.phase2.deployments.push(deploymentRecord);
-    
-    // Check for conflicts
-    const conflictZones = ['Eastern Europe', 'East Asia', 'Middle East', 'Southeast Asia'];
-    if (conflictZones.includes(deployment.region)) {
-      // Find if another country has troops there
-      const otherDeployments = room.phase2.deployments.filter(d => 
-        d.region === deployment.region && 
-        d.country !== deployment.country &&
-        d.year === room.phase2.currentYear
-      );
-      
-      if (otherDeployments.length > 0) {
-        // Create conflict alert
-        if (!room.phase2.conflicts) {
-          room.phase2.conflicts = [];
-        }
-        
-        const conflict = {
-          region: deployment.region,
-          countries: [deployment.country, ...otherDeployments.map(d => d.country)],
-          year: room.phase2.currentYear,
-          timestamp: Date.now(),
-          battleId: `${deployment.region}-${room.phase2.currentYear}-${Date.now()}`
-        };
-        
-        room.phase2.conflicts.push(conflict);
-        
-        console.log(`⚠️ CONFLICT ALERT: ${deployment.country} deployed to ${deployment.region} - conflict with ${otherDeployments.map(d => d.country).join(', ')}`);
-        
-        // Emit battle modal to involved countries
-        const involvedCountries = conflict.countries;
-        let sentToAnySocket = false;
+    });
 
-        involvedCountries.forEach(country => {
-          const playerEntry = Object.entries(room.players).find(([id, p]) =>
-            p.country === country || normalizeCountryName(p.country) === normalizeCountryName(country)
-          );
-          if (playerEntry) {
-            const [odName, playerData] = playerEntry;
-            if (playerData.socketId) {
-              io.to(playerData.socketId).emit('militaryConflict', {
-                message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
-                region: deployment.region,
-                countries: involvedCountries,
-                year: room.phase2.currentYear,
-                battleId: conflict.battleId,
-                yourCountry: country
-              });
-              console.log(`📨 Sent battle modal to ${country} (socket ${playerData.socketId})`);
-              sentToAnySocket = true;
-            }
-          }
-        });
+    console.log(`✅ ${country} deployed ${troops} ${branch} to ${region}`);
+    console.log(`   Cumulative in ${region}: ${JSON.stringify(room.phase2.cumulativeDeployments[region][country])}`);
 
-        // Fallback: if no sockets were found, broadcast to room
-        if (!sentToAnySocket) {
-          console.log(`⚠️ No valid sockets found - broadcasting militaryConflict to entire room`);
-          involvedCountries.forEach(country => {
-            io.to(roomId).emit('militaryConflict', {
-              message: `Military forces from ${involvedCountries.join(' and ')} have both deployed to ${deployment.region}!`,
-              region: deployment.region,
-              countries: involvedCountries,
-              year: room.phase2.currentYear,
-              battleId: conflict.battleId,
-              yourCountry: country
-            });
-          });
-        }
+    // Check for potential conflicts but DON'T trigger battle yet
+    // Store pending conflicts to be resolved after all policies submitted
+    const countriesInRegion = Object.keys(room.phase2.cumulativeDeployments[region]);
+    if (countriesInRegion.length > 1) {
+      // Multiple countries in same region - mark as potential conflict zone
+      if (!room.phase2.pendingConflictZones) {
+        room.phase2.pendingConflictZones = {};
       }
+
+      room.phase2.pendingConflictZones[region] = {
+        countries: countriesInRegion,
+        year: room.phase2.currentYear,
+        deployments: room.phase2.cumulativeDeployments[region]
+      };
+
+      console.log(`⚠️ POTENTIAL CONFLICT: Multiple countries in ${region}: ${countriesInRegion.join(', ')}`);
+
+      // Notify all players in the region about the tension (but no battle yet)
+      io.to(roomId).emit('tensionAlert', {
+        region: region,
+        countries: countriesInRegion,
+        message: `Military tension rising in ${region}! Multiple nations have forces deployed.`
+      });
     }
-    
-    console.log(`${player.country} deployed ${deployment.troops} troops to ${deployment.region}`);
 
     broadcastToRoom(roomId);
     saveState();
@@ -2999,6 +3522,366 @@ io.on('connection', (socket) => {
     saveGameToDatabase(roomId);
   });
 
+  // DIPLOMATIC STANCE: Submit stance for each country in conflict zone
+  socket.on('submitDiplomaticStance', ({ roomId, playerid, region, stances }) => {
+    const room = globalState.rooms[roomId];
+    if (!room || !room.phase2?.active) return;
+
+    const player = room.players[playerid];
+    if (!player) return;
+
+    const country = player.country;
+    console.log(`🤝 Diplomatic stance from ${country} for ${region}:`, stances);
+
+    // Initialize diplomatic stances storage
+    if (!room.phase2.diplomaticStances) {
+      room.phase2.diplomaticStances = {};
+    }
+
+    if (!room.phase2.diplomaticStances[region]) {
+      room.phase2.diplomaticStances[region] = {};
+    }
+
+    // Store this country's stances toward others
+    // stances = { "USA": "ally", "USSR": "enemy", "China": "neutral" }
+    room.phase2.diplomaticStances[region][country] = {
+      stances: stances,
+      timestamp: Date.now()
+    };
+
+    // Check if all countries in this conflict zone have submitted stances
+    const conflictZone = room.phase2.pendingConflictZones?.[region];
+    if (conflictZone) {
+      const allCountries = conflictZone.countries;
+      const submittedCountries = Object.keys(room.phase2.diplomaticStances[region]);
+      const allSubmitted = allCountries.every(c => submittedCountries.includes(c));
+
+      console.log(`   Stances submitted: ${submittedCountries.length}/${allCountries.length}`);
+
+      if (allSubmitted) {
+        console.log(`✅ All diplomatic stances submitted for ${region} - proceeding to battle phase`);
+
+        // Analyze stances to determine alliances and enemies
+        const stanceAnalysis = analyzeDiplomaticStances(room.phase2.diplomaticStances[region], allCountries);
+
+        // Create battle with stance information
+        const battleId = `${region}-${room.phase2.currentYear}-${Date.now()}`;
+        const conflict = {
+          battleId,
+          region,
+          countries: allCountries,
+          year: room.phase2.currentYear,
+          stances: room.phase2.diplomaticStances[region],
+          alliances: stanceAnalysis.alliances,
+          enemies: stanceAnalysis.enemies,
+          phase: 'battle_options', // Now waiting for attack/retreat/negotiate
+          timestamp: Date.now()
+        };
+
+        if (!room.phase2.activeConflicts) {
+          room.phase2.activeConflicts = [];
+        }
+        room.phase2.activeConflicts.push(conflict);
+
+        // Notify all countries in the conflict to select battle options
+        io.to(roomId).emit('battleOptionsRequired', {
+          battleId,
+          region,
+          countries: allCountries,
+          stances: room.phase2.diplomaticStances[region],
+          alliances: stanceAnalysis.alliances,
+          enemies: stanceAnalysis.enemies,
+          deployments: conflictZone.deployments,
+          message: `Diplomatic stances set in ${region}. Choose your military action.`
+        });
+      }
+    }
+
+    broadcastToRoom(roomId);
+    saveState();
+  });
+
+  // Helper function to analyze diplomatic stances
+  function analyzeDiplomaticStances(stances, countries) {
+    const alliances = []; // Groups of allied countries
+    const enemies = {}; // { "USA": ["USSR", "China"], "USSR": ["USA"] }
+
+    countries.forEach(country => {
+      enemies[country] = [];
+      const countryStances = stances[country]?.stances || {};
+
+      countries.forEach(otherCountry => {
+        if (country === otherCountry) return;
+
+        const stance = countryStances[otherCountry];
+        if (stance === 'enemy') {
+          enemies[country].push(otherCountry);
+        }
+      });
+    });
+
+    // Find mutual alliances (both countries mark each other as ally)
+    const processedPairs = new Set();
+    countries.forEach(country => {
+      const countryStances = stances[country]?.stances || {};
+
+      countries.forEach(otherCountry => {
+        if (country === otherCountry) return;
+        const pairKey = [country, otherCountry].sort().join('-');
+        if (processedPairs.has(pairKey)) return;
+        processedPairs.add(pairKey);
+
+        const otherStances = stances[otherCountry]?.stances || {};
+        if (countryStances[otherCountry] === 'ally' && otherStances[country] === 'ally') {
+          // Mutual alliance - add to alliance groups
+          let foundGroup = false;
+          for (const group of alliances) {
+            if (group.includes(country) || group.includes(otherCountry)) {
+              if (!group.includes(country)) group.push(country);
+              if (!group.includes(otherCountry)) group.push(otherCountry);
+              foundGroup = true;
+              break;
+            }
+          }
+          if (!foundGroup) {
+            alliances.push([country, otherCountry]);
+          }
+        }
+      });
+    });
+
+    return { alliances, enemies };
+  }
+
+  // BATTLE OPTIONS: Submit attack/retreat/negotiate after stance selection
+  socket.on('submitBattleOption', ({ roomId, playerid, battleId, option, region }) => {
+    const room = globalState.rooms[roomId];
+    if (!room || !room.phase2?.active) return;
+
+    const player = room.players[playerid];
+    if (!player) return;
+
+    const country = player.country;
+    console.log(`⚔️ Battle option from ${country}: ${option} in ${region}`);
+
+    // Store battle option
+    if (!room.phase2.battleOptions) {
+      room.phase2.battleOptions = {};
+    }
+
+    if (!room.phase2.battleOptions[battleId]) {
+      room.phase2.battleOptions[battleId] = {};
+    }
+
+    room.phase2.battleOptions[battleId][country] = {
+      option, // 'attack', 'retreat', 'negotiate'
+      timestamp: Date.now()
+    };
+
+    // Find the active conflict
+    const conflict = room.phase2.activeConflicts?.find(c => c.battleId === battleId);
+    if (!conflict) {
+      console.log(`Conflict not found: ${battleId}`);
+      return;
+    }
+
+    // Check if all countries have submitted options
+    const allCountries = conflict.countries;
+    const submittedCountries = Object.keys(room.phase2.battleOptions[battleId]);
+    const allSubmitted = allCountries.every(c => submittedCountries.includes(c));
+
+    console.log(`   Battle options submitted: ${submittedCountries.length}/${allCountries.length}`);
+
+    if (allSubmitted) {
+      console.log(`✅ All battle options submitted for ${battleId} - resolving battle`);
+      resolveBattleWithStances(room, roomId, battleId, conflict);
+    }
+
+    broadcastToRoom(roomId);
+    saveState();
+  });
+
+  // Resolve battle with diplomatic stances and battle options
+  function resolveBattleWithStances(room, roomId, battleId, conflict) {
+    const options = room.phase2.battleOptions[battleId];
+    const stances = conflict.stances;
+    const deployments = room.phase2.cumulativeDeployments[conflict.region] || {};
+    const yearData = room.phase2.yearlyData[conflict.year];
+
+    const battleResult = {
+      battleId,
+      region: conflict.region,
+      year: conflict.year,
+      alliances: conflict.alliances,
+      participants: []
+    };
+
+    // Calculate combat power for each country/alliance
+    conflict.countries.forEach(country => {
+      const countryDeployment = deployments[country] || { total: 0 };
+      const countryOption = options[country]?.option || 'retreat';
+      const countryData = yearData?.[country];
+
+      // Calculate base combat power from deployed troops
+      let combatPower = countryDeployment.total;
+
+      // Add allied power
+      const countryStances = stances[country]?.stances || {};
+      conflict.countries.forEach(otherCountry => {
+        if (country === otherCountry) return;
+        const otherStances = stances[otherCountry]?.stances || {};
+        // Mutual alliance provides combat bonus
+        if (countryStances[otherCountry] === 'ally' && otherStances[country] === 'ally') {
+          const otherDeployment = deployments[otherCountry] || { total: 0 };
+          combatPower += otherDeployment.total * 0.3; // 30% of ally's power as bonus
+        }
+      });
+
+      // Modify by battle option
+      if (countryOption === 'attack') {
+        combatPower *= 1.0; // Full power
+      } else if (countryOption === 'negotiate') {
+        combatPower *= 0.4; // Reduced power but lower casualties
+      } else { // retreat
+        combatPower = 0; // No combat
+      }
+
+      battleResult.participants.push({
+        country,
+        option: countryOption,
+        deployedTroops: countryDeployment.total,
+        combatPower: Math.round(combatPower),
+        stances: countryStances
+      });
+    });
+
+    // Determine outcomes
+    const attackers = battleResult.participants.filter(p => p.option === 'attack');
+    const negotiators = battleResult.participants.filter(p => p.option === 'negotiate');
+    const retreaters = battleResult.participants.filter(p => p.option === 'retreat');
+
+    // If everyone retreats or negotiates, no battle
+    if (attackers.length === 0) {
+      battleResult.outcome = 'standoff';
+      battleResult.participants.forEach(p => {
+        p.outcome = p.option === 'retreat' ? 'withdrew safely' : 'diplomatic resolution';
+        p.casualties = 0;
+      });
+    } else {
+      // Calculate battle
+      const totalAttackPower = attackers.reduce((sum, p) => sum + p.combatPower, 0);
+
+      battleResult.participants.forEach(p => {
+        const isAttacker = p.option === 'attack';
+        const isRetreater = p.option === 'retreat';
+
+        if (isRetreater) {
+          // Retreaters take some casualties from attackers
+          const casualtyRate = attackers.length > 0 ? 0.1 : 0;
+          p.casualties = Math.floor(p.deployedTroops * casualtyRate);
+          p.outcome = 'withdrew under fire';
+        } else if (isAttacker) {
+          // Check if this attacker won
+          const isTopAttacker = p.combatPower >= Math.max(...attackers.map(a => a.combatPower));
+          if (isTopAttacker && attackers.length === 1) {
+            p.casualties = Math.floor(p.deployedTroops * 0.1);
+            p.outcome = 'military victory';
+            battleResult.winner = p.country;
+          } else if (isTopAttacker) {
+            p.casualties = Math.floor(p.deployedTroops * 0.15);
+            p.outcome = 'contested victory';
+            battleResult.winner = p.country;
+          } else {
+            p.casualties = Math.floor(p.deployedTroops * 0.25);
+            p.outcome = 'military defeat';
+          }
+        } else { // negotiate
+          p.casualties = Math.floor(p.deployedTroops * 0.05);
+          p.outcome = 'held position through diplomacy';
+        }
+
+        // Apply casualties to cumulative deployments
+        if (p.casualties > 0 && deployments[p.country]) {
+          const totalBefore = deployments[p.country].total;
+          deployments[p.country].total = Math.max(0, totalBefore - p.casualties);
+          // Distribute casualties proportionally across branches
+          const ratio = deployments[p.country].total / Math.max(1, totalBefore);
+          deployments[p.country].army = Math.floor(deployments[p.country].army * ratio);
+          deployments[p.country].navy = Math.floor(deployments[p.country].navy * ratio);
+          deployments[p.country].airForce = Math.floor(deployments[p.country].airForce * ratio);
+        }
+      });
+    }
+
+    // Store battle result
+    if (!room.phase2.battleResults) {
+      room.phase2.battleResults = [];
+    }
+    room.phase2.battleResults.push(battleResult);
+
+    // Remove from active conflicts
+    room.phase2.activeConflicts = room.phase2.activeConflicts.filter(c => c.battleId !== battleId);
+
+    // Clear pending conflict zone
+    if (room.phase2.pendingConflictZones) {
+      delete room.phase2.pendingConflictZones[conflict.region];
+    }
+
+    console.log('⚔️ Battle resolved:', JSON.stringify(battleResult, null, 2));
+
+    // Notify all players of battle result
+    io.to(roomId).emit('battleResolved', {
+      battleId,
+      result: battleResult
+    });
+
+    // Check if all conflicts are resolved - if so, continue with year advance
+    const remainingConflicts = Object.keys(room.phase2.pendingConflictZones || {}).length;
+    const activeConflictCount = (room.phase2.activeConflicts || []).length;
+
+    console.log(`   Remaining conflicts: ${remainingConflicts} pending, ${activeConflictCount} active`);
+
+    if (remainingConflicts === 0 && activeConflictCount === 0 && room.phase2.awaitingDiplomaticResolution) {
+      console.log('✅ All diplomatic/battle phases complete! Proceeding with year advance...');
+      room.phase2.awaitingDiplomaticResolution = false;
+
+      // Now do the year advance that was postponed
+      try {
+        const currentYear = room.phase2.currentYear;
+        console.log(`🔍 Post-battle year advance: currentYear=${currentYear}`);
+
+        // Check if we're already at the end (1952)
+        if (currentYear >= 1952) {
+          calculatePhase2Scores(roomId);
+          room.gamePhase = 'complete';
+          room.phase2.active = false;
+          console.log('Phase 2 complete! Final scores calculated.');
+        } else {
+          // Calculate economics
+          calculateYearEconomics(roomId);
+
+          // Advance year and round
+          room.phase2.currentYear++;
+          room.currentRound++;
+          room.readyPlayers = [];
+
+          // Check for new crisis
+          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+
+          console.log(`✅ Advanced to year ${room.phase2.currentYear} after battle resolution`);
+        }
+
+        broadcastToRoom(roomId);
+      } catch (err) {
+        console.error('❌ Post-battle year advance failed:', err);
+      }
+    }
+
+    saveState();
+    saveGamePhase2State(roomId);
+    saveGameToDatabase(roomId);
+  }
+
   // CRISIS: Submit response to active crisis
   // Now supports multiple active crises - crisisId identifies which one
   socket.on('submitCrisisResponse', ({ roomId, playerid, choiceId, crisisId }) => {
@@ -3129,12 +4012,12 @@ io.on('connection', (socket) => {
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
   // crisisId is optional - if not provided, resolves all active crises
-  socket.on('resolveCrisis', async ({ roomId, playerid, userId, crisisId }) => {
+  socket.on('resolveCrisis', async ({ roomId, playerId, playerid, userId, crisisId }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
-    // Use userId if provided (for superadmin), otherwise use playerid
-    const checkId = userId || playerid;
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const checkId = userId || playerId || playerid;
 
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -3196,26 +4079,25 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('advanceYear', async ({ roomId, playerid, userId }) => {
+  socket.on('advanceYear', async ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names - prefer userId, then playerId, then playerid
+    const checkId = userId || playerId || playerid;
+
     console.log('=== ADVANCE YEAR REQUEST ===');
     console.log('Room ID:', roomId);
-    console.log('Player ID:', playerid);
-    console.log('User ID:', userId);
-    
+    console.log('User ID:', checkId);
+
     const room = globalState.rooms[roomId];
     if (!room) {
       console.log('ERROR: Room not found');
       return;
     }
-    
+
     console.log('Room found:', room.roomName);
     console.log('Room host userId:', room.hostUserId);
     console.log('Room host Id (legacy):', room.hostId);
     console.log('Phase 2 active:', room.phase2.active);
     console.log('Current year:', room.phase2.currentYear);
-    
-    // Use userId if provided (for superadmin), otherwise use playerid
-    const checkId = userId || playerid;
     
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
@@ -3277,16 +4159,21 @@ io.on('connection', (socket) => {
       console.log('ERROR: Phase 2 not active');
       return;
     }
-    
-    // Check if there's an active crisis that needs resolution (now an array)
-    const activeCrises = Array.isArray(room.phase2.crises.active)
-      ? room.phase2.crises.active
-      : (room.phase2.crises.active ? [room.phase2.crises.active] : []);
-    if (activeCrises.length > 0) {
-      const crisisTitles = activeCrises.map(c => c.title).join(', ');
-      console.log('⚠️ Cannot advance year - active crisis must be resolved first');
+
+    // Check if there's an active crisis that needs resolution
+    // Handle both array format and single object format
+    const activeCrises = room.phase2.crises.active;
+    const hasActiveCrisis = Array.isArray(activeCrises)
+      ? activeCrises.length > 0
+      : activeCrises !== null && activeCrises !== undefined;
+
+    if (hasActiveCrisis) {
+      const crisisTitle = Array.isArray(activeCrises)
+        ? activeCrises.map(c => c.title || c.id || 'Unknown').join(', ')
+        : (activeCrises.title || activeCrises.id || 'Unknown');
+      console.log('⚠️ Cannot advance year - active crisis must be resolved first:', crisisTitle);
       socket.emit('advanceYearError', {
-        message: `Crisis in progress: ${crisisTitles}. Resolve the crisis before advancing.`
+        message: `Crisis in progress: ${crisisTitle}. Resolve the crisis before advancing.`
       });
       return;
     }
@@ -3343,19 +4230,22 @@ io.on('connection', (socket) => {
   });
 
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', async ({ roomId, playerid }) => {
+  socket.on('resetRoom', async ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
+
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
-    
+
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3363,8 +4253,9 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
-    const isRoomHost = room.hostId === playerid;
+
+    // Check using hostUserId (which is always user_id)
+    const isRoomHost = room.hostUserId === id || room.hostId === id;
     
     if (!isSuperAdmin && !isRoomHost) {
       socket.emit('resetRoomResult', { success: false, message: 'Only the game admin can reset games' });
@@ -3397,19 +4288,21 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Clear all data
-  socket.on('clearAllData', async ({ playerid, confirmCode }) => {
-    console.log('clearAllData called:', { playerid, confirmCode });
-    
+  socket.on('clearAllData', async ({ playerId, playerid, userId, confirmCode }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+    console.log('clearAllData called:', { userId: id, confirmCode });
+
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
     let dbUser = null;
-    
+
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3417,7 +4310,7 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
+
     if (!dbUser) {
       socket.emit('clearDataResult', { success: false, message: 'User not found. Please try logging out and back in.' });
       return;
@@ -3450,20 +4343,23 @@ io.on('connection', (socket) => {
     saveState();
     
     socket.emit('clearDataResult', { success: true, message: 'All data cleared except administrator account' });
-    console.log(`All data cleared by superadmin: ${playerid}`);
+    console.log(`All data cleared by superadmin: ${id}`);
   });
-  
+
   // SUPERADMIN ONLY: Delete any room
-  socket.on('adminDeleteRoom', async ({ roomId, playerid }) => {
+  socket.on('adminDeleteRoom', async ({ roomId, playerId, playerid, userId }) => {
+    // Support multiple parameter names
+    const id = userId || playerId || playerid;
+
     // Check if user is superadmin by querying database
     let isSuperAdmin = false;
-    
+
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
-      
+
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === playerid);
-        
+        const dbUser = dbUsers.find(u => u.user_id === id);
+
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3471,7 +4367,7 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
+
     if (!isSuperAdmin) {
       socket.emit('deleteRoomResult', { success: false, message: 'Administrator access required' });
       return;
@@ -3502,18 +4398,21 @@ io.on('connection', (socket) => {
   // NEW: Get available games (for regular users without active game)
   socket.on('getAvailableGames', async ({ playerId }) => {
     console.log('getAvailableGames request from playerId:', playerId);
-    
+
     const availableGames = [];
-    
-    // Get active games from database
-    const dbGames = await queryDatabase('getGames', { status: 'active' });
-    
-    if (dbGames && Array.isArray(dbGames)) {
+
+    // Get only 'lobby' status games - active games have already started and cannot be joined
+    const lobbyGames = await queryDatabase('getGames', { status: 'lobby' }) || [];
+    const dbGames = Array.isArray(lobbyGames) ? lobbyGames : [];
+
+    console.log(`Found ${dbGames.length} lobby games in database`);
+
+    if (dbGames.length > 0) {
       for (const game of dbGames) {
         const roomState = globalState.rooms[game.game_code];
-        
+
         // Only show lobby games with available slots
-        if (roomState && roomState.gamePhase === 'lobby') {
+        if (roomState && roomState.gamePhase === 'lobby' && !roomState.gameStarted) {
           const playerCount = Object.keys(roomState.players).length;
           if (playerCount < 7) {
             availableGames.push({
@@ -3526,15 +4425,33 @@ io.on('connection', (socket) => {
               hostUserId: game.host_user_id
             });
           }
+        } else if (!roomState) {
+          // Game exists in DB but not in memory - create room state for it
+          console.log(`   Game ${game.game_code} not in memory, creating room state...`);
+          const newRoomState = createGameState(game.game_code, `Game ${game.game_code}`, game.host_user_id);
+          newRoomState.gameId = game.game_id;
+          newRoomState.status = game.status;
+          newRoomState.gamePhase = 'lobby';
+          globalState.rooms[game.game_code] = newRoomState;
+
+          availableGames.push({
+            gameCode: game.game_code,
+            gameId: game.game_id,
+            status: game.status,
+            playerCount: 0,
+            availableSlots: 7,
+            createdAt: game.created_at,
+            hostUserId: game.host_user_id
+          });
         }
       }
     }
-    
+
     console.log(`Returning ${availableGames.length} available games`);
-    
-    socket.emit('availableGamesResult', { 
-      success: true, 
-      games: availableGames 
+
+    socket.emit('availableGamesResult', {
+      success: true,
+      games: availableGames
     });
   });
 
@@ -3642,7 +4559,7 @@ async function initializeFromDatabase() {
         console.log(`   ✅ Using existing state from file (has yearlyData for years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')})`);
 
         // Just update players from database in case they changed
-        const players = await queryDatabase('getPlayers', { gameCode: gameCode });
+        const players = await queryDatabase('getPlayers', { game_id: game.game_id });
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
             existingRoom.players[player.user_id] = {
@@ -3691,7 +4608,7 @@ async function initializeFromDatabase() {
       console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
 
       // Load players for this game from database
-      const players = await queryDatabase('getPlayers', { gameCode: gameCode });
+      const players = await queryDatabase('getPlayers', { game_id: game.game_id });
 
       if (players && Array.isArray(players) && players.length > 0) {
         console.log(`   Found ${players.length} player(s) in database`);

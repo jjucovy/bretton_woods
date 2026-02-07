@@ -32,6 +32,24 @@
         .leaflet-popup-content {
             margin: 16px;
         }
+
+        /* Deployment marker pulse animation */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .deployment-marker {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        /* Conflict zone warning */
+        @keyframes conflict-pulse {
+            0% { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef444466; }
+            50% { box-shadow: 0 0 20px #ef4444, 0 0 40px #ef444466; }
+            100% { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef444466; }
+        }
     </style>
 </head>
 <body>
@@ -151,12 +169,39 @@ function isCommandEconomy(country, year) {
         const socket = io();
         const { useState, useEffect } = React;
 
+        // Region coordinates for deployment visualization
+        const REGION_COORDINATES = {
+          'Western Europe': { lat: 48.8, lng: 2.3, name: 'Western Europe' },
+          'Eastern Europe': { lat: 52.2, lng: 21.0, name: 'Eastern Europe' },
+          'Middle East': { lat: 31.5, lng: 34.8, name: 'Middle East' },
+          'North Africa': { lat: 28.0, lng: 3.0, name: 'North Africa' },
+          'Sub-Saharan Africa': { lat: -2.0, lng: 23.0, name: 'Sub-Saharan Africa' },
+          'South Asia': { lat: 20.5, lng: 78.9, name: 'South Asia' },
+          'East Asia': { lat: 35.8, lng: 104.1, name: 'East Asia' },
+          'Southeast Asia': { lat: 12.8, lng: 108.0, name: 'Southeast Asia' },
+          'Pacific Islands': { lat: -5.0, lng: 152.0, name: 'Pacific Islands' },
+          'North America': { lat: 40.0, lng: -100.0, name: 'North America' },
+          'Central America': { lat: 15.0, lng: -90.0, name: 'Central America' },
+          'South America': { lat: -15.0, lng: -60.0, name: 'South America' },
+          'Caribbean': { lat: 18.0, lng: -75.0, name: 'Caribbean' },
+          'Arctic': { lat: 75.0, lng: 0.0, name: 'Arctic' },
+          'Antarctic': { lat: -75.0, lng: 0.0, name: 'Antarctic' },
+          'Korea': { lat: 37.5, lng: 127.0, name: 'Korean Peninsula' },
+          'Indochina': { lat: 16.0, lng: 108.0, name: 'Indochina' },
+          'Germany': { lat: 51.0, lng: 10.0, name: 'Germany' },
+          'Japan': { lat: 36.0, lng: 138.0, name: 'Japan' },
+          'Suez Canal': { lat: 30.5, lng: 32.3, name: 'Suez Canal Zone' },
+          'Berlin': { lat: 52.5, lng: 13.4, name: 'Berlin' }
+        };
+
         // Military Map Component using Leaflet.js
-        function MilitaryMap({ currentYear, gameState }) {
+        function MilitaryMap({ currentYear, gameState, playerCountry, socket, roomId, playerId }) {
           const [militaryData, setMilitaryData] = useState(null);
           const [selectedBase, setSelectedBase] = useState(null);
+          const [selectedRegion, setSelectedRegion] = useState(null);
           const mapRef = React.useRef(null);
           const leafletMapRef = React.useRef(null);
+          const deploymentMarkersRef = React.useRef([]);
 
           useEffect(() => {
             fetch('/military-deployments.json')
@@ -268,6 +313,85 @@ function isCommandEconomy(country, year) {
             };
           }, [militaryData]);
 
+          // Update map with player deployments
+          useEffect(() => {
+            if (!leafletMapRef.current || !gameState?.phase2?.deployments) return;
+
+            const map = leafletMapRef.current;
+            const countryColors = {
+              USA: '#3b82f6', UK: '#ef4444', USSR: '#a855f7',
+              France: '#f59e0b', China: '#22c55e', India: '#f97316', Argentina: '#06b6d4'
+            };
+
+            // Clear old deployment markers
+            deploymentMarkersRef.current.forEach(marker => map.removeLayer(marker));
+            deploymentMarkersRef.current = [];
+
+            // Add markers for player deployments
+            gameState.phase2.deployments.forEach(deployment => {
+              const regionCoords = REGION_COORDINATES[deployment.region];
+              if (!regionCoords) return;
+
+              const color = countryColors[deployment.country] || '#64748b';
+              // Offset slightly so multiple deployments to same region don't stack
+              const offset = (Math.random() - 0.5) * 3;
+
+              const icon = L.divIcon({
+                html: `
+                  <div class="deployment-marker" style="
+                    width: 24px;
+                    height: 24px;
+                    background: ${color};
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 0 10px ${color}, 0 0 20px ${color}66;
+                    animation: pulse 1.5s ease-in-out infinite;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                  ">
+                    ${deployment.branch === 'Army' ? '🪖' : deployment.branch === 'Navy' ? '⚓' : '✈️'}
+                  </div>
+                  <div style="
+                    position: absolute;
+                    top: 28px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: ${color};
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    white-space: nowrap;
+                  ">${deployment.country}: ${(deployment.troops/1000).toFixed(0)}K</div>
+                `,
+                className: '',
+                iconSize: [24, 50],
+                iconAnchor: [12, 12]
+              });
+
+              const marker = L.marker(
+                [regionCoords.lat + offset, regionCoords.lng + offset],
+                { icon }
+              ).addTo(map).bindPopup(`
+                <div style="min-width: 180px;">
+                  <h3 style="margin: 0 0 8px 0; color: ${color};">
+                    ${deployment.branch === 'Army' ? '🪖' : deployment.branch === 'Navy' ? '⚓' : '✈️'}
+                    ${deployment.country} Deployment
+                  </h3>
+                  <p><strong>Region:</strong> ${deployment.region}</p>
+                  <p><strong>Branch:</strong> ${deployment.branch}</p>
+                  <p><strong>Troops:</strong> ${deployment.troops.toLocaleString()}</p>
+                  <p><strong>Year:</strong> ${deployment.year || currentYear}</p>
+                </div>
+              `);
+
+              deploymentMarkersRef.current.push(marker);
+            });
+          }, [gameState?.phase2?.deployments, currentYear]);
+
           if (!militaryData) {
             return (
               <div style={{ background: 'white', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
@@ -369,17 +493,50 @@ function isCommandEconomy(country, year) {
           const [troopCount, setTroopCount] = useState(50000);
           const [deploymentLog, setDeploymentLog] = useState([]);
 
+          // Strategic regions with hotspots and deployment costs
+          const strategicRegions = {
+            'Western Europe': { cost: 100, hotspot: false, description: 'NATO territory, Marshall Plan zone' },
+            'Eastern Europe': { cost: 150, hotspot: true, description: '⚠️ Soviet sphere - risk of conflict' },
+            'Germany': { cost: 80, hotspot: true, description: '⚠️ Divided occupation zones' },
+            'Berlin': { cost: 200, hotspot: true, description: '🔥 FLASHPOINT - Deep in Soviet zone' },
+            'Middle East': { cost: 180, hotspot: true, description: '⚠️ Oil resources, Suez Canal' },
+            'Suez Canal': { cost: 150, hotspot: true, description: '⚠️ Strategic chokepoint' },
+            'Korea': { cost: 250, hotspot: true, description: '🔥 FLASHPOINT - 38th parallel divide' },
+            'Indochina': { cost: 220, hotspot: true, description: '⚠️ French colonial war zone' },
+            'South Asia': { cost: 120, hotspot: false, description: 'India/Pakistan region' },
+            'East Asia': { cost: 200, hotspot: true, description: '⚠️ China, Japan, Taiwan' },
+            'Southeast Asia': { cost: 180, hotspot: false, description: 'Colonial transitions' },
+            'Pacific Islands': { cost: 150, hotspot: false, description: 'US naval dominance' },
+            'North America': { cost: 50, hotspot: false, description: 'US/Canada homeland' },
+            'Central America': { cost: 100, hotspot: false, description: 'US sphere of influence' },
+            'South America': { cost: 120, hotspot: false, description: 'Neutral, Argentine influence' },
+            'Caribbean': { cost: 80, hotspot: false, description: 'US naval bases' },
+            'North Africa': { cost: 140, hotspot: false, description: 'French colonies' },
+            'Sub-Saharan Africa': { cost: 160, hotspot: false, description: 'European colonies' }
+          };
+
+          // Calculate deployment cost
+          const getDeploymentCost = () => {
+            if (!selectedRegion) return 0;
+            const regionData = strategicRegions[selectedRegion];
+            const baseCost = regionData?.cost || 100;
+            const branchMultiplier = selectedBranch === 'Army' ? 1 : selectedBranch === 'Navy' ? 1.5 : 2;
+            return Math.round(baseCost * (troopCount / 50000) * branchMultiplier);
+          };
+
+          // Get current deployments for this country
+          const myDeployments = gameState?.phase2?.deployments?.filter(d => d.country === playerCountry) || [];
+
           const handleDeploy = () => {
-            if (!selectedRegion) {
-              // Validation: must select a region
-              return;
-            }
+            if (!selectedRegion) return;
 
             const deployment = {
               country: playerCountry,
               region: selectedRegion,
               branch: selectedBranch,
               troops: troopCount,
+              cost: getDeploymentCost(),
+              year: gameState?.phase2?.currentYear,
               timestamp: Date.now()
             };
 
@@ -394,18 +551,12 @@ function isCommandEconomy(country, year) {
               time: new Date().toLocaleTimeString()
             }]);
 
-            // Reset
             setSelectedRegion('');
             setSelectedBranch('Army');
             setTroopCount(50000);
           };
 
-          const regions = [
-            'Western Europe', 'Eastern Europe', 'Middle East', 'North Africa',
-            'Sub-Saharan Africa', 'South Asia', 'East Asia', 'Southeast Asia',
-            'Pacific Islands', 'North America', 'Central America', 'South America',
-            'Caribbean', 'Arctic', 'Antarctic'
-          ];
+          const regions = Object.keys(strategicRegions);
 
           return (
             <div style={{
@@ -419,6 +570,34 @@ function isCommandEconomy(country, year) {
                 ⚔️ Deploy Your Troops - {playerCountry}
               </h2>
 
+              {/* Current Deployments Summary */}
+              {myDeployments.length > 0 && (
+                <div style={{
+                  marginBottom: '20px',
+                  padding: '12px',
+                  background: '#f0fdf4',
+                  borderRadius: '8px',
+                  border: '1px solid #86efac'
+                }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#166534' }}>
+                    📍 Your Active Deployments ({myDeployments.length})
+                  </div>
+                  <div style={{ fontSize: '0.85rem', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {myDeployments.map((d, idx) => (
+                      <span key={idx} style={{
+                        background: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid #86efac'
+                      }}>
+                        {d.branch === 'Army' ? '🪖' : d.branch === 'Navy' ? '⚓' : '✈️'}
+                        {d.region}: {(d.troops/1000).toFixed(0)}K
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
                   Deploy To Region
@@ -430,15 +609,46 @@ function isCommandEconomy(country, year) {
                     width: '100%',
                     padding: '12px',
                     borderRadius: '6px',
-                    border: '2px solid #e2e8f0',
-                    fontSize: '1rem'
+                    border: selectedRegion && strategicRegions[selectedRegion]?.hotspot
+                      ? '2px solid #ef4444'
+                      : '2px solid #e2e8f0',
+                    fontSize: '1rem',
+                    background: selectedRegion && strategicRegions[selectedRegion]?.hotspot
+                      ? '#fef2f2'
+                      : 'white'
                   }}
                 >
-                  <option value="">Choose a region...</option>
-                  {regions.map(region => (
-                    <option key={region} value={region}>{region}</option>
-                  ))}
+                  <option value="">Choose a strategic region...</option>
+                  {regions.map(region => {
+                    const data = strategicRegions[region];
+                    return (
+                      <option key={region} value={region}>
+                        {data.hotspot ? '⚠️ ' : ''}{region} (Cost: ${data.cost})
+                      </option>
+                    );
+                  })}
                 </select>
+
+                {/* Region Info */}
+                {selectedRegion && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '10px',
+                    background: strategicRegions[selectedRegion]?.hotspot ? '#fef2f2' : '#f8fafc',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    border: strategicRegions[selectedRegion]?.hotspot ? '1px solid #fecaca' : '1px solid #e2e8f0'
+                  }}>
+                    <div style={{ color: strategicRegions[selectedRegion]?.hotspot ? '#dc2626' : '#64748b' }}>
+                      {strategicRegions[selectedRegion]?.description}
+                    </div>
+                    {strategicRegions[selectedRegion]?.hotspot && (
+                      <div style={{ marginTop: '6px', color: '#dc2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        ⚠️ Deploying here may trigger military confrontation!
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Military Branch Selection */}
@@ -488,24 +698,51 @@ function isCommandEconomy(country, year) {
               </div>
 
               {/* Deploy Button */}
+              {/* Deployment Cost Summary */}
+              {selectedRegion && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px',
+                  background: '#fef3c7',
+                  borderRadius: '8px',
+                  border: '1px solid #fbbf24',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontWeight: 'bold', color: '#92400e' }}>
+                    💰 Deployment Cost:
+                  </span>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#dc2626' }}>
+                    ${getDeploymentCost().toLocaleString()}M
+                  </span>
+                </div>
+              )}
+
               <button
                 onClick={handleDeploy}
+                disabled={!selectedRegion}
                 style={{
                   width: '100%',
                   padding: '16px',
-                  background: '#dc2626',
+                  background: selectedRegion ? (strategicRegions[selectedRegion]?.hotspot ? '#dc2626' : '#16a34a') : '#94a3b8',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
                   fontSize: '1.1rem',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
-                  marginBottom: '20px'
+                  cursor: selectedRegion ? 'pointer' : 'not-allowed',
+                  marginBottom: '20px',
+                  transition: 'all 0.2s'
                 }}
-                onMouseOver={(e) => e.currentTarget.style.background = '#b91c1c'}
-                onMouseOut={(e) => e.currentTarget.style.background = '#dc2626'}
+                onMouseOver={(e) => selectedRegion && (e.currentTarget.style.opacity = '0.9')}
+                onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
               >
-                ⚔️ Deploy Troops
+                {selectedRegion
+                  ? (strategicRegions[selectedRegion]?.hotspot
+                    ? `⚠️ Deploy to ${selectedRegion} (HOTSPOT)`
+                    : `⚔️ Deploy to ${selectedRegion}`)
+                  : '⚔️ Select a Region to Deploy'}
               </button>
 
               {/* Deployment Log */}
@@ -2045,6 +2282,14 @@ function YearEndBattlePhase({
           const [showBattleResultModal, setShowBattleResultModal] = useState(false);
           const [battleResultData, setBattleResultData] = useState(null);
 
+          // Diplomatic stance and battle options state
+          const [showDiplomaticModal, setShowDiplomaticModal] = useState(false);
+          const [diplomaticConflict, setDiplomaticConflict] = useState(null);
+          const [diplomaticStances, setDiplomaticStances] = useState({});
+          const [showBattleOptionsModal, setShowBattleOptionsModal] = useState(false);
+          const [battleOptionsData, setBattleOptionsData] = useState(null);
+          const [tensionAlerts, setTensionAlerts] = useState([]);
+
           // Check for existing session
           useEffect(() => {
             const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
@@ -2064,6 +2309,42 @@ function YearEndBattlePhase({
             socket.on('connect', () => {
               setConnected(true);
               console.log('Connected to server');
+
+              // Auto-rejoin game if user has saved session and game room
+              const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom');
+              const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
+
+              if (savedPlayerId && savedGameRoom) {
+                console.log('Auto-rejoining game:', savedGameRoom, 'as user:', savedPlayerId);
+                window.actualRoomId = savedGameRoom;
+                setCurrentRoomId(savedGameRoom);
+                socket.emit('joinRoom', { roomId: savedGameRoom, userId: savedPlayerId });
+              } else if (savedPlayerId && !savedGameRoom) {
+                // User is logged in but not in a game - show game selection
+                console.log('User logged in but not in a game - showing game selection');
+                if (savedUserRole !== 'superadmin') {
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
+                  socket.emit('getAvailableGames', { playerId: savedPlayerId });
+                  socket.once('availableGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) {
+                      setAvailableGames(games || []);
+                    }
+                  });
+                } else {
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
+                  socket.emit('getActiveGames', { playerId: savedPlayerId });
+                  socket.once('activeGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) {
+                      setAvailableGames(games || []);
+                    }
+                  });
+                }
+              }
             });
 
             socket.on('disconnect', () => {
@@ -2174,6 +2455,11 @@ function YearEndBattlePhase({
                   setPlayerCountry(country);
                   sessionStorage.setItem('brettonWoodsCountry', country);
                 }
+                // Save game room to session for auto-rejoin on refresh
+                if (window.actualRoomId) {
+                  sessionStorage.setItem('brettonWoodsGameRoom', window.actualRoomId);
+                  console.log('   Saved game room to session:', window.actualRoomId);
+                }
               }
             });
             
@@ -2203,8 +2489,11 @@ function YearEndBattlePhase({
 
             socket.on('militaryConflict', (conflictData) => {
               console.log('🎖️ Battle Modal Trigger: Military conflict detected', conflictData);
+              console.log('🎖️ Current showBattleModal state before:', showBattleModal);
+              alert(`⚔️ MILITARY CONFLICT!\n${conflictData.message}\nRegion: ${conflictData.region}`);
               setMilitaryConflict(conflictData);
               setShowBattleModal(true);
+              console.log('🎖️ States set - modal should appear');
             });
             
             socket.on('battleResolved', (data) => {
@@ -2215,6 +2504,8 @@ function YearEndBattlePhase({
               // Close the battle decision modal
               setShowBattleModal(false);
               setMilitaryConflict(null);
+              setShowBattleOptionsModal(false);
+              setBattleOptionsData(null);
 
               // Show the battle results modal
               if (data.result) {
@@ -2225,6 +2516,45 @@ function YearEndBattlePhase({
               } else {
                 console.error('⚔️ No result data in battleResolved event!');
               }
+            });
+
+            // Diplomatic stance required - triggered after all policies submitted
+            socket.on('diplomaticStanceRequired', (data) => {
+              console.log('🤝 Diplomatic stance required:', data);
+              // Only show modal if this player's country is in the conflict
+              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsCountry');
+              console.log('🤝 My country:', myCountry, 'Countries in conflict:', data.countries);
+              if (myCountry && data.countries.includes(myCountry)) {
+                console.log('🤝 Showing diplomatic modal for', myCountry);
+                setDiplomaticStances({}); // Reset stances for new conflict
+                setDiplomaticConflict(data);
+                setShowDiplomaticModal(true);
+              } else {
+                console.log('🤝 Not showing modal - country not in conflict or no country set');
+              }
+            });
+
+            // Battle options required - after all stances submitted
+            socket.on('battleOptionsRequired', (data) => {
+              console.log('⚔️ Battle options required:', data);
+              const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsCountry');
+              console.log('⚔️ My country:', myCountry, 'Countries in conflict:', data.countries);
+              if (myCountry && data.countries.includes(myCountry)) {
+                console.log('⚔️ Showing battle options modal for', myCountry);
+                setBattleOptionsData(data);
+                setShowBattleOptionsModal(true);
+                setShowDiplomaticModal(false); // Close diplomatic modal
+              }
+            });
+
+            // Tension alert - warning about military buildup
+            socket.on('tensionAlert', (data) => {
+              console.log('⚠️ Tension alert:', data);
+              setTensionAlerts(prev => [...prev, { ...data, id: Date.now() }]);
+              // Auto-dismiss after 5 seconds
+              setTimeout(() => {
+                setTensionAlerts(prev => prev.filter(a => a.id !== data.id));
+              }, 5000);
             });
 
             return () => {
@@ -2240,8 +2570,11 @@ function YearEndBattlePhase({
               socket.off('policySubmitted');
               socket.off('militaryConflict');
               socket.off('battleResolved');
+              socket.off('diplomaticStanceRequired');
+              socket.off('battleOptionsRequired');
+              socket.off('tensionAlert');
             };
-          }, [playerId, isAuthenticated]);
+          }, [playerId, isAuthenticated, playerCountry]);
 
           // Authentication handlers
           const handleRegister = (e) => {
@@ -2249,24 +2582,59 @@ function YearEndBattlePhase({
             const formData = new FormData(e.target);
             const username = formData.get('username');
             const password = formData.get('password');
+            const email = formData.get('email');
 
-            socket.emit('register', { username, password });
+            socket.emit('register', { username, password, email });
             
-            socket.once('registerResult', ({ success, playerId: newPlayerId, role, message }) => {
+            socket.once('registerResult', ({ success, userId: newUserId, role, message }) => {
               if (success) {
                 setUsername(username);
-                setPlayerId(newPlayerId);
+                setPlayerId(newUserId);
                 setUserRole(role || 'player');
                 setIsAuthenticated(true);
                 sessionStorage.setItem('brettonWoodsUsername', username);
-                sessionStorage.setItem('brettonWoodsPlayerId', newPlayerId);
+                sessionStorage.setItem('brettonWoodsPlayerId', newUserId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
-                
-                // For new players, show game selection
-                console.log('Registration successful. Showing game selection...');
-                
+
+                console.log('Registration successful. Role:', role);
+
+                // For superadmin, show all games to observe
+                if (role === 'superadmin') {
+                  console.log('Superadmin registered - fetching all active games');
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
+
+                  socket.emit('getActiveGames', { playerId: newUserId });
+                  socket.once('activeGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) {
+                      setAvailableGames(games || []);
+                    }
+                  });
+                  return;
+                }
+
+                // For new players, show game selection (fetch available lobby games)
+                console.log('New player registered. Fetching available games...');
+                setShowGameSelection(true);
+                setLoadingGames(true);
+
+                socket.emit('getAvailableGames', { playerId: newUserId });
+                socket.once('availableGamesResult', ({ success, games, message: gamesMessage }) => {
+                  setLoadingGames(false);
+                  console.log('Available games result:', { success, games, gamesMessage });
+                  if (success) {
+                    setAvailableGames(games || []);
+                    console.log('Available games loaded:', games);
+                  } else {
+                    console.error('Failed to load games:', gamesMessage);
+                    setAvailableGames([]);
+                  }
+                });
+
               } else {
                 console.error('Registration failed:', message);
+                alert('Registration failed: ' + (message || 'Unknown error'));
               }
             });
           };
@@ -2279,8 +2647,8 @@ function YearEndBattlePhase({
 
             socket.emit('login', { username, password });
             
-            socket.once('loginResult', ({ success, userId, role, message, activeGame }) => {
-              
+            socket.once('loginResult', ({ success, userId, role, message, activeGame, availableGames: loginAvailableGames }) => {
+
               if (success) {
                 setUsername(username);
                 setPlayerId(userId);
@@ -2289,8 +2657,10 @@ function YearEndBattlePhase({
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', userId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
-                
+
                 console.log('Login successful. Role:', role);
+                console.log('Available games from login:', loginAvailableGames?.length || 0);
+
                 // SUPERADMIN: Show game selection screen (all games, any phase)
                 if (role === 'superadmin') {
                   console.log('Superadmin logged in - fetching all active games');
@@ -2337,20 +2707,28 @@ function YearEndBattlePhase({
                 // REGULAR PLAYER WITHOUT ACTIVE GAME: Show available games
                 console.log('Player has no active game - showing available games');
                 setShowGameSelection(true);
-                setLoadingGames(true);
-                
-                socket.emit('getAvailableGames', { playerId: userId });
-                socket.once('availableGamesResult', ({ success, games, message }) => {
+
+                // Use available games from login result if provided
+                if (loginAvailableGames && loginAvailableGames.length > 0) {
+                  console.log('Using available games from login result:', loginAvailableGames);
+                  setAvailableGames(loginAvailableGames);
                   setLoadingGames(false);
-                  console.log('Available games result:', { success, games, message });
-                  if (success) {
-                    setAvailableGames(games || []);
-                    console.log('Available games loaded:', games);
-                  } else {
-                    console.error('Failed to load games:', message);
-                    setAvailableGames([]);
-                  }
-                });
+                } else {
+                  // Fetch from server if not provided in login result
+                  setLoadingGames(true);
+                  socket.emit('getAvailableGames', { playerId: userId });
+                  socket.once('availableGamesResult', ({ success, games, message }) => {
+                    setLoadingGames(false);
+                    console.log('Available games result:', { success, games, message });
+                    if (success) {
+                      setAvailableGames(games || []);
+                      console.log('Available games loaded:', games);
+                    } else {
+                      console.error('Failed to load games:', message);
+                      setAvailableGames([]);
+                    }
+                  });
+                }
 
               } else {
                 console.log('Login failed:', message);
@@ -2418,14 +2796,25 @@ function YearEndBattlePhase({
 
           // Helper: Convert country code to name used in voting options
           const getCountryNameForVoting = (countryCode) => {
+            // Normalize country codes to match scores object keys
             const codeToName = {
               'USA': 'USA',
+              'US': 'USA',
               'UK': 'UK',
+              'GB': 'UK',
+              'GBR': 'UK',
               'USS': 'USSR',
+              'USSR': 'USSR',
+              'SUN': 'USSR',
+              'SOV': 'USSR',
               'FRA': 'France',
+              'France': 'France',
               'CHN': 'China',
+              'China': 'China',
               'IND': 'India',
-              'ARG': 'Argentina'
+              'India': 'India',
+              'ARG': 'Argentina',
+              'Argentina': 'Argentina'
             };
             return codeToName[countryCode] || countries[countryCode]?.name || countryCode;
           };
@@ -2827,6 +3216,27 @@ function YearEndBattlePhase({
                       />
                     </div>
 
+                    {showRegister && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          name="email"
+                          required
+                          placeholder="your@email.com"
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            border: '2px solid #e2e8f0',
+                            borderRadius: '6px',
+                            fontSize: '1rem'
+                          }}
+                        />
+                      </div>
+                    )}
+
                     <button type="submit" className="btn-primary" style={{ width: '100%' }}>
                       {showRegister ? 'Register' : 'Login'}
                     </button>
@@ -2878,9 +3288,12 @@ function YearEndBattlePhase({
 
           // Main Game View
           const playerList = gameState?.players ? Object.values(gameState.players) : [];
+          console.log('🎮 Player list for filtering:', playerList.map(p => ({ id: p.id, country: p.country })));
+          console.log('🎮 Countries keys:', Object.keys(countries));
           const availableCountries = Object.keys(countries).filter(
             country => !playerList.some(p => p.country === country)
           );
+          console.log('🎮 Available countries after filter:', availableCountries);
 
           return (
             <div className="container">
@@ -4614,12 +5027,12 @@ function YearEndBattlePhase({
                                       )}
                                     </div>
                                   </div>
-                                  <div style={{ 
-                                    fontWeight: 'bold', 
+                                  <div style={{
+                                    fontWeight: 'bold',
                                     fontSize: '1.5rem',
                                     color: idx === 0 ? '#92400e' : '#1e293b'
                                   }}>
-                                    {score} pts
+                                    {(typeof score === 'number' && !isNaN(score)) ? score : 0} pts
                                   </div>
                                 </div>
                               ))}
@@ -4645,38 +5058,38 @@ function YearEndBattlePhase({
                                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #3b82f6' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>GDP Growth</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.gdp > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.gdp > 0 ? '+' : ''}{breakdown.gdp} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.gdp || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.gdp || 0) > 0 ? '+' : ''}{breakdown.gdp || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #f59e0b' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Inflation Control</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.inflation > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.inflation > 0 ? '+' : ''}{breakdown.inflation} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.inflation || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.inflation || 0) > 0 ? '+' : ''}{breakdown.inflation || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Employment</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.unemployment > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.unemployment > 0 ? '+' : ''}{breakdown.unemployment} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.unemployment || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.unemployment || 0) > 0 ? '+' : ''}{breakdown.unemployment || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #10b981' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Trade Balance</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.trade > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.trade > 0 ? '+' : ''}{breakdown.trade} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.trade || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.trade || 0) > 0 ? '+' : ''}{breakdown.trade || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #8b5cf6' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Stability</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.stability > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.stability > 0 ? '+' : ''}{breakdown.stability} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.stability || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.stability || 0) > 0 ? '+' : ''}{breakdown.stability || 0} pts
                                       </div>
                                     </div>
                                     <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '6px', borderLeft: '3px solid #f59e0b' }}>
                                       <div style={{ fontSize: '0.8rem', color: '#78350f', marginBottom: '4px', fontWeight: 'bold' }}>Bretton Woods</div>
-                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: breakdown.brettonWoods > 0 ? '#16a34a' : '#dc2626' }}>
-                                        {breakdown.brettonWoods > 0 ? '+' : ''}{breakdown.brettonWoods} pts
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.brettonWoods || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                        {(breakdown.brettonWoods || 0) > 0 ? '+' : ''}{breakdown.brettonWoods || 0} pts
                                       </div>
                                     </div>
                                   </div>
@@ -4829,29 +5242,60 @@ function YearEndBattlePhase({
 
                     {userRole !== 'superadmin' && !playerCountry && (
                       <div>
-                        <h3>Select Your Country</h3>
-                        <div className="country-grid">
-                          {availableCountries.map(key => {
-                            const country = countries[key];
-                            if (!country) return null;
-                            return (
-                              <div 
-                                key={key} 
-                                className={`country-card ${country.color}`}
-                                onClick={() => handleJoinGame(key)}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <h3>{country.name}</h3>
-                                <p style={{ fontSize: '0.875rem', marginBottom: '12px', opacity: '0.9' }}>
-                                  {country.economicPosition}
-                                </p>
-                                <p style={{ fontSize: '0.75rem', opacity: '0.8' }}>
-                                  {country.role}
-                                </p>
-                              </div>
-                            );
-                          })}
+                        <div style={{
+                          padding: '16px',
+                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                          borderRadius: '8px',
+                          marginBottom: '20px',
+                          border: '2px solid #f59e0b'
+                        }}>
+                          <h3 style={{ margin: '0 0 8px 0', color: '#92400e' }}>
+                            Select Your Country
+                          </h3>
+                          <p style={{ margin: 0, color: '#78350f', fontSize: '0.9rem' }}>
+                            Choose a country to represent at the Bretton Woods Conference.
+                            {availableCountries.length === 0
+                              ? ' No countries are currently available.'
+                              : ` ${availableCountries.length} of 7 countries available.`}
+                          </p>
                         </div>
+                        {availableCountries.length > 0 ? (
+                          <div className="country-grid">
+                            {availableCountries.map(key => {
+                              const country = countries[key];
+                              if (!country) return null;
+                              return (
+                                <div
+                                  key={key}
+                                  className={`country-card ${country.color}`}
+                                  onClick={() => handleJoinGame(key)}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  <h3>{country.name}</h3>
+                                  <p style={{ fontSize: '0.875rem', marginBottom: '12px', opacity: '0.9' }}>
+                                    {country.economicPosition}
+                                  </p>
+                                  <p style={{ fontSize: '0.75rem', opacity: '0.8' }}>
+                                    {country.role}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div style={{
+                            padding: '40px',
+                            textAlign: 'center',
+                            background: '#f1f5f9',
+                            borderRadius: '8px',
+                            color: '#64748b'
+                          }}>
+                            <div style={{ fontSize: '2rem', marginBottom: '16px' }}>🏳️</div>
+                            <p style={{ margin: 0 }}>
+                              All countries have been taken. Please wait for another game or check back later.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -5175,6 +5619,341 @@ function YearEndBattlePhase({
                         Close
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Diplomatic Stance Modal */}
+                {showDiplomaticModal && diplomaticConflict && (() => {
+                  const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsCountry');
+                  const otherCountries = diplomaticConflict.countries.filter(c => c !== myCountry);
+
+                  return (
+                    <div style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'rgba(0,0,0,0.8)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 1002
+                    }}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%)',
+                        borderRadius: '16px',
+                        padding: '24px',
+                        maxWidth: '600px',
+                        width: '90%',
+                        border: '2px solid #8b5cf6',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+                      }}>
+                        <h2 style={{ color: '#c4b5fd', margin: '0 0 16px 0', textAlign: 'center' }}>
+                          🤝 Diplomatic Stance - {diplomaticConflict.region}
+                        </h2>
+
+                        <div style={{
+                          background: 'rgba(139, 92, 246, 0.1)',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          marginBottom: '16px',
+                          border: '1px solid rgba(139, 92, 246, 0.3)'
+                        }}>
+                          <p style={{ color: '#d1d5db', margin: 0, fontSize: '0.95rem' }}>
+                            {diplomaticConflict.message}
+                          </p>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                          <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '12px' }}>
+                            Select your diplomatic stance toward each nation:
+                          </p>
+
+                          {otherCountries.map(country => (
+                            <div key={country} style={{
+                              background: 'rgba(255,255,255,0.05)',
+                              borderRadius: '8px',
+                              padding: '12px',
+                              marginBottom: '8px'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ color: 'white', fontWeight: 'bold' }}>{country}</span>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={() => setDiplomaticStances(prev => ({ ...prev, [country]: 'ally' }))}
+                                    style={{
+                                      padding: '6px 12px',
+                                      background: diplomaticStances[country] === 'ally' ? '#22c55e' : '#374151',
+                                      color: 'white',
+                                      border: diplomaticStances[country] === 'ally' ? '2px solid #86efac' : '2px solid transparent',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem'
+                                    }}
+                                  >
+                                    🤝 Ally
+                                  </button>
+                                  <button
+                                    onClick={() => setDiplomaticStances(prev => ({ ...prev, [country]: 'neutral' }))}
+                                    style={{
+                                      padding: '6px 12px',
+                                      background: diplomaticStances[country] === 'neutral' ? '#6b7280' : '#374151',
+                                      color: 'white',
+                                      border: diplomaticStances[country] === 'neutral' ? '2px solid #9ca3af' : '2px solid transparent',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem'
+                                    }}
+                                  >
+                                    🔘 Neutral
+                                  </button>
+                                  <button
+                                    onClick={() => setDiplomaticStances(prev => ({ ...prev, [country]: 'enemy' }))}
+                                    style={{
+                                      padding: '6px 12px',
+                                      background: diplomaticStances[country] === 'enemy' ? '#dc2626' : '#374151',
+                                      color: 'white',
+                                      border: diplomaticStances[country] === 'enemy' ? '2px solid #fca5a5' : '2px solid transparent',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem'
+                                    }}
+                                  >
+                                    ⚔️ Enemy
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            // Check all stances are set
+                            const allSet = otherCountries.every(c => diplomaticStances[c]);
+                            if (!allSet) {
+                              alert('Please select a stance for each country');
+                              return;
+                            }
+
+                            console.log('🤝 Submitting diplomatic stances:', diplomaticStances);
+                            socket.emit('submitDiplomaticStance', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              region: diplomaticConflict.region,
+                              stances: diplomaticStances
+                            });
+                            setShowDiplomaticModal(false);
+                            setDiplomaticConflict(null);
+                            setDiplomaticStances({});
+                          }}
+                          disabled={!otherCountries.every(c => diplomaticStances[c])}
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: otherCountries.every(c => diplomaticStances[c]) ? '#8b5cf6' : '#374151',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: otherCountries.every(c => diplomaticStances[c]) ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Submit Diplomatic Stances
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Battle Options Modal */}
+                {showBattleOptionsModal && battleOptionsData && (
+                  <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1003
+                  }}>
+                    <div style={{
+                      background: 'linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)',
+                      borderRadius: '16px',
+                      padding: '24px',
+                      maxWidth: '600px',
+                      width: '90%',
+                      border: '2px solid #dc2626',
+                      boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+                    }}>
+                      <h2 style={{ color: '#fca5a5', margin: '0 0 16px 0', textAlign: 'center' }}>
+                        ⚔️ Battle Options - {battleOptionsData.region}
+                      </h2>
+
+                      <div style={{
+                        background: 'rgba(220, 38, 38, 0.1)',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        marginBottom: '16px',
+                        border: '1px solid rgba(220, 38, 38, 0.3)'
+                      }}>
+                        <p style={{ color: '#d1d5db', margin: 0, fontSize: '0.95rem' }}>
+                          {battleOptionsData.message}
+                        </p>
+
+                        {battleOptionsData.alliances && battleOptionsData.alliances.length > 0 && (
+                          <div style={{ marginTop: '8px', fontSize: '0.85rem' }}>
+                            <span style={{ color: '#22c55e' }}>Alliances: </span>
+                            <span style={{ color: '#86efac' }}>
+                              {battleOptionsData.alliances.map(a => a.join(' + ')).join(' | ')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '16px', textAlign: 'center' }}>
+                        Choose your military action:
+                      </p>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                        <button
+                          onClick={() => {
+                            console.log('⚔️ Player chose ATTACK');
+                            socket.emit('submitBattleOption', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              battleId: battleOptionsData.battleId,
+                              region: battleOptionsData.region,
+                              option: 'attack'
+                            });
+                            setShowBattleOptionsModal(false);
+                            setBattleOptionsData(null);
+                          }}
+                          style={{
+                            padding: '16px',
+                            background: '#dc2626',
+                            color: 'white',
+                            border: '2px solid #fca5a5',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          ⚔️ Attack
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>
+                            Full military engagement
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            console.log('🤝 Player chose NEGOTIATE');
+                            socket.emit('submitBattleOption', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              battleId: battleOptionsData.battleId,
+                              region: battleOptionsData.region,
+                              option: 'negotiate'
+                            });
+                            setShowBattleOptionsModal(false);
+                            setBattleOptionsData(null);
+                          }}
+                          style={{
+                            padding: '16px',
+                            background: '#2563eb',
+                            color: 'white',
+                            border: '2px solid #93c5fd',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          🤝 Negotiate
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>
+                            Diplomatic resolution
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            console.log('🏃 Player chose RETREAT');
+                            socket.emit('submitBattleOption', {
+                              roomId: currentRoomId,
+                              playerid: playerId,
+                              battleId: battleOptionsData.battleId,
+                              region: battleOptionsData.region,
+                              option: 'retreat'
+                            });
+                            setShowBattleOptionsModal(false);
+                            setBattleOptionsData(null);
+                          }}
+                          style={{
+                            padding: '16px',
+                            background: '#f59e0b',
+                            color: 'white',
+                            border: '2px solid #fcd34d',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          🏃 Retreat
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>
+                            Withdraw forces
+                          </div>
+                        </button>
+                      </div>
+
+                      <p style={{ color: '#6b7280', fontSize: '0.75rem', textAlign: 'center', margin: 0 }}>
+                        Attack: Full power, high casualties | Negotiate: Reduced power, low casualties | Retreat: No combat, minimal losses
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tension Alerts */}
+                {tensionAlerts.length > 0 && (
+                  <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '20px',
+                    zIndex: 900,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    {tensionAlerts.map(alert => (
+                      <div key={alert.id} style={{
+                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        color: 'white',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        maxWidth: '300px',
+                        animation: 'slideIn 0.3s ease-out'
+                      }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                          ⚠️ Military Tension
+                        </div>
+                        <div style={{ fontSize: '0.9rem' }}>
+                          {alert.message}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.8 }}>
+                          Region: {alert.region}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
