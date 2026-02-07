@@ -3157,13 +3157,8 @@ io.on('connection', (socket) => {
             return;
           }
 
-          // Check for crisis
-          if (currentRoom.phase2.crises.active) {
-            console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
-            return;
-          }
-
-          // Check for pending conflict zones - trigger diplomatic phase before advancing
+          // Check for pending conflict zones FIRST - trigger diplomatic phase before advancing
+          // (Military conflicts take priority over economic crises)
           const pendingConflicts = currentRoom.phase2.pendingConflictZones || {};
           const conflictRegions = Object.keys(pendingConflicts);
 
@@ -3194,6 +3189,12 @@ io.on('connection', (socket) => {
             broadcastToRoom(roomId);
             saveState();
             return; // Don't advance year yet - wait for diplomatic phase to complete
+          }
+
+          // Check for crisis (only if no military conflicts)
+          if (currentRoom.phase2.crises.active) {
+            console.log('⚠️ Cannot auto-advance - active crisis must be resolved first');
+            return;
           }
 
           const currentYear = currentRoom.phase2.currentYear;
