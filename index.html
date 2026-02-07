@@ -4219,16 +4219,45 @@ function YearEndBattlePhase({
                       }
                       activeCrises = activeCrises || [];
 
-                      // Find the first crisis that affects the current player
+                      // Helper to check if player is affected by crisis (handles country name variations)
+                      const isPlayerAffected = (crisis) => {
+                        if (!crisis) return false;
+                        const affected = crisis.affectedCountries || [];
+                        const options = crisis.options || {};
+                        return affected.includes(playerCountry) ||
+                               affected.includes(normalizedCountry) ||
+                               affected.some(c => normalizeCountryName(c) === normalizedCountry) ||
+                               options[playerCountry] ||
+                               options[normalizedCountry];
+                      };
+
+                      // Helper to check if player has responded (handles country name variations)
+                      const hasPlayerResponded = (crisis) => {
+                        if (!crisis?.responses) return false;
+                        return crisis.responses[playerCountry] ||
+                               crisis.responses[normalizedCountry] ||
+                               Object.keys(crisis.responses).some(c =>
+                                 normalizeCountryName(c) === normalizedCountry
+                               );
+                      };
+
+                      // Find the first crisis that affects the current player AND they haven't responded to yet
                       const activeCrisis = activeCrises.find(c =>
-                        c.affectedCountries?.includes(playerCountry) ||
-                        c.options?.[playerCountry]
-                      ) || activeCrises[0]; // fallback to first crisis if any
+                        isPlayerAffected(c) && !hasPlayerResponded(c)
+                      ) || activeCrises.find(c =>
+                        // Fallback: show any crisis they're affected by (even if responded)
+                        isPlayerAffected(c)
+                      ) || activeCrises[0]; // Final fallback to first crisis if any
 
                       // Get responses from the crisis itself (new format) or from parent (old format)
                       const crisisResponses = activeCrisis?.responses || gameState.phase2?.crises?.responses || {};
-                      const myCountryOptions = activeCrisis?.options?.[playerCountry] || [];
-                      const hasRespondedToCrisis = crisisResponses[playerCountry];
+                      const myCountryOptions = activeCrisis?.options?.[playerCountry] || activeCrisis?.options?.[normalizedCountry] || [];
+                      const hasRespondedToCrisis = hasPlayerResponded(activeCrisis);
+
+                      // Check if there are more crises to respond to
+                      const remainingCrises = activeCrises.filter(c =>
+                        isPlayerAffected(c) && !hasPlayerResponded(c)
+                      ).length;
 
                       // Debug crisis options
                       if (activeCrisis) {
@@ -4238,6 +4267,8 @@ function YearEndBattlePhase({
                         console.log('  My country:', playerCountry);
                         console.log('  Options keys:', Object.keys(activeCrisis.options || {}));
                         console.log('  My options:', myCountryOptions);
+                        console.log('  Has responded:', hasRespondedToCrisis);
+                        console.log('  Remaining crises to respond:', remainingCrises);
                       }
                       
                       return (
