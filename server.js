@@ -5,6 +5,23 @@ const socketIo = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const {
+  normalizeCountryName,
+  isCommandEconomy,
+  areRivals,
+  getBaseGDP,
+  getInitialExchangeRate,
+  getInitialUnemployment,
+  getInitialInflation,
+  INITIAL_EXCHANGE_RATES,
+  COUNTRIES
+} = require('./shared/country-utils');
+const { queryDatabase } = require('./server/database');
+const { sendAdminNotification } = require('./server/email');
+// Economics functions (calculateAgreementBonus, calculateExchangeRate,
+// calculateYearEconomics, calculatePhase2Scores) are also available as a
+// module at ./server/economics.js. The inline definitions below are still
+// used by the socket handlers and will be migrated incrementally.
 
 const app = express();
 const server = http.createServer(app);
@@ -13,191 +30,13 @@ const io = socketIo(server);
 const PORT = process.env.PORT || 65002;
 const STATE_FILE = path.join(__dirname, 'game-state.json');
 
-// Database API configuration
-const DB_API = {
-  url: 'https://jucovy.com/api.php',
-  apiKey: 'bretton-woods-secret-key-2024'
-};
+// Database (queryDatabase) imported from ./server/database.js
+// Email (sendAdminNotification) imported from ./server/email.js
 
-// Email configuration using nodemailer
-const nodemailer = require('nodemailer');
-
-// Email transporter configuration
-// Configure via environment variables or use these defaults
-const EMAIL_CONFIG = {
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: process.env.SMTP_PORT || 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || ''
-  }
-};
-
-// Create reusable transporter object
-let emailTransporter = null;
-if (EMAIL_CONFIG.auth.user && EMAIL_CONFIG.auth.pass) {
-  emailTransporter = nodemailer.createTransport(EMAIL_CONFIG);
-  console.log('📧 Email notifications enabled');
-} else {
-  console.log('📧 Email notifications disabled (SMTP_USER and SMTP_PASS not configured)');
-}
-
-// Function to send email notification to superadmin
-async function sendAdminNotification(subject, message, gameCode = null) {
-  if (!emailTransporter) {
-    console.log('📧 Email skipped - transporter not configured');
-    return false;
-  }
-
-  try {
-    // Get superadmin email from database
-    const dbUsers = await queryDatabase('getAllUsers', {});
-    if (!dbUsers || !Array.isArray(dbUsers)) {
-      console.error('📧 Could not fetch users for email notification');
-      return false;
-    }
-
-    // Find superadmin users (is_teacher = 1)
-    const superadmins = dbUsers.filter(u => u.is_teacher === '1' || u.is_teacher === 1);
-    if (superadmins.length === 0) {
-      console.log('📧 No superadmins found to notify');
-      return false;
-    }
-
-    // Get superadmin emails from the email field in Users table
-    const adminEmails = superadmins
-      .map(u => u.email || u.username) // Use email field, fall back to username
-      .filter(email => email && email.includes('@'));
-
-    if (adminEmails.length === 0) {
-      console.log('📧 No valid superadmin email addresses found');
-      return false;
-    }
-
-    // Build email content
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 20px; border-radius: 8px 8px 0 0;">
-          <h1 style="color: white; margin: 0;">🌍 Bretton Woods 1944</h1>
-          <p style="color: #cbd5e1; margin: 8px 0 0 0;">Game Notification</p>
-        </div>
-        <div style="background: #f8fafc; padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
-          <h2 style="color: #1e293b; margin-top: 0;">${subject}</h2>
-          <p style="color: #475569; line-height: 1.6;">${message}</p>
-          ${gameCode ? `<p style="color: #64748b; font-size: 0.875rem;">Game Code: <strong>${gameCode}</strong></p>` : ''}
-          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-          <p style="color: #94a3b8; font-size: 0.75rem; margin: 0;">
-            This is an automated notification from the Bretton Woods simulation.
-          </p>
-        </div>
-      </div>
-    `;
-
-    // Send email
-    const info = await emailTransporter.sendMail({
-      from: `"Bretton Woods Game" <${EMAIL_CONFIG.auth.user}>`,
-      to: adminEmails.join(', '),
-      subject: `[Bretton Woods] ${subject}`,
-      html: htmlContent
-    });
-
-    console.log(`📧 Email sent to ${adminEmails.join(', ')}: ${info.messageId}`);
-    return true;
-  } catch (error) {
-    console.error('📧 Failed to send email:', error.message);
-    return false;
-  }
-}
-
-// Normalize country names to ensure consistent keys
-function normalizeCountryName(country) {
-  if (!country) return '';
-  const normalizations = {
-    // USSR variations
-    'USS': 'USSR',
-    'SUN': 'USSR',
-    'SOV': 'USSR',
-    'Soviet Union': 'USSR',
-    'Soviet': 'USSR',
-    // USA variations
-    'US': 'USA',
-    'United States': 'USA',
-    'America': 'USA',
-    // UK variations
-    'GB': 'UK',
-    'GBR': 'UK',
-    'Great Britain': 'UK',
-    'United Kingdom': 'UK',
-    'Britain': 'UK',
-    // China variations
-    'CHN': 'China',
-    'PRC': 'China',
-    'CHI': 'China',
-    "People's Republic of China": 'China',
-    'Republic of China': 'China',
-    // France variations
-    'FRA': 'France',
-    'French': 'France',
-    // India variations
-    'IND': 'India',
-    'British Raj': 'India',
-    // Argentina variations
-    'ARG': 'Argentina'
-  };
-  return normalizations[country] || country;
-}
-
-
-// Function to query database via PHP API
-async function queryDatabase(action, data = {}) {
-  try {
-    const payload = {
-      action,
-      api_key: DB_API.apiKey,
-      ...data
-    };
-
-    // Debug logging for database calls
-    console.log(`📤 DB Request [${action}]:`, JSON.stringify(data, null, 2));
-
-    const response = await fetch(DB_API.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    // Get raw text first to handle empty responses
-    const text = await response.text();
-
-    if (!text || text.trim() === '') {
-      console.error(`❌ DB Error [${action}]: Empty response from API`);
-      return null;
-    }
-
-    let result;
-    try {
-      result = JSON.parse(text);
-    } catch (parseError) {
-      console.error(`❌ DB Error [${action}]: Invalid JSON response:`, text.substring(0, 200));
-      return null;
-    }
-
-    console.log(`📥 DB Response [${action}]:`, JSON.stringify(result).substring(0, 200));
-
-    if (result.success) {
-      return result.data || result;
-    } else {
-      console.error(`❌ DB Error [${action}]:`, result.error || result.message);
-      return null;
-    }
-  } catch (error) {
-    console.error(`❌ API Error [${action}]:`, error.message);
-    return null;
-  }
-}
+// normalizeCountryName, isCommandEconomy, areRivals, etc.
+// imported from ./shared/country-utils.js
+// queryDatabase imported from ./server/database.js
+// sendAdminNotification imported from ./server/email.js
 
 // Serve game HTML as the main page (MUST come before static middleware!)
 app.get('/', (req, res) => {
@@ -323,6 +162,8 @@ app.get('/api/active-games', async (req, res) => {
 });
 
 app.use(express.static(__dirname));
+app.use('/shared', express.static(path.join(__dirname, 'shared')));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Multi-room game state
 let globalState = {
@@ -796,18 +637,8 @@ function initializePhase2(roomId) {
   room.gamePhase = 'phase2';
   room.readyPlayers = [];
   
-  // Initialize starting exchange rates (Bretton Woods fixed rates)
-  const initialExchangeRates = {
-    'USA': 1.00,  // USD is the anchor
-    'United States': 1.00,
-    'UK': 4.03,   // $4.03 per pound (from 1940)
-    'USSR': null, // Not convertible - didn't join Bretton Woods
-    'Soviet Union': null,
-    'France': 119.11, // Francs per dollar (post-war rate)
-    'China': 3.35,    // Yuan per dollar (pre-hyperinflation)
-    'India': 3.31,    // Rupees per dollar (₹13.33 per pound / 4.03)
-    'Argentina': 3.50 // Pesos per dollar (approximate)
-  };
+  // Initial exchange rates from shared country-utils
+  const initialExchangeRates = INITIAL_EXCHANGE_RATES;
   
   // Initialize starting economic conditions for each country
   room.phase2.yearlyData[1946] = {};
@@ -816,29 +647,23 @@ function initializePhase2(roomId) {
   
   Object.values(room.players).forEach(player => {
     const country = normalizeCountryName(player.country);
-    
-    // Map country codes (database might have USS instead of USSR)
-    const countryKey = country === 'USS' ? 'USSR' : 
-                       country === 'United States' ? 'USA' :
-                       country === 'United Kingdom' ? 'UK' : country;
-    
-    const initialData = initialEconomicData[countryKey] || initialEconomicData[country];
-    
+
+    const initialData = initialEconomicData[country] || initialEconomicData[player.country];
+
     if (!initialData) {
-      console.error(`⚠️ No economic data found for country: ${country} (tried ${countryKey})`);
+      console.error(`⚠️ No economic data found for country: ${country} (raw: ${player.country})`);
       console.log('Available countries in economicData:', Object.keys(initialEconomicData));
       return; // Skip this country
     }
-    
-    const normalizedCountry = normalizeCountryName(country);
-    room.phase2.yearlyData[1946][normalizedCountry] = {
+
+    room.phase2.yearlyData[1946][country] = {
       gdpGrowth: 0,
       goldReserves: initialData.goldReserves || 1000,
-      unemployment: country === 'USA' ? 3.9 : country === 'UK' ? 2.5 : country === 'USSR' || country === 'USS' ? 0 : country === 'France' ? 4.5 : country === 'China' ? 6.0 : country === 'India' ? 7.0 : 5.0,
+      unemployment: getInitialUnemployment(country),
       tradeBalance: initialData.tradeBalance || 0,
-      inflation: country === 'USA' ? 8.3 : country === 'UK' ? 3.1 : country === 'USSR' || country === 'USS' ? 0 : country === 'France' ? 50.0 : country === 'China' ? 300.0 : 20.0,
+      inflation: getInitialInflation(country),
       industrialOutput: initialData.industrialOutput || 100,
-      exchangeRate: initialExchangeRates[country] || initialExchangeRates[countryKey] || 1.0,
+      exchangeRate: getInitialExchangeRate(country),
       exchangeRateChange: 0,
       military: {
         army: initialData.military?.army || 1000000,
@@ -848,7 +673,7 @@ function initializePhase2(roomId) {
       }
     };
     
-    console.log(`   ✅ Loaded ${normalizedCountry}: Industrial=${initialData.industrialOutput}, Military=${initialData.military?.total}`);
+    console.log(`   ✅ Loaded ${country}: Industrial=${initialData.industrialOutput}, Military=${initialData.military?.total}`);
   });
   
   console.log(`\n📦 PHASE 2 DATA READY:`);
@@ -930,21 +755,22 @@ function calculateAgreementBonus(roomId) {
 
 // Calculate exchange rate changes based on economic policies
 function calculateExchangeRate(country, currentYear, policy, previousData, room) {
+  const nc = normalizeCountryName(country);
   // USSR doesn't participate in Bretton Woods
-  if (country === 'USSR' || country === 'Soviet Union') {
+  if (nc === 'USSR') {
     return { rate: null, change: 0, defendable: true };
   }
-  
+
   // USA is the anchor currency
-  if (country === 'USA' || country === 'United States') {
+  if (nc === 'USA') {
     return { rate: 1.00, change: 0, defendable: true };
   }
-  
+
   const previousRate = previousData.exchangeRate;
   let rateChange = 0;
-  
+
   // 1. Inflation differential (vs USA)
-  const usData = room.phase2.yearlyData[currentYear]?.['USA'] || room.phase2.yearlyData[currentYear]?.['United States'];
+  const usData = room.phase2.yearlyData[currentYear]?.['USA'];
   const usInflation = usData ? usData.inflation : 3.0;
   const countryInflation = previousData.inflation || 5.0;
   const inflationDiff = countryInflation - usInflation;
@@ -983,33 +809,33 @@ function calculateExchangeRate(country, currentYear, policy, previousData, room)
   }
   
   // Historical event triggers
-  if (country === 'UK' && currentYear === 1949) {
+  if (nc === 'UK' && currentYear === 1949) {
     // September 1949: Sterling crisis - forced devaluation
     rateChange -= 30.5; // $4.03 → $2.80 (for GBP, negative = devaluation)
     console.log(`🚨 HISTORICAL EVENT: UK Sterling Crisis 1949 - Forced 30% devaluation`);
   }
-  
-  if ((country === 'France' || country === 'French') && currentYear === 1948) {
+
+  if (nc === 'France' && currentYear === 1948) {
     // January 1948: Major franc devaluation
     rateChange += 79.9; // 119.11 → 214.39 francs per dollar
     console.log(`🚨 HISTORICAL EVENT: France 1948 Devaluation - 80% currency collapse`);
   }
-  
-  if ((country === 'France' || country === 'French') && currentYear === 1949) {
+
+  if (nc === 'France' && currentYear === 1949) {
     // 1949: Two more devaluations
     rateChange += 63.3; // 214 → 350 francs per dollar (combined)
     console.log(`🚨 HISTORICAL EVENT: France 1949 Devaluations - Currency crisis continues`);
   }
-  
-  if (country === 'India' && currentYear === 1949) {
+
+  if (nc === 'India' && currentYear === 1949) {
     // Adjust to sterling devaluation
     rateChange += 18.0; // ₹3.31 → ₹4.76 (follows pound)
     console.log(`📊 India adjusts to sterling devaluation`);
   }
-  
+
   // Calculate new rate
   let newRate;
-  if (country === 'UK' || country === 'United Kingdom') {
+  if (nc === 'UK') {
     // GBP quoted as $/£ - devaluation means lower number
     newRate = previousRate * (1 + rateChange / 100);
   } else {
@@ -1160,11 +986,11 @@ function calculateYearEconomics(roomId) {
     }
     
     // Economic calculation model with DYNAMIC CROSS-COUNTRY EFFECTS
-    const isCommandEconomy = policy.isCommandEconomy || false;
-    
+    const policyIsCommand = policy.isCommandEconomy || false;
+
     // Extract policy variables based on economy type
     let centralBankRate, exchangeRate, tariffRate;
-    if (isCommandEconomy) {
+    if (policyIsCommand) {
       // Command economies don't use market mechanisms
       centralBankRate = 0; // No independent central bank
       exchangeRate = 1.0; // Fixed by state
@@ -1185,8 +1011,10 @@ function calculateYearEconomics(roomId) {
     
     // Base growth rate (post-war boom)
     let gdpGrowth = 4.0;
-    let tradeBalance = prevData.tradeBalance; // Initialize early - used in military effects
-    let industrialOutput = prevData.industrialOutput || 100; // Initialize early - modified in policy blocks
+    let tradeBalance = prevData.tradeBalance;
+    let industrialOutput = prevData.industrialOutput || 100;
+    let inflation = prevData.inflation;
+    let unemployment = prevData.unemployment;
     
     // === MILITARY ECONOMIC IMPACT (BRANCH-SPECIFIC) ===
     // Military spending as % of GDP
@@ -1203,7 +1031,7 @@ function calculateYearEconomics(roomId) {
 
     // Calculate effective military spending as % of GDP
     // GDP is in $millions, totalMilitaryCost is now also in $millions
-    const gdp = country === 'USA' ? 210000 : country === 'UK' ? 61000 : country === 'USSR' ? 126000 : country === 'France' ? 37000 : country === 'China' ? 45000 : country === 'India' ? 55000 : 32000;
+    const gdp = getBaseGDP(country);
     const effectiveMilSpending = (totalMilitaryCost / gdp) * 100; // As percentage of GDP
     
     // High military spending drains civilian economy
@@ -1275,13 +1103,8 @@ function calculateYearEconomics(roomId) {
       const otherTotalMilitary = otherArmySize + otherNavySize + otherAirForceSize;
       
       // Arms race: if they heavily militarize, you feel pressure
-      // Specific rivalries
-      const isRival = (
-        (country === 'USA' && otherCountry === 'USSR') ||
-        (country === 'USSR' && otherCountry === 'USA') ||
-        (country === 'UK' && otherCountry === 'USSR') ||
-        (country === 'USSR' && (otherCountry === 'UK' || otherCountry === 'France'))
-      );
+      // Specific rivalries (defined in shared/country-utils.js)
+      const isRival = areRivals(country, otherCountry);
       
       if (isRival) {
         // If rival has much larger military, you lose influence
@@ -1353,8 +1176,8 @@ function calculateYearEconomics(roomId) {
     tradeBalance += bwBonus.tradeBonus;
     
     // Country-specific modifiers
-    if (country === 'USSR') {
-      // USSR command economy effects
+    if (isCommandEconomy(country, currentYear)) {
+      // Command economy effects (USSR always, China from 1949)
       if (policy.isCommandEconomy) {
         // Five-Year Plan effects
         const planTarget = policy.fiveYearPlanTarget || 8;
@@ -1576,7 +1399,6 @@ function calculateYearEconomics(roomId) {
     gdpGrowth += randomShock;
     
     // === INFLATION (affected by global conditions) ===
-    let inflation = prevData.inflation;
     
     // China civil war effect on inflation (agricultural disruption)
     if (country === 'China' && currentYear >= 1948 && currentYear <= 1949) {
@@ -1617,7 +1439,6 @@ function calculateYearEconomics(roomId) {
     inflation = Math.max(0, inflation + (Math.random() - 0.5) * 3);
     
     // === UNEMPLOYMENT ===
-    let unemployment = prevData.unemployment;
     
     // China civil war effect on unemployment
     if (country === 'China' && currentYear <= 1949) {
@@ -2763,7 +2584,7 @@ const countryId = countryData?.country_id || null;
   });
   
   // Vote on current issue
-  socket.on('vote', ({ roomId, playerId, playerid, userId, choice }) => {
+  socket.on('vote', async ({ roomId, playerId, playerid, userId, choice }) => {
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
 
@@ -2963,8 +2784,7 @@ const countryId = countryData?.country_id || null;
           }
           
           roundScores[country] = points;
-          // Handle USS/USSR naming inconsistency
-          const scoreKey = country === 'USS' ? 'USSR' : country;
+          const scoreKey = normalizeCountryName(country);
           room.scores[scoreKey] = (room.scores[scoreKey] || 0) + points;
           // Also store under original country code for display
           if (country !== scoreKey) {
