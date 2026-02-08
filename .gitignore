@@ -8,6 +8,7 @@ node_modules/
 
 # Game state (regenerated at runtime)
 game-state.json
+game-state-backup.json
 
 # Logs
 logs
