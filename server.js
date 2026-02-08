@@ -2763,7 +2763,7 @@ const countryId = countryData?.country_id || null;
   });
   
   // Vote on current issue
-  socket.on('vote', ({ roomId, playerId, playerid, userId, choice }) => {
+  socket.on('vote', async ({ roomId, playerId, playerid, userId, choice }) => {
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
 
