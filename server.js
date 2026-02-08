@@ -2875,7 +2875,7 @@ const countryId = countryData?.country_id || null;
           // Save tie result to database
           try {
             const roundResultData = {
-              gameCode: room.gameId,
+              gameCode: roomId, // Use roomId which is the game_code string
               round: room.currentRound,
               phase: 1, // Phase 1 voting
               winningOptionId: 'TIE',
@@ -3012,7 +3012,7 @@ const countryId = countryData?.country_id || null;
         // Save round result to database
         try {
           const roundResultData = {
-            gameCode: room.gameId,
+            gameCode: roomId, // Use roomId which is the game_code string
             round: room.currentRound,
             phase: 1, // Phase 1 voting
             winningOptionId: winningOption,
