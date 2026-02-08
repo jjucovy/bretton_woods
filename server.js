@@ -485,7 +485,7 @@ async function saveGameToDatabase(roomId) {
 
     // Add Phase 2 year if available (don't require active since game might be complete)
     if (room.phase2?.currentYear) {
-      updateData.currentYear = room.phase2.currentYear;
+      //updateData.currentYear = room.phase2.currentYear;
     }
 
     // Mark as ended if complete
