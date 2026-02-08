@@ -2402,7 +2402,7 @@ io.on('connection', (socket) => {
           console.log(`✅ User ${userId} restored to game ${roomId} as ${dbAssignment.country_code} from database`);
         } else {
           // Player has no assignment - they need to select a country
-          console.log(`   Player ${userId} not found in database - needs country selection`);
+          console.log(`   User ${userId} not found in player database - needs country selection`);
 
           socket.emit('joinRoomResult', {
             success: true,
