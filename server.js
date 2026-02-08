@@ -2871,6 +2871,31 @@ const countryId = countryData?.country_id || null;
              Please log in to advance to the next round.`,
             roomId
           );
+
+          // Save tie result to database
+          try {
+            const roundResultData = {
+              gameCode: room.gameId,
+              round: room.currentRound,
+              phase: 1, // Phase 1 voting
+              winningOptionId: 'TIE',
+              winningOptionText: 'No decision adopted after 3 voting attempts',
+              totalVotes: Object.keys(room.votes).length,
+              results: {
+                voteTally: voteTally,
+                votes: room.votes,
+                isTie: true,
+                noDecision: true,
+                timestamp: Date.now()
+              }
+            };
+            queryDatabase('saveRoundResult', roundResultData).catch(err => {
+              console.error('⚠️ Failed to save tie result to database:', err);
+            });
+            console.log(`✅ Round ${room.currentRound} tie result saved to database`);
+          } catch (err) {
+            console.error('⚠️ Failed to save tie result to database:', err);
+          }
         }
       } else {
         // Clear winner - no tie
@@ -2968,7 +2993,7 @@ const countryId = countryData?.country_id || null;
         if (!room.roundHistory) {
           room.roundHistory = [];
         }
-        
+
         room.roundHistory.push({
           round: room.currentRound,
           winningOption: winningOption,
@@ -2977,12 +3002,34 @@ const countryId = countryData?.country_id || null;
           voteTally: { ...voteTally },
           timestamp: Date.now()
         });
-        
+
         console.log(`Round ${room.currentRound} results:`, {
           voteTally,
           winningOption: room.roundOutcome
         });
         console.log(`✅ Saved to round history for Phase 2 calculations`);
+
+        // Save round result to database
+        try {
+          const roundResultData = {
+            gameCode: room.gameId,
+            round: room.currentRound,
+            phase: 1, // Phase 1 voting
+            winningOptionId: winningOption,
+            winningOptionText: currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2]?.text || '',
+            totalVotes: Object.keys(room.votes).length,
+            results: {
+              voteTally: voteTally,
+              votes: room.votes,
+              issueTitle: issueTitle,
+              timestamp: Date.now()
+            }
+          };
+          await queryDatabase('saveRoundResult', roundResultData);
+          console.log(`✅ Round ${room.currentRound} result saved to database`);
+        } catch (err) {
+          console.error('⚠️ Failed to save round result to database:', err);
+        }
 
         // Send email notification to superadmin that round is ready to advance
         const playerCount = Object.keys(room.players).length;
