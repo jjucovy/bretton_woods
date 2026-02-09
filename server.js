@@ -266,6 +266,18 @@ function saveGamePhase2State(roomId) {
       achievements: room.phase2.achievements,
       crises: room.phase2.crises,
       active: room.phase2.active,
+      // Persist deployment and battle state
+      cumulativeDeployments: room.phase2.cumulativeDeployments || {},
+      deploymentHistory: room.phase2.deploymentHistory || [],
+      pendingConflictZones: room.phase2.pendingConflictZones || {},
+      activeConflicts: room.phase2.activeConflicts || [],
+      battleResults: room.phase2.battleResults || [],
+      battleDecisions: room.phase2.battleDecisions || {},
+      battleOptions: room.phase2.battleOptions || {},
+      diplomaticStances: room.phase2.diplomaticStances || {},
+      diplomaticPoints: room.phase2.diplomaticPoints || {},
+      awaitingDiplomaticResolution: room.phase2.awaitingDiplomaticResolution || false,
+      scoreBreakdowns: room.phase2.scoreBreakdowns || {},
       savedAt: Date.now()
     };
 
@@ -684,7 +696,8 @@ function initializePhase2(roomId) {
   // Check for 1946 crises at game start
   triggerCrisisIfNeeded(roomId, 1946);
 
-  // Save Phase 2 state to per-game file
+  // Save all state (main state file + per-game Phase 2 file)
+  saveState();
   saveGamePhase2State(roomId);
 }
 
@@ -4481,10 +4494,30 @@ async function initializeFromDatabase() {
 
       console.log(`📋 Loading game: ${gameCode}`);
 
-      // Check if we already have this room from the state file (with yearlyData etc.)
+      // Check if we already have this room from the main state file (with yearlyData etc.)
+      // The main JSON state file is synchronously written, so it's always up-to-date
       const existingRoom = globalState.rooms[gameCode];
       if (existingRoom && existingRoom.phase2?.yearlyData && Object.keys(existingRoom.phase2.yearlyData).length > 0) {
         console.log(`   ✅ Using existing state from file (has yearlyData for years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')})`);
+
+        // Merge in any Phase 2 data from per-game file that the main state may be missing
+        // (per-game file has deployment/battle data that main state might not fully capture)
+        const savedPhase2State = loadGamePhase2State(gameCode);
+        if (savedPhase2State && savedPhase2State.savedAt) {
+          // Restore fields that might be missing from the main state file
+          if (savedPhase2State.cumulativeDeployments && !existingRoom.phase2.cumulativeDeployments) {
+            existingRoom.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments;
+          }
+          if (savedPhase2State.deploymentHistory && !existingRoom.phase2.deploymentHistory) {
+            existingRoom.phase2.deploymentHistory = savedPhase2State.deploymentHistory;
+          }
+          if (savedPhase2State.battleResults && !existingRoom.phase2.battleResults) {
+            existingRoom.phase2.battleResults = savedPhase2State.battleResults;
+          }
+          if (savedPhase2State.diplomaticPoints && !existingRoom.phase2.diplomaticPoints) {
+            existingRoom.phase2.diplomaticPoints = savedPhase2State.diplomaticPoints;
+          }
+        }
 
         // Just update players from database in case they changed
         const players = await queryDatabase('getPlayers', { game_id: game.game_id });
@@ -4559,8 +4592,9 @@ async function initializeFromDatabase() {
 
       globalState.rooms[gameCode] = roomState;
 
-      // Try to load Phase 2 state from per-game file if needed
-      // Check: phase2 exists but missing yearlyData, OR game was in phase2/complete
+      // Try to load Phase 2 state from per-game JSON file
+      // The per-game file is the authoritative source for Phase 2 data because
+      // it's written synchronously and always up-to-date (unlike the async DB)
       const needsPhase2Data = roomState.phase2 && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0);
       const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
 
@@ -4569,17 +4603,30 @@ async function initializeFromDatabase() {
 
         const savedPhase2State = loadGamePhase2State(gameCode);
         if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
-          // Restore from per-game file
+          // Restore from per-game file (authoritative source)
           if (!roomState.phase2) {
             roomState.phase2 = {};
           }
+          // Prefer JSON file's currentYear over DB's (JSON is always more recent)
           roomState.phase2.currentYear = savedPhase2State.currentYear || roomState.phase2.currentYear;
           roomState.phase2.yearlyData = savedPhase2State.yearlyData;
           roomState.phase2.policies = savedPhase2State.policies || {};
           roomState.phase2.achievements = savedPhase2State.achievements || {};
           roomState.phase2.crises = savedPhase2State.crises || { active: null, history: [], responses: {} };
           roomState.phase2.active = savedPhase2State.active !== undefined ? savedPhase2State.active : true;
-          console.log(`   ✅ Restored Phase 2 state from file (year: ${savedPhase2State.currentYear}, years: ${Object.keys(savedPhase2State.yearlyData).join(', ')})`);
+          // Restore deployment and battle state
+          roomState.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments || {};
+          roomState.phase2.deploymentHistory = savedPhase2State.deploymentHistory || [];
+          roomState.phase2.pendingConflictZones = savedPhase2State.pendingConflictZones || {};
+          roomState.phase2.activeConflicts = savedPhase2State.activeConflicts || [];
+          roomState.phase2.battleResults = savedPhase2State.battleResults || [];
+          roomState.phase2.battleDecisions = savedPhase2State.battleDecisions || {};
+          roomState.phase2.battleOptions = savedPhase2State.battleOptions || {};
+          roomState.phase2.diplomaticStances = savedPhase2State.diplomaticStances || {};
+          roomState.phase2.diplomaticPoints = savedPhase2State.diplomaticPoints || {};
+          roomState.phase2.awaitingDiplomaticResolution = savedPhase2State.awaitingDiplomaticResolution || false;
+          roomState.phase2.scoreBreakdowns = savedPhase2State.scoreBreakdowns || {};
+          console.log(`   ✅ Restored Phase 2 state from file (year: ${savedPhase2State.currentYear}, years: ${Object.keys(savedPhase2State.yearlyData).join(', ')}, saved: ${new Date(savedPhase2State.savedAt).toLocaleString()})`);
         } else if (wasInPhase2) {
           // Fall back to fresh initialization only if game was supposed to be in Phase 2
           console.log(`   ⚠️ No saved Phase 2 state found - initializing fresh...`);
@@ -4594,10 +4641,76 @@ async function initializeFromDatabase() {
   }
 }
 
+// Graceful shutdown: save all state before exit
+function gracefulShutdown(signal) {
+  console.log(`\n🛑 Received ${signal} - saving state before shutdown...`);
+  try {
+    saveState();
+    // Save Phase 2 state for every active room
+    Object.keys(globalState.rooms).forEach(roomId => {
+      const room = globalState.rooms[roomId];
+      if (room && room.phase2 && room.phase2.yearlyData) {
+        saveGamePhase2State(roomId);
+      }
+    });
+    console.log('✅ All state saved. Shutting down.');
+  } catch (err) {
+    console.error('❌ Error during shutdown save:', err);
+  }
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+
+// Catch uncaught exceptions - save state before crash
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught exception - saving state before crash:', err);
+  try {
+    saveState();
+    Object.keys(globalState.rooms).forEach(roomId => {
+      const room = globalState.rooms[roomId];
+      if (room && room.phase2 && room.phase2.yearlyData) {
+        saveGamePhase2State(roomId);
+      }
+    });
+    console.log('✅ Emergency state save complete.');
+  } catch (saveErr) {
+    console.error('❌ Emergency save failed:', saveErr);
+  }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled rejection at:', promise, 'reason:', reason);
+  // Don't exit - just log. Save state as precaution.
+  try {
+    saveState();
+  } catch (err) {
+    console.error('❌ Precautionary save failed:', err);
+  }
+});
+
 // Start server
 (async () => {
   await initializeFromDatabase();
-  
+
+  // Periodic auto-save every 60 seconds
+  setInterval(() => {
+    try {
+      saveState();
+      Object.keys(globalState.rooms).forEach(roomId => {
+        const room = globalState.rooms[roomId];
+        if (room && room.phase2 && room.phase2.yearlyData) {
+          saveGamePhase2State(roomId);
+        }
+      });
+    } catch (err) {
+      console.error('❌ Auto-save failed:', err);
+    }
+  }, 60000);
+
   server.listen(PORT, () => {
     console.log('🌍 Bretton Woods Multi-Room Server');
     console.log('===================================');
@@ -4605,6 +4718,8 @@ async function initializeFromDatabase() {
     console.log(`📂 State file: ${STATE_FILE}`);
     console.log(`👥 Users: ${Object.keys(globalState.users).length}`);
     console.log(`🏠 Rooms: ${Object.keys(globalState.rooms).length}`);
+    console.log(`🔄 Auto-save: every 60 seconds`);
+    console.log(`🛑 Graceful shutdown: enabled`);
     console.log('===================================');
   });
 })();
