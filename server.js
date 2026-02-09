@@ -1930,15 +1930,25 @@ io.on('connection', (socket) => {
         const game = Array.isArray(gameResult) ? gameResult[0] : gameResult;
 
         if (game && game.game_code) {
-          activeGame = {
-            game_id: game.game_id,
-            gameCode: game.game_code,
-            country_id: game.country_id,
-            country_code: game.country_code,
-            status: game.status
-          };
-          console.log(`✓ User has active game: ${activeGame.gameCode}`);
-          console.log(`  Country: ${activeGame.country_code} (ID: ${activeGame.country_id})`);
+          // Check if the game is actually still active (not completed)
+          const roomState = globalState.rooms[game.game_code];
+          const isCompleted = game.status === 'completed' ||
+            game.game_status === 'completed' ||
+            (roomState && roomState.gamePhase === 'complete');
+
+          if (isCompleted) {
+            console.log(`⏭️ User's game ${game.game_code} is completed - releasing player to lobby`);
+          } else {
+            activeGame = {
+              game_id: game.game_id,
+              gameCode: game.game_code,
+              country_id: game.country_id,
+              country_code: game.country_code,
+              status: game.status
+            };
+            console.log(`✓ User has active game: ${activeGame.gameCode}`);
+            console.log(`  Country: ${activeGame.country_code} (ID: ${activeGame.country_id})`);
+          }
         }
       }
       
@@ -2522,6 +2532,37 @@ const countryId = countryData?.country_id || null;
   });
   
   // Leave game in room
+  // Leave a completed game — releases player so they can join new games
+  socket.on('leaveCompletedGame', async ({ roomId, userId }) => {
+    console.log(`🚪 Player ${userId} leaving completed game ${roomId}`);
+    const room = globalState.rooms[roomId];
+
+    // Only allow leaving completed games
+    if (room && room.gamePhase !== 'complete') {
+      console.log(`   ❌ Game ${roomId} is not complete (phase: ${room.gamePhase}) - cannot leave`);
+      return;
+    }
+
+    // Remove from socket room
+    socket.leave(roomId);
+
+    // Mark player as released in database so getPlayerActiveGame won't return this game
+    if (room && room.gameId) {
+      try {
+        await queryDatabase('updateGame', {
+          game_id: room.gameId,
+          status: 'completed',
+          game_status: 'completed'
+        });
+      } catch (err) {
+        console.error(`   ❌ Failed to update game status in DB:`, err);
+      }
+    }
+
+    console.log(`   ✅ Player ${userId} released from completed game ${roomId}`);
+    socket.emit('leftRoom', { roomId });
+  });
+
   socket.on('leaveGame', ({ roomId, userId, playerid }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;

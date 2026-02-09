@@ -591,7 +591,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 }
                 
                 // REGULAR PLAYER WITH ACTIVE GAME: Auto-join their game
-                if (activeGame && activeGame.gameCode) {
+                // Skip completed games — player should be released to lobby
+                if (activeGame && activeGame.gameCode && activeGame.status !== 'completed') {
                   console.log('Player has active game - rejoining:', activeGame.gameCode);
                   console.log('Player country from DB:', activeGame.country_code || activeGame.country_id);
                   
@@ -3020,53 +3021,83 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           </div>
                         )}
 
-                        {/* Admin can reset */}
-                        {userRole === 'superadmin' && (
-                          <div style={{ marginTop: '20px', textAlign: 'center', display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <button
-                              onClick={() => {
-                                // Export game state
-                                const url = `/api/export-state/${currentRoomId}`;
-                                window.location.href = url;
-                              }}
-                              style={{
-                                padding: '15px 30px',
-                                background: '#0891b2',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontSize: '1rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              💾 Download Game State
-                            </button>
-                            
-                            <button
-                              onClick={() => {
-                                if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
-  socket.emit('startNewGame', {
-    roomId: currentRoomId,
-    playerId
-  });
-}
-                              }}
-                              style={{
-                                padding: '15px 30px',
-                                background: '#f59e0b',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontSize: '1rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              🔄 Start New Game
-                            </button>
-                          </div>
-                        )}
+                        {/* Return to Lobby - available to all players */}
+                        <div style={{ marginTop: '20px', textAlign: 'center', display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => {
+                              console.log('🚪 Leaving completed game...');
+                              const roomToLeave = gameState?.roomId || currentRoomId;
+                              socket.emit('leaveCompletedGame', {
+                                roomId: roomToLeave,
+                                userId: playerId
+                              });
+                              sessionStorage.removeItem('brettonWoodsGameRoom');
+                              sessionStorage.removeItem('brettonWoodsCountry');
+                              window.actualRoomId = null;
+                              setCurrentRoomId(null);
+                              setTimeout(() => window.location.reload(), 100);
+                            }}
+                            style={{
+                              padding: '15px 30px',
+                              background: '#16a34a',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontSize: '1rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🏠 Return to Lobby
+                          </button>
+
+                          {/* Admin-only actions */}
+                          {userRole === 'superadmin' && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  const url = `/api/export-state/${currentRoomId}`;
+                                  window.location.href = url;
+                                }}
+                                style={{
+                                  padding: '15px 30px',
+                                  background: '#0891b2',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  fontSize: '1rem',
+                                  fontWeight: 'bold',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                💾 Download Game State
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
+                                    socket.emit('startNewGame', {
+                                      roomId: currentRoomId,
+                                      playerId
+                                    });
+                                  }
+                                }}
+                                style={{
+                                  padding: '15px 30px',
+                                  background: '#f59e0b',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  fontSize: '1rem',
+                                  fontWeight: 'bold',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                🔄 Start New Game
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
 
