@@ -44,11 +44,56 @@
             animation: pulse 1.5s ease-in-out infinite;
         }
 
-        /* Conflict zone warning */
+        /* Conflict zone animations */
         @keyframes conflict-pulse {
             0% { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef444466; }
             50% { box-shadow: 0 0 20px #ef4444, 0 0 40px #ef444466; }
             100% { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef444466; }
+        }
+
+        .conflict-zone-circle {
+            animation: conflict-zone-pulse 2s ease-in-out infinite;
+        }
+        @keyframes conflict-zone-pulse {
+            0% { stroke-opacity: 1; stroke-width: 3; }
+            50% { stroke-opacity: 0.5; stroke-width: 5; }
+            100% { stroke-opacity: 1; stroke-width: 3; }
+        }
+
+        .conflict-zone-outer {
+            animation: conflict-outer-pulse 2.5s ease-in-out infinite;
+        }
+        @keyframes conflict-outer-pulse {
+            0% { stroke-opacity: 0.4; }
+            50% { stroke-opacity: 0.1; }
+            100% { stroke-opacity: 0.4; }
+        }
+
+        .battle-label {
+            animation: battle-label-flash 1s ease-in-out infinite;
+        }
+        @keyframes battle-label-flash {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .tension-label {
+            animation: tension-label-glow 2s ease-in-out infinite;
+        }
+        @keyframes tension-label-glow {
+            0% { opacity: 0.9; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 0.9; transform: scale(1); }
+        }
+
+        .battle-result-marker {
+            animation: battle-result-pulse 2s ease-in-out infinite;
+        }
+        @keyframes battle-result-pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.15); opacity: 0.85; }
+            100% { transform: scale(1); opacity: 1; }
         }
     </style>
 </head>
