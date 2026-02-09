@@ -242,6 +242,16 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [showBattleOptionsModal, setShowBattleOptionsModal] = useState(false);
           const [battleOptionsData, setBattleOptionsData] = useState(null);
           const [tensionAlerts, setTensionAlerts] = useState([]);
+          const [crisisMinimized, setCrisisMinimized] = useState(false);
+          const [battleModalMinimized, setBattleModalMinimized] = useState(false);
+          const [diplomaticModalMinimized, setDiplomaticModalMinimized] = useState(false);
+          const [battleOptionsMinimized, setBattleOptionsMinimized] = useState(false);
+
+          // Expand crisis overlay when a new crisis appears
+          const activeCrisisId = gameState?.phase2?.crises?.active?.[0]?.id;
+          useEffect(() => {
+            if (activeCrisisId) setCrisisMinimized(false);
+          }, [activeCrisisId]);
 
           // Check for existing session
           useEffect(() => {
@@ -2220,14 +2230,50 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       return (
                         <div>
                           {/* CRISIS EVENT OVERLAY */}
-                          {activeCrisis && (
+                          {activeCrisis && crisisMinimized && (
+                            <div
+                              onClick={() => setCrisisMinimized(false)}
+                              style={{
+                                position: 'fixed',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                                color: 'white',
+                                padding: '12px 24px',
+                                zIndex: 10000,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '1.3rem' }}>🚨</span>
+                                <strong>{activeCrisis.title}</strong>
+                                {!hasRespondedToCrisis && myCountryOptions.length > 0 && (
+                                  <span style={{ background: '#fbbf24', color: '#000', padding: '2px 8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                                    Response needed
+                                  </span>
+                                )}
+                                {hasRespondedToCrisis && (
+                                  <span style={{ background: '#22c55e', color: '#fff', padding: '2px 8px', borderRadius: '8px', fontSize: '0.8rem' }}>
+                                    Responded
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>Click to expand</span>
+                            </div>
+                          )}
+                          {activeCrisis && !crisisMinimized && (
                             <div style={{
                               position: 'fixed',
                               top: 0,
                               left: 0,
                               right: 0,
                               bottom: 0,
-                              background: 'rgba(0, 0, 0, 0.95)',
+                              background: 'rgba(0, 0, 0, 0.85)',
                               zIndex: 10000,
                               display: 'flex',
                               alignItems: 'center',
@@ -2244,9 +2290,28 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 maxHeight: '90vh',
                                 overflowY: 'auto'
                               }}>
-                                <h1 style={{ color: '#dc2626', marginTop: 0, marginBottom: '16px', fontSize: '2rem' }}>
-                                  {activeCrisis.title}
-                                </h1>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                                  <h1 style={{ color: '#dc2626', marginTop: 0, marginBottom: 0, fontSize: '2rem' }}>
+                                    {activeCrisis.title}
+                                  </h1>
+                                  <button
+                                    onClick={() => setCrisisMinimized(true)}
+                                    style={{
+                                      background: '#6b7280',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      padding: '8px 16px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem',
+                                      fontWeight: 'bold',
+                                      whiteSpace: 'nowrap',
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    🗺️ View Map
+                                  </button>
+                                </div>
                                 
                                 {activeCrisis.triggeredByDeployment && activeCrisis.triggerReason && (
                                   <div style={{
@@ -3349,7 +3414,28 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
              )}
   
                 {/* BATTLE MODAL */}
-                {showBattleModal && militaryConflict && (
+                {showBattleModal && militaryConflict && battleModalMinimized && (
+                  <div
+                    onClick={() => setBattleModalMinimized(false)}
+                    style={{
+                      position: 'fixed',
+                      top: crisisMinimized && gameState?.phase2?.crises?.active?.length ? '48px' : 0,
+                      left: 0, right: 0,
+                      background: 'linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)',
+                      color: 'white', padding: '10px 24px', zIndex: 1000,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '1.2rem' }}>🎖️</span>
+                      <strong>Military Conflict — {militaryConflict.region}</strong>
+                      <span style={{ background: '#fbbf24', color: '#000', padding: '2px 8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>Decision needed</span>
+                    </div>
+                    <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>Click to expand</span>
+                  </div>
+                )}
+                {showBattleModal && militaryConflict && !battleModalMinimized && (
                   <div style={{
                     position: 'fixed',
                     top: 0,
@@ -3370,8 +3456,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       width: '90%',
                       boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
                     }}>
-                      <h2 style={{ marginTop: 0, marginBottom: '20px', color: '#dc2626', fontSize: '1.8rem' }}>
-                        🎖️ Military Conflict Detected!
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <h2 style={{ marginTop: 0, marginBottom: '20px', color: '#dc2626', fontSize: '1.8rem' }}>
+                          🎖️ Military Conflict Detected!
+                        </h2>
+                        <button onClick={() => setBattleModalMinimized(true)} style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap', flexShrink: 0 }}>🗺️ View Map</button>
+                      </div>
                       </h2>
                       
                       <div style={{
@@ -3529,9 +3619,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       border: '2px solid #3b82f6',
                       boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
                     }}>
-                      <h2 style={{ color: '#fbbf24', margin: '0 0 16px 0', textAlign: 'center' }}>
-                        ⚔️ Battle Results - {battleResultData.region}
-                      </h2>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                        <h2 style={{ color: '#fbbf24', margin: 0 }}>
+                          ⚔️ Battle Results - {battleResultData.region}
+                        </h2>
+                        <button onClick={() => setShowBattleResultModal(false)} style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap', flexShrink: 0 }}>🗺️ View Map</button>
+                      </div>
 
                       <div style={{
                         background: battleResultData.winner ? '#065f46' : '#1f2937',
@@ -3602,7 +3695,30 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 )}
 
                 {/* Diplomatic Stance Modal */}
-                {showDiplomaticModal && diplomaticConflict && (() => {
+                {showDiplomaticModal && diplomaticConflict && diplomaticModalMinimized && (() => {
+                  return (
+                    <div
+                      onClick={() => setDiplomaticModalMinimized(false)}
+                      style={{
+                        position: 'fixed',
+                        top: crisisMinimized && gameState?.phase2?.crises?.active?.length ? '48px' : 0,
+                        left: 0, right: 0,
+                        background: 'linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%)',
+                        color: 'white', padding: '10px 24px', zIndex: 1002,
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '1.2rem' }}>🕊️</span>
+                        <strong>Diplomatic Stance — {diplomaticConflict.region}</strong>
+                        <span style={{ background: '#fbbf24', color: '#000', padding: '2px 8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>Stances needed</span>
+                      </div>
+                      <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>Click to expand</span>
+                    </div>
+                  );
+                })()}
+                {showDiplomaticModal && diplomaticConflict && !diplomaticModalMinimized && (() => {
                   const myCountry = playerCountry || sessionStorage.getItem('brettonWoodsCountry');
                   const otherCountries = diplomaticConflict.countries.filter(c => c !== myCountry);
 
@@ -3628,9 +3744,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         border: '2px solid #8b5cf6',
                         boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
                       }}>
-                        <h2 style={{ color: '#c4b5fd', margin: '0 0 16px 0', textAlign: 'center' }}>
-                          🤝 Diplomatic Stance - {diplomaticConflict.region}
-                        </h2>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                          <h2 style={{ color: '#c4b5fd', margin: 0 }}>
+                            🤝 Diplomatic Stance - {diplomaticConflict.region}
+                          </h2>
+                          <button onClick={() => setDiplomaticModalMinimized(true)} style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap', flexShrink: 0 }}>🗺️ View Map</button>
+                        </div>
 
                         <div style={{
                           background: 'rgba(139, 92, 246, 0.1)',
@@ -3748,7 +3867,28 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 })()}
 
                 {/* Battle Options Modal */}
-                {showBattleOptionsModal && battleOptionsData && (
+                {showBattleOptionsModal && battleOptionsData && battleOptionsMinimized && (
+                  <div
+                    onClick={() => setBattleOptionsMinimized(false)}
+                    style={{
+                      position: 'fixed',
+                      top: crisisMinimized && gameState?.phase2?.crises?.active?.length ? '48px' : 0,
+                      left: 0, right: 0,
+                      background: 'linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)',
+                      color: 'white', padding: '10px 24px', zIndex: 1003,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '1.2rem' }}>⚔️</span>
+                      <strong>Battle Options — {battleOptionsData.region}</strong>
+                      <span style={{ background: '#fbbf24', color: '#000', padding: '2px 8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>Action needed</span>
+                    </div>
+                    <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>Click to expand</span>
+                  </div>
+                )}
+                {showBattleOptionsModal && battleOptionsData && !battleOptionsMinimized && (
                   <div style={{
                     position: 'fixed',
                     top: 0,
@@ -3770,9 +3910,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       border: '2px solid #dc2626',
                       boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
                     }}>
-                      <h2 style={{ color: '#fca5a5', margin: '0 0 16px 0', textAlign: 'center' }}>
-                        ⚔️ Battle Options - {battleOptionsData.region}
-                      </h2>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                        <h2 style={{ color: '#fca5a5', margin: 0 }}>
+                          ⚔️ Battle Options - {battleOptionsData.region}
+                        </h2>
+                        <button onClick={() => setBattleOptionsMinimized(true)} style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap', flexShrink: 0 }}>🗺️ View Map</button>
+                      </div>
 
                       <div style={{
                         background: 'rgba(220, 38, 38, 0.1)',
