@@ -8,6 +8,13 @@
       "affectedCountries": ["China", "USA", "USSR"],
       "primaryActors": ["China", "USA", "USSR"],
       "historicalContext": "After WWII, the Chinese Civil War resumes. Nationalists control cities, Communists control countryside. US backs KMT, USSR aids CCP.",
+      "deploymentTrigger": {
+        "region": "East Asia",
+        "requiredCountries": ["USSR", "USA"],
+        "minTroops": 100000,
+        "triggerChance": 0.85,
+        "description": "Foreign military buildup in East Asia intensifies the civil war"
+      },
       "options": {
         "China": [
           {
@@ -87,6 +94,13 @@
       "affectedCountries": ["India", "UK"],
       "primaryActors": ["India", "UK"],
       "historicalContext": "Britain hastily partitions India along religious lines. Unprecedented communal violence erupts.",
+      "deploymentTrigger": {
+        "region": "South Asia",
+        "requiredCountries": ["UK", "India"],
+        "minTroops": 100000,
+        "triggerChance": 0.85,
+        "description": "Military tensions in South Asia accelerate the partition crisis"
+      },
       "options": {
         "India": [
           {
@@ -212,6 +226,13 @@
       "affectedCountries": ["France", "USA", "USSR", "India"],
       "primaryActors": ["France", "USA"],
       "historicalContext": "Eight-year war drains French treasury. Ends at Dien Bien Phu 1954.",
+      "deploymentTrigger": {
+        "region": "Southeast Asia",
+        "requiredCountries": ["France"],
+        "minTroops": 50000,
+        "triggerChance": 0.9,
+        "description": "French military deployment to Southeast Asia triggers colonial war"
+      },
       "options": {
         "France": [
           {
@@ -300,6 +321,13 @@
       "affectedCountries": ["USA", "UK", "USSR", "France"],
       "primaryActors": ["USA", "UK", "USSR"],
       "historicalContext": "Stalin blocks rail and road access. City can only be supplied by air.",
+      "deploymentTrigger": {
+        "region": "Eastern Europe",
+        "requiredCountries": ["USSR"],
+        "minTroops": 200000,
+        "triggerChance": 0.95,
+        "description": "Massive Soviet deployment to Eastern Europe triggers the Berlin Blockade"
+      },
       "options": {
         "USA": [
           {
@@ -398,6 +426,13 @@
       "affectedCountries": ["USA", "UK", "France", "USSR"],
       "primaryActors": ["USA", "USSR"],
       "historicalContext": "Marshall proposes massive aid. Designed to counter Soviet influence.",
+      "deploymentTrigger": {
+        "region": "Western Europe",
+        "requiredCountries": ["USA"],
+        "minTroops": 100000,
+        "triggerChance": 0.9,
+        "description": "American military presence in Western Europe prompts Marshall Plan to secure economic stability"
+      },
       "options": {
         "USA": [
           {
@@ -457,6 +492,13 @@
       "affectedCountries": ["USA", "UK", "USSR", "China", "France", "India", "Argentina"],
       "primaryActors": ["USA", "USSR", "China"],
       "historicalContext": "Stalin approved invasion. Truman sees this as test of containment.",
+      "deploymentTrigger": {
+        "region": "East Asia",
+        "requiredCountries": ["USSR", "China"],
+        "minTroops": 300000,
+        "triggerChance": 0.95,
+        "description": "Soviet and Chinese military buildup in East Asia leads to Korean War"
+      },
       "options": {
         "USA": [
           {

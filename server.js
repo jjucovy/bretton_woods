@@ -857,42 +857,91 @@ function calculateExchangeRate(country, currentYear, policy, previousData, room)
   };
 }
 
-// Trigger crisis events at the END of year turn
+// Trigger crisis events at the END of year turn (or mid-year via deployment)
 // Can trigger multiple crises per year, with random chance per crisis
-function triggerCrisisIfNeeded(roomId, year) {
+// Options:
+//   deploymentTriggered: { country, region, troops } - if called from a deployment action
+function triggerCrisisIfNeeded(roomId, year, options = {}) {
   const room = globalState.rooms[roomId];
   if (!room) return;
 
+  const deploymentTriggered = options.deploymentTriggered || null;
+
   // Find ALL crisis events for this year that haven't been triggered yet
-  const availableCrises = crisisEventsData.crisisEvents.filter(event =>
-    event.year === year &&
-    !room.phase2.crises.history.find(h => h.id === event.id)
-  );
+  // When triggered by deployment, also check crises from the CURRENT year onward (±1 year window)
+  const availableCrises = crisisEventsData.crisisEvents.filter(event => {
+    const alreadyTriggered = room.phase2.crises.history.find(h => h.id === event.id);
+    if (alreadyTriggered) return false;
+    // Already active
+    if (Array.isArray(room.phase2.crises.active) && room.phase2.crises.active.find(a => a.id === event.id)) return false;
+
+    if (deploymentTriggered && event.deploymentTrigger) {
+      // Deployment-triggered: allow crises within ±1 year of their historical date
+      return Math.abs(event.year - year) <= 1;
+    }
+    // Normal year-based: exact year match only
+    return event.year === year;
+  });
 
   if (availableCrises.length === 0) {
-    console.log(`📅 No new crises available for year ${year}`);
+    if (!deploymentTriggered) console.log(`📅 No new crises available for year ${year}`);
     return;
   }
 
-  console.log(`📅 Found ${availableCrises.length} potential crisis(es) for year ${year}`);
+  console.log(`📅 Found ${availableCrises.length} potential crisis(es) for year ${year}${deploymentTriggered ? ` (deployment-triggered by ${deploymentTriggered.country} in ${deploymentTriggered.region})` : ''}`);
 
-  // Random chance for each crisis to trigger (60% base chance)
-  const CRISIS_TRIGGER_CHANCE = 0.6;
+  // Get cumulative deployments for checking deployment triggers
+  const cumulativeDeployments = room.phase2.cumulativeDeployments || {};
+
+  const CRISIS_TRIGGER_CHANCE = 0.6; // Base random chance
   const triggeredCrises = [];
 
   for (const crisis of availableCrises) {
-    const roll = Math.random();
-    const willTrigger = roll < CRISIS_TRIGGER_CHANCE;
+    let triggerChance = CRISIS_TRIGGER_CHANCE;
+    let triggeredByDeployment = false;
+    let triggerReason = null;
 
-    console.log(`   🎲 ${crisis.title}: roll=${roll.toFixed(2)} vs ${CRISIS_TRIGGER_CHANCE} → ${willTrigger ? 'TRIGGERED' : 'skipped'}`);
+    // Check if this crisis has deployment trigger conditions
+    if (crisis.deploymentTrigger) {
+      const dt = crisis.deploymentTrigger;
+      const regionDeployments = cumulativeDeployments[dt.region] || {};
+
+      // Check if any of the required countries have deployed enough troops
+      const matchingCountry = dt.requiredCountries.find(reqCountry => {
+        const countryDeps = regionDeployments[reqCountry];
+        if (!countryDeps) return false;
+        return countryDeps.total >= dt.minTroops;
+      });
+
+      if (matchingCountry) {
+        triggerChance = dt.triggerChance; // Use the crisis-specific higher chance
+        triggeredByDeployment = true;
+        triggerReason = dt.description || `${matchingCountry} deployed forces to ${dt.region}`;
+        console.log(`   ⚡ ${crisis.title}: deployment condition MET (${matchingCountry} has ${regionDeployments[matchingCountry].total} troops in ${dt.region}, need ${dt.minTroops}) → chance boosted to ${triggerChance}`);
+      }
+    }
+
+    // If this is a deployment-triggered call, only trigger crises whose deployment conditions are met
+    if (deploymentTriggered && !triggeredByDeployment) {
+      continue;
+    }
+
+    const roll = Math.random();
+    const willTrigger = roll < triggerChance;
+
+    console.log(`   🎲 ${crisis.title}: roll=${roll.toFixed(2)} vs ${triggerChance}${triggeredByDeployment ? ' (deployment-boosted)' : ''} → ${willTrigger ? 'TRIGGERED' : 'skipped'}`);
 
     if (willTrigger) {
-      triggeredCrises.push(crisis);
+      triggeredCrises.push({
+        ...crisis,
+        triggeredByDeployment,
+        triggerReason
+      });
     }
   }
 
   if (triggeredCrises.length === 0) {
-    console.log(`📅 No crises triggered this year (all failed random check)`);
+    if (!deploymentTriggered) console.log(`📅 No crises triggered this year (all failed random check)`);
     return;
   }
 
@@ -902,7 +951,10 @@ function triggerCrisisIfNeeded(roomId, year) {
   }
 
   for (const crisis of triggeredCrises) {
-    console.log(`🚨 Triggering crisis: ${crisis.title}`);
+    console.log(`🚨 Triggering crisis: ${crisis.title}${crisis.triggeredByDeployment ? ' [DEPLOYMENT-TRIGGERED]' : ''}`);
+    if (crisis.triggerReason) {
+      console.log(`   Reason: ${crisis.triggerReason}`);
+    }
 
     room.phase2.crises.active.push({
       ...crisis,
@@ -3206,6 +3258,15 @@ const countryId = countryData?.country_id || null;
         region: region,
         countries: countriesInRegion,
         message: `Military tension rising in ${region}! Multiple nations have forces deployed.`
+      });
+    }
+
+    // Check if this deployment triggers a crisis event
+    // Only check if there are no active crises (don't stack mid-turn)
+    const activeCrises = room.phase2.crises?.active || [];
+    if (activeCrises.length === 0) {
+      triggerCrisisIfNeeded(roomId, room.phase2.currentYear, {
+        deploymentTriggered: { country, region, troops }
       });
     }
 
