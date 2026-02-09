@@ -154,6 +154,10 @@ function MilitaryMap({ currentYear, gameState, playerCountry, socket, roomId, pl
     return n.toString();
   };
 
+  // Compute a stable key from deployment data so React detects deep changes
+  const deploymentKey = JSON.stringify(gameState?.phase2?.cumulativeDeployments || {});
+  const conflictKey = JSON.stringify(gameState?.phase2?.pendingConflictZones || {});
+
   // Update map with cumulative deployments, conflict zones, and battle results
   useEffect(() => {
     if (!leafletMapRef.current) return;
@@ -389,13 +393,7 @@ function MilitaryMap({ currentYear, gameState, playerCountry, socket, roomId, pl
       deploymentMarkersRef.current.push(marker);
     });
 
-  }, [
-    gameState?.phase2?.cumulativeDeployments,
-    gameState?.phase2?.pendingConflictZones,
-    gameState?.phase2?.activeConflicts,
-    gameState?.phase2?.battleResults,
-    currentYear
-  ]);
+  }, [deploymentKey, conflictKey, gameState?.phase2?.activeConflicts?.length, gameState?.phase2?.battleResults?.length, currentYear]);
 
   // Auto-zoom to conflict zones when they appear
   useEffect(() => {
