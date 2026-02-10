@@ -214,6 +214,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [username, setUsername] = useState('');
           const [playerId, setPlayerId] = useState('');
           const [userRole, setUserRole] = useState('player');
+          const [isRoomHost, setIsRoomHost] = useState(false);
           const [showRegister, setShowRegister] = useState(false);
           
           // NEW: Game selection state
@@ -376,6 +377,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 console.log('Country:', country);
                 console.log('Needs country selection:', needsCountrySelection);
                 
+                setIsRoomHost(!!isHost);
+
                 // If reconnected with country, set it
                 if (reconnected && country) {
                   setPlayerCountry(country);
@@ -2078,8 +2081,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             );
                           })()}
 
-                          {/* Continue button - only admin can advance */}
-                          {userRole === 'superadmin' && (
+                          {/* Continue button - admin or host can advance */}
+                          {(userRole === 'superadmin' || isRoomHost) && (
                             <button
                               onClick={() => {
                                 socket.emit('advanceRound', {
@@ -2102,9 +2105,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </button>
                           )}
 
-                          {userRole !== 'superadmin' && (
+                          {userRole !== 'superadmin' && !isRoomHost && (
                             <p style={{ color: '#78350f', fontSize: '0.875rem', fontStyle: 'italic' }}>
-                              Waiting for administrator to advance to next round...
+                              Waiting for host to advance to next round...
                             </p>
                           )}
                         </div>
