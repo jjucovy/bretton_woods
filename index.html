@@ -2837,6 +2837,89 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
                           )}
 
+                          {/* Conference Decisions -- Phase 1 outcomes affecting Phase 2 */}
+                          {gameState.phase1Outcomes && Object.keys(gameState.phase1Outcomes).length > 0 && (
+                            <div style={{
+                              background: 'white',
+                              borderRadius: '12px',
+                              padding: '24px',
+                              marginBottom: '20px',
+                              border: '2px solid #a78bfa'
+                            }}>
+                              <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#6d28d9' }}>🏛️ Conference Decisions (Affecting Economy)</h3>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+                                {gameState.phase1Outcomes.reserveCurrency && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Reserve Currency:</strong>{' '}
+                                    {gameState.phase1Outcomes.reserveCurrency === 'dollar' ? '💵 US Dollar (White Plan)'
+                                      : gameState.phase1Outcomes.reserveCurrency === 'bancor' ? '🌐 Bancor (Keynes Plan)'
+                                      : '🔀 Multiple Currencies'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.exchangeRateSystem && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Exchange Rates:</strong>{' '}
+                                    {gameState.phase1Outcomes.exchangeRateSystem === 'fixed' ? '📌 Fixed Pegs'
+                                      : gameState.phase1Outcomes.exchangeRateSystem === 'adjustable' ? '↔️ Adjustable Pegs'
+                                      : '🏳️ National Sovereignty'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.capitalControls && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Capital Controls:</strong>{' '}
+                                    {gameState.phase1Outcomes.capitalControls === 'free' ? '🔓 Free Movement'
+                                      : gameState.phase1Outcomes.capitalControls === 'transitional' ? '⏳ Transitional Controls'
+                                      : '🔒 Permanent Controls'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.tradeLiberalization && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Trade Policy:</strong>{' '}
+                                    {gameState.phase1Outcomes.tradeLiberalization === 'freeTrade' ? '🌍 Free Trade'
+                                      : gameState.phase1Outcomes.tradeLiberalization === 'imperialPreference' ? '👑 Imperial Preferences'
+                                      : '📉 Gradual Tariff Reduction'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.goldStandard && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Gold Standard:</strong>{' '}
+                                    {gameState.phase1Outcomes.goldStandard === 'fixedPeg' ? '🥇 Fixed $35/oz Peg'
+                                      : gameState.phase1Outcomes.goldStandard === 'flexible' ? '⚖️ Flexible Gold Standard'
+                                      : '❌ Gold Abandoned'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.sovietParticipation && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Soviet Role:</strong>{' '}
+                                    {gameState.phase1Outcomes.sovietParticipation === 'conditional' ? '🤝 Conditional Participation'
+                                      : gameState.phase1Outcomes.sovietParticipation === 'unconditional' ? '✅ Full Participation'
+                                      : '🔀 Separate Eastern System'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.reconstructionFinancing && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Reconstruction:</strong>{' '}
+                                    {gameState.phase1Outcomes.reconstructionFinancing === 'worldBank' ? '🏦 World Bank (US Conditions)'
+                                      : gameState.phase1Outcomes.reconstructionFinancing === 'unconditional' ? '🎁 Unconditional Grants'
+                                      : gameState.phase1Outcomes.reconstructionFinancing === 'devastated' ? '🏚️ Priority for Most Devastated'
+                                      : '🌾 Include Commodity Exporters'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.postWarOrder && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>World Order:</strong>{' '}
+                                    {gameState.phase1Outcomes.postWarOrder === 'usLed' ? '🇺🇸 US-Led Liberal Order'
+                                      : gameState.phase1Outcomes.postWarOrder === 'multilateral' ? '🤝 Multilateral Cooperation'
+                                      : '🏴 National Sovereignty'}
+                                  </div>
+                                )}
+                              </div>
+                              <p style={{ fontSize: '0.8rem', color: '#7c3aed', marginTop: '12px', marginBottom: 0, fontStyle: 'italic' }}>
+                                These decisions from the Conference directly influence economic calculations each year.
+                              </p>
+                            </div>
+                          )}
+
                           {/* Historical Events */}
                           <div style={{
                             background: 'white',

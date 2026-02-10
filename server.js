@@ -18,6 +18,14 @@ const {
 } = require('./shared/country-utils');
 const { queryDatabase } = require('./server/database');
 const { sendAdminNotification } = require('./server/email');
+const {
+  REGIONS: DEPLOYMENT_REGIONS,
+  calculateDeploymentCosts,
+  calculateDeploymentEconomics,
+  calculateRegionalControl,
+  detectDeploymentConflicts,
+  applyDeploymentEffects
+} = require('./deployment-impacts');
 // Economics functions (calculateAgreementBonus, calculateExchangeRate,
 // calculateYearEconomics, calculatePhase2Scores) are also available as a
 // module at ./server/economics.js. The inline definitions below are still
@@ -693,6 +701,10 @@ function initializePhase2(roomId) {
   console.log(`   yearlyData[1946] sample:`, JSON.stringify(room.phase2.yearlyData[1946], null, 2).substring(0, 400));
   console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)\n`);
 
+  // Compute and cache Phase 1 outcomes so they're available throughout Phase 2
+  const phase1Outcomes = getPhase1Outcomes(roomId);
+  console.log(`   Phase 1 outcomes:`, JSON.stringify(phase1Outcomes));
+
   // Check for 1946 crises at game start
   triggerCrisisIfNeeded(roomId, 1946);
 
@@ -701,60 +713,172 @@ function initializePhase2(roomId) {
   saveGamePhase2State(roomId);
 }
 
+// Derive structured Phase 1 outcomes from roundHistory.
+// Each of the 10 voting issues maps to a concrete world-state decision.
+function getPhase1Outcomes(roomId) {
+  const room = globalState.rooms[roomId];
+  if (!room) return {};
+
+  // Cache so we only compute once per room
+  if (room.phase1Outcomes) return room.phase1Outcomes;
+
+  const roundHistory = room.roundHistory || [];
+  const outcomes = {};
+
+  roundHistory.forEach(round => {
+    const win = round.winningOption; // 'a', 'b', 'c', or 'd'
+    if (!win) return;
+
+    switch (round.round) {
+      case 1: // Reserve Currency System
+        // a = dollar (White Plan), b = Bancor (Keynes Plan), c = multiple reserve currencies
+        outcomes.reserveCurrency = win === 'a' ? 'dollar' : win === 'b' ? 'bancor' : 'multiple';
+        break;
+      case 2: // Exchange Rate System
+        // a = fixed rates pegged to dollar, b = adjustable pegs, c = national sovereignty
+        outcomes.exchangeRateSystem = win === 'a' ? 'fixed' : win === 'b' ? 'adjustable' : 'sovereign';
+        break;
+      case 3: // Capital Controls
+        // a = free capital movement, b = transitional controls, c = permanent controls
+        outcomes.capitalControls = win === 'a' ? 'free' : win === 'b' ? 'transitional' : 'permanent';
+        break;
+      case 4: // IMF Voting Power
+        // a = weighted by gold/GDP, b = major power quotas, c = more equal distribution
+        outcomes.imfVotingPower = win === 'a' ? 'weighted' : win === 'b' ? 'majorPower' : 'equal';
+        break;
+      case 5: // Reconstruction Financing
+        // a = World Bank with US conditions, b = unconditional grants, c = priority for devastated, d = include commodity exporters
+        outcomes.reconstructionFinancing = win === 'a' ? 'worldBank' : win === 'b' ? 'unconditional' : win === 'c' ? 'devastated' : 'commodity';
+        break;
+      case 6: // Currency Stabilization
+        // a = market-based, b = IMF stabilization loans, c = state currency controls
+        outcomes.currencyStabilization = win === 'a' ? 'market' : win === 'b' ? 'imfLoans' : 'stateControls';
+        break;
+      case 7: // Trade Liberalization
+        // a = free trade, b = imperial preferences, c = gradual tariff reduction
+        outcomes.tradeLiberalization = win === 'a' ? 'freeTrade' : win === 'b' ? 'imperialPreference' : 'gradualReduction';
+        break;
+      case 8: // Gold Standard
+        // a = fixed gold-dollar peg ($35/oz), b = flexible gold standard, c = abandon gold
+        outcomes.goldStandard = win === 'a' ? 'fixedPeg' : win === 'b' ? 'flexible' : 'abandonGold';
+        break;
+      case 9: // Soviet Participation
+        // a = full with conditions, b = no political strings, c = separate Eastern system
+        outcomes.sovietParticipation = win === 'a' ? 'conditional' : win === 'b' ? 'unconditional' : 'separate';
+        break;
+      case 10: // Post-War Economic Order
+        // a = US-led liberal order, b = multilateral cooperation, c = national sovereignty
+        outcomes.postWarOrder = win === 'a' ? 'usLed' : win === 'b' ? 'multilateral' : 'sovereignty';
+        break;
+    }
+  });
+
+  room.phase1Outcomes = outcomes;
+  return outcomes;
+}
+
 function calculateAgreementBonus(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return {};
-  
+
   const bonus = {};
   const roundHistory = room.roundHistory || [];
-  
-  // Analyze each country's Bretton Woods positions
+  const outcomes = getPhase1Outcomes(roomId);
+
+  // Analyze each country's alignment with the agreed world order
   Object.values(room.players).forEach(player => {
     const country = normalizeCountryName(player.country);
     let gdpBonus = 0;
     let tradeBonus = 0;
     let cooperationBonus = 0;
-    
+
     roundHistory.forEach((round, idx) => {
-      const playerVote = round.votes[player.userId]; // Get vote from saved history
+      const playerVote = round.votes[player.userId];
       const winningOption = round.winningOption;
-      
+
       if (!playerVote || !winningOption) return;
-      
-      // Issue-specific bonuses based on historical outcomes
-      const issueTitle = round.issueTitle || '';
-      
+
       // Voted with majority = cooperation benefit
       if (playerVote === winningOption) {
-        cooperationBonus += 0.3; // GDP bonus for being part of consensus
-        
-        // Specific issue bonuses
-        if (issueTitle.includes('IMF') || issueTitle.includes('loans')) {
-          // Supporting IMF/loans = better access to capital
-          tradeBonus += 200; // Million USD trade balance improvement
-        }
-        
-        if (issueTitle.includes('tariff') || issueTitle.includes('trade')) {
-          // Supporting free trade = trade benefits
-          gdpBonus += 0.4;
-          tradeBonus += 300;
-        }
-        
-        if (issueTitle.includes('gold') || issueTitle.includes('currency')) {
-          // Supporting gold standard = monetary stability
-          gdpBonus += 0.2;
-        }
-        
-        if (issueTitle.includes('World Bank') || issueTitle.includes('development')) {
-          // Supporting development aid = reconstruction benefits
-          gdpBonus += 0.3;
-        }
+        cooperationBonus += 0.3;
       } else {
-        // Voted against majority = isolation penalty
         cooperationBonus -= 0.1;
       }
     });
-    
+
+    // --- Outcome-specific bonuses for each country ---
+
+    // Reserve Currency (Issue 1)
+    if (outcomes.reserveCurrency === 'dollar') {
+      if (country === 'USA') { gdpBonus += 0.5; tradeBonus += 300; }
+    } else if (outcomes.reserveCurrency === 'bancor') {
+      // UK/France benefit from Keynes Plan
+      if (country === 'UK') { gdpBonus += 0.4; tradeBonus += 200; }
+      if (country === 'France') { gdpBonus += 0.3; tradeBonus += 150; }
+    } else if (outcomes.reserveCurrency === 'multiple') {
+      // Diversified system - smaller nations benefit, USA loses advantage
+      if (country !== 'USA') { gdpBonus += 0.2; tradeBonus += 100; }
+    }
+
+    // Trade Liberalization (Issue 7)
+    if (outcomes.tradeLiberalization === 'freeTrade') {
+      // Free trade benefits large exporters
+      if (country === 'USA') { tradeBonus += 300; gdpBonus += 0.3; }
+      if (country === 'UK') { tradeBonus += 200; }
+    } else if (outcomes.tradeLiberalization === 'imperialPreference') {
+      // Commonwealth nations benefit
+      if (country === 'UK' || country === 'India') { tradeBonus += 250; gdpBonus += 0.2; }
+    } else if (outcomes.tradeLiberalization === 'gradualReduction') {
+      // Developing nations benefit from gradual approach
+      if (country === 'Argentina' || country === 'France') { tradeBonus += 150; gdpBonus += 0.2; }
+    }
+
+    // Reconstruction Financing (Issue 5)
+    if (outcomes.reconstructionFinancing === 'worldBank') {
+      if (country === 'UK' || country === 'France') { gdpBonus += 0.3; }
+    } else if (outcomes.reconstructionFinancing === 'unconditional') {
+      if (country === 'USSR') { gdpBonus += 0.4; tradeBonus += 200; }
+      if (country === 'UK' || country === 'India') { gdpBonus += 0.2; }
+    } else if (outcomes.reconstructionFinancing === 'devastated') {
+      if (country === 'France' || country === 'USSR') { gdpBonus += 0.5; tradeBonus += 200; }
+    } else if (outcomes.reconstructionFinancing === 'commodity') {
+      if (country === 'Argentina' || country === 'India') { gdpBonus += 0.4; tradeBonus += 200; }
+    }
+
+    // Gold Standard (Issue 8)
+    if (outcomes.goldStandard === 'fixedPeg') {
+      // Benefits gold holders
+      if (country === 'USA') { gdpBonus += 0.3; }
+    } else if (outcomes.goldStandard === 'flexible') {
+      // Moderate benefit for all participants
+      gdpBonus += 0.1;
+    } else if (outcomes.goldStandard === 'abandonGold') {
+      // More monetary freedom for developing nations
+      if (country === 'China' || country === 'India' || country === 'Argentina') { gdpBonus += 0.3; }
+      if (country === 'USA') { gdpBonus -= 0.3; } // Loses gold advantage
+    }
+
+    // IMF Voting Power (Issue 4)
+    if (outcomes.imfVotingPower === 'weighted') {
+      if (country === 'USA') { tradeBonus += 200; }
+    } else if (outcomes.imfVotingPower === 'equal') {
+      if (country === 'China' || country === 'India' || country === 'Argentina') { tradeBonus += 150; }
+    }
+
+    // Capital Controls (Issue 3)
+    if (outcomes.capitalControls === 'free') {
+      if (country === 'USA') { tradeBonus += 200; }
+    } else if (outcomes.capitalControls === 'permanent') {
+      if (country === 'USSR' || country === 'China') { gdpBonus += 0.2; }
+    }
+
+    // Soviet Participation (Issue 9)
+    if (outcomes.sovietParticipation === 'unconditional') {
+      if (country === 'USSR') { gdpBonus += 0.5; tradeBonus += 300; }
+    } else if (outcomes.sovietParticipation === 'separate') {
+      if (country === 'USSR') { gdpBonus -= 0.3; tradeBonus -= 200; }
+    }
+
     // Store detailed bonuses
     bonus[country] = {
       gdpBonus: gdpBonus + cooperationBonus,
@@ -762,7 +886,7 @@ function calculateAgreementBonus(roomId) {
       description: `Bretton Woods alignment: ${cooperationBonus > 0 ? 'cooperative' : 'isolated'}`
     };
   });
-  
+
   return bonus;
 }
 
@@ -856,10 +980,34 @@ function calculateExchangeRate(country, currentYear, policy, previousData, room)
     newRate = previousRate * (1 + rateChange / 100);
   }
   
-  // Bretton Woods constraint: ±1% band (unless crisis)
-  const defendable = Math.abs(rateChange) < 10;
-  
-  if (Math.abs(rateChange) > 1 && Math.abs(rateChange) < 10) {
+  // Phase 1 exchange rate system affects band width and volatility
+  const phase1 = getPhase1Outcomes(room.roomId || '');
+  let bandWidth = 1; // Default Bretton Woods ±1% band
+  if (phase1.exchangeRateSystem === 'adjustable') {
+    bandWidth = 5; // Adjustable pegs allow ±5% before intervention
+    rateChange *= 0.8; // More policy room = less forced pressure
+  } else if (phase1.exchangeRateSystem === 'sovereign') {
+    bandWidth = 15; // Near-floating rates
+    rateChange *= 0.6; // Nations can manage their own rates more freely
+  }
+  // 'fixed' = default strict ±1% band
+
+  // Gold standard vote affects gold reserve pressure
+  if (phase1.goldStandard === 'abandonGold') {
+    // Gold reserves matter less -- reduce the gold-reserve-driven rate pressure
+    if (goldReserves < 500) {
+      rateChange -= 2.0; // Offset half the crisis pressure applied above
+    }
+  } else if (phase1.goldStandard === 'flexible') {
+    if (goldReserves < 500) {
+      rateChange -= 1.0; // Slightly less pressure than strict peg
+    }
+  }
+
+  // Bretton Woods constraint: band depends on Phase 1 exchange rate vote
+  const defendable = Math.abs(rateChange) < (bandWidth * 2);
+
+  if (Math.abs(rateChange) > bandWidth && Math.abs(rateChange) < (bandWidth * 2)) {
     console.log(`⚠️  ${country}: Exchange rate pressure (${rateChange.toFixed(1)}%) - intervention required`);
   }
   
@@ -998,6 +1146,7 @@ function calculateYearEconomics(roomId) {
   
   // Get Bretton Woods agreements impact
   const agreementBonuses = calculateAgreementBonus(roomId);
+  const phase1 = getPhase1Outcomes(roomId);
   
   // STEP 1: Calculate average global economic conditions
   const allCountries = Object.values(room.players).map(p => p.country);
@@ -1226,13 +1375,40 @@ function calculateYearEconomics(roomId) {
     if (tariffDeviation < 10) {
       gdpGrowth += 0.3; // Benefit from coordinated trade policy
     }
+
+    // Phase 1 Trade Liberalization outcome affects tariff penalties
+    if (phase1.tradeLiberalization === 'freeTrade') {
+      // Free trade world: low tariffs rewarded more, high tariffs punished more
+      if (tariffRate < 15) {
+        tradeBalance += 200; // Free trade bonus for compliant nations
+        gdpGrowth += 0.3;
+      } else if (tariffRate > 30) {
+        tradeBalance -= 300; // Punished for protectionism in a free-trade world
+        gdpGrowth -= 0.3;
+      }
+    } else if (phase1.tradeLiberalization === 'imperialPreference') {
+      // Imperial preference world: UK/India/Commonwealth benefit from protected blocs
+      if (country === 'UK' || country === 'India') {
+        tradeBalance += 150;
+      }
+      // Outsiders penalized
+      if (country === 'USA' || country === 'Argentina') {
+        tradeBalance -= 100;
+      }
+    }
+    // 'gradualReduction': no extra modifier -- standard mechanics apply
     
     // === CAPITAL FLOWS ===
+    // Phase 1 capital controls outcome affects capital flow magnitude
+    const capitalFlowMultiplier = phase1.capitalControls === 'free' ? 1.5
+      : phase1.capitalControls === 'permanent' ? 0.3
+      : 1.0; // 'transitional' = baseline
+
     // High interest rates attract capital (helps balance of payments)
     if (centralBankRate > globalAvgInterestRate + 2) {
-      tradeBalance += 500; // Capital inflows
+      tradeBalance += Math.round(500 * capitalFlowMultiplier); // Capital inflows
     } else if (centralBankRate < globalAvgInterestRate - 2) {
-      tradeBalance -= 300; // Capital outflows
+      tradeBalance -= Math.round(300 * capitalFlowMultiplier); // Capital outflows
     }
     
     // Bretton Woods agreement bonuses
@@ -1290,10 +1466,21 @@ function calculateYearEconomics(roomId) {
         }
       }
       
-      // Marshall Plan isolation (from 1948)
+      // Marshall Plan isolation (from 1948) -- severity depends on Soviet Participation vote
       if (currentYear >= 1948) {
-        gdpGrowth -= 0.5; // Isolation from Marshall Plan (reduced from -1.0)
-        tradeBalance -= 200; // Western trade cutoff (reduced from -400)
+        if (phase1.sovietParticipation === 'unconditional') {
+          // World voted to include USSR without strings -- milder isolation
+          gdpGrowth -= 0.2;
+          tradeBalance -= 100;
+        } else if (phase1.sovietParticipation === 'separate') {
+          // World endorsed a separate Eastern system -- deeper isolation
+          gdpGrowth -= 0.8;
+          tradeBalance -= 400;
+        } else {
+          // 'conditional' (default/historical) -- moderate isolation
+          gdpGrowth -= 0.5;
+          tradeBalance -= 200;
+        }
       }
 
       // USSR Superpower Advantages
@@ -1378,28 +1565,67 @@ function calculateYearEconomics(roomId) {
     }
 
     if (country === 'France') {
-      // Marshall Plan recipient - major reconstruction aid
+      // Reconstruction aid -- scale depends on Phase 1 Reconstruction Financing vote
       if (currentYear >= 1948) {
-        gdpGrowth += 1.2; // Marshall Plan boost
-        tradeBalance += 400; // US aid
+        if (phase1.reconstructionFinancing === 'worldBank') {
+          // World Bank with US conditions -- France benefits from structured aid
+          gdpGrowth += 1.2;
+          tradeBalance += 400;
+        } else if (phase1.reconstructionFinancing === 'devastated') {
+          // Priority for most devastated -- France is a top recipient
+          gdpGrowth += 1.5;
+          tradeBalance += 500;
+        } else if (phase1.reconstructionFinancing === 'unconditional') {
+          // Unconditional grants -- decent but less targeted
+          gdpGrowth += 1.0;
+          tradeBalance += 350;
+        } else {
+          // 'commodity' -- aid goes elsewhere, France gets less
+          gdpGrowth += 0.6;
+          tradeBalance += 200;
+        }
       }
       // Despite currency crises, rapid reconstruction
       gdpGrowth += 0.5; // Reconstruction momentum
     }
 
     if (country === 'UK') {
-      // Marshall Plan and special relationship with USA
+      // Reconstruction aid depends on Phase 1 vote
       if (currentYear >= 1948) {
-        gdpGrowth += 0.6; // Marshall Plan
-        tradeBalance += 250; // US support
+        if (phase1.reconstructionFinancing === 'worldBank') {
+          gdpGrowth += 0.6;
+          tradeBalance += 250;
+        } else if (phase1.reconstructionFinancing === 'unconditional') {
+          // UK pushed for unconditional -- bigger benefit
+          gdpGrowth += 0.9;
+          tradeBalance += 350;
+        } else if (phase1.reconstructionFinancing === 'devastated') {
+          // UK less devastated than France/USSR -- less priority
+          gdpGrowth += 0.4;
+          tradeBalance += 150;
+        } else {
+          gdpGrowth += 0.5;
+          tradeBalance += 200;
+        }
       }
-      // Commonwealth trade network
-      tradeBalance += 200; // Sterling area trade
+      // Commonwealth trade -- stronger if imperial preferences won
+      if (phase1.tradeLiberalization === 'imperialPreference') {
+        tradeBalance += 350; // Sterling area trade flourishes
+      } else {
+        tradeBalance += 200; // Sterling area trade
+      }
     }
 
     if (country === 'USA') {
-      // USA benefits from being reserve currency
-      tradeBalance += 400; // Dollar demand
+      // USA reserve currency bonus -- depends on Phase 1 Reserve Currency vote
+      if (phase1.reserveCurrency === 'dollar') {
+        tradeBalance += 400; // Dollar demand as sole reserve currency
+      } else if (phase1.reserveCurrency === 'multiple') {
+        tradeBalance += 150; // Partial reserve status, shared with others
+      } else {
+        // 'bancor' -- Keynes Plan won, USA loses reserve currency privilege
+        tradeBalance += 50; // Still a major currency but no special privilege
+      }
     }
 
     // === ARGENTINA SPECIAL MECHANICS ===
@@ -1555,6 +1781,34 @@ function calculateYearEconomics(roomId) {
       inflation += exchangeRateResult.change * 0.15;
     }
     
+    // === DEPLOYMENT MAINTENANCE COSTS ===
+    // Annual upkeep for all deployed troops (deducted from gold reserves and trade balance)
+    const flatDeployments = flattenDeployments(room.phase2.cumulativeDeployments, currentYear);
+    const countryDeployments = flatDeployments.filter(d => d.country === country);
+
+    let totalMaintenanceCost = 0;
+    countryDeployments.forEach(d => {
+      const distFactor = getDeploymentDistanceFactor(country, d.region);
+      const branchMult = d.branch === 'navy' ? 4.0 : d.branch === 'airForce' ? 6.0 : 1.0;
+      // ~$500-$6000 per soldier per year depending on branch and distance
+      const maintenance = d.troops * distFactor * 0.0005 * branchMult; // in $M
+      totalMaintenanceCost += maintenance;
+    });
+
+    if (totalMaintenanceCost > 0) {
+      // Maintenance hits gold reserves directly
+      goldReserves -= totalMaintenanceCost;
+      // Also drags on trade balance (supply shipments, logistics)
+      tradeBalance -= totalMaintenanceCost * 0.3;
+      // Overextension: more than 5 deployments hurts GDP
+      if (countryDeployments.length > 5) {
+        const overextensionPenalty = (countryDeployments.length - 5) * 0.2;
+        gdpGrowth -= overextensionPenalty;
+      }
+    }
+
+    goldReserves = Math.max(0, goldReserves);
+
     // Store results
     tempResults[country] = {
       gdpGrowth: Math.round(gdpGrowth * 10) / 10,
@@ -1566,6 +1820,7 @@ function calculateYearEconomics(roomId) {
       exchangeRate: Math.round(exchangeRateResult.rate * 100) / 100,
       exchangeRateChange: Math.round(exchangeRateResult.change * 10) / 10,
       militarySpending: milSpending,
+      deploymentMaintenanceCost: Math.round(totalMaintenanceCost),
       military: {
         army: armySize,
         navy: navySize,
@@ -1726,6 +1981,92 @@ function calculatePhase2Scores(roomId) {
   console.log(`Phase 2 final scores:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);
   return phase2Scores;
+}
+
+// --- Deployment cost helpers ---
+// Base deployment costs per region (in $M, for 50K troops)
+function getDeploymentBaseCost(region) {
+  const costs = {
+    'Western Europe': 100, 'Eastern Europe': 150, 'Germany': 80, 'Berlin': 200,
+    'Middle East': 180, 'Suez Canal': 150, 'Korea': 250, 'Indochina': 220,
+    'South Asia': 120, 'East Asia': 200, 'Southeast Asia': 180, 'Pacific Islands': 150,
+    'North America': 50, 'Central America': 100, 'South America': 120, 'Caribbean': 80,
+    'North Africa': 140, 'Sub-Saharan Africa': 160,
+    'Mediterranean': 130, 'Atlantic Ocean': 120, 'Pacific Ocean': 140,
+    'Indian Ocean': 150, 'Central Asia': 140, 'Latin America': 120, 'Africa': 160
+  };
+  return costs[region] || 100;
+}
+
+// Distance factor: how far region is from country (1.0 = near, 2.0 = far)
+function getDeploymentDistanceFactor(country, region) {
+  const distanceMap = {
+    'USA': {
+      'Western Europe': 1.5, 'Eastern Europe': 2.0, 'Germany': 1.5, 'Berlin': 2.0,
+      'Middle East': 1.8, 'Suez Canal': 1.8, 'Korea': 1.8, 'Indochina': 1.8,
+      'South Asia': 1.9, 'East Asia': 1.8, 'Southeast Asia': 1.7, 'Pacific Islands': 1.2,
+      'North America': 1.0, 'Central America': 1.0, 'South America': 1.3, 'Caribbean': 1.0,
+      'North Africa': 1.6, 'Sub-Saharan Africa': 1.7
+    },
+    'USSR': {
+      'Western Europe': 1.2, 'Eastern Europe': 1.0, 'Germany': 1.1, 'Berlin': 1.1,
+      'Middle East': 1.2, 'Suez Canal': 1.4, 'Korea': 1.3, 'Indochina': 1.6,
+      'South Asia': 1.3, 'East Asia': 1.3, 'Southeast Asia': 1.6, 'Pacific Islands': 1.8,
+      'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
+      'North Africa': 1.5, 'Sub-Saharan Africa': 1.6
+    },
+    'UK': {
+      'Western Europe': 1.0, 'Eastern Europe': 1.3, 'Germany': 1.0, 'Berlin': 1.2,
+      'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 1.9, 'Indochina': 1.6,
+      'South Asia': 1.5, 'East Asia': 1.9, 'Southeast Asia': 1.6, 'Pacific Islands': 1.9,
+      'North America': 1.3, 'Central America': 1.5, 'South America': 1.6, 'Caribbean': 1.4,
+      'North Africa': 1.1, 'Sub-Saharan Africa': 1.2
+    },
+    'France': {
+      'Western Europe': 1.0, 'Eastern Europe': 1.4, 'Germany': 1.0, 'Berlin': 1.3,
+      'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 2.0, 'Indochina': 1.5,
+      'South Asia': 1.7, 'East Asia': 2.0, 'Southeast Asia': 1.5, 'Pacific Islands': 2.0,
+      'North America': 1.5, 'Central America': 1.7, 'South America': 1.7, 'Caribbean': 1.6,
+      'North Africa': 1.0, 'Sub-Saharan Africa': 1.1
+    },
+    'China': {
+      'Western Europe': 2.0, 'Eastern Europe': 1.8, 'Germany': 2.0, 'Berlin': 2.0,
+      'Middle East': 1.6, 'Suez Canal': 1.8, 'Korea': 1.0, 'Indochina': 1.1,
+      'South Asia': 1.3, 'East Asia': 1.0, 'Southeast Asia': 1.1, 'Pacific Islands': 1.4,
+      'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
+      'North Africa': 1.9, 'Sub-Saharan Africa': 1.8
+    },
+    'India': {
+      'Western Europe': 1.8, 'Eastern Europe': 1.9, 'Germany': 1.8, 'Berlin': 1.9,
+      'Middle East': 1.3, 'Suez Canal': 1.4, 'Korea': 1.6, 'Indochina': 1.2,
+      'South Asia': 1.0, 'East Asia': 1.5, 'Southeast Asia': 1.2, 'Pacific Islands': 1.6,
+      'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
+      'North Africa': 1.5, 'Sub-Saharan Africa': 1.4
+    },
+    'Argentina': {
+      'Western Europe': 1.7, 'Eastern Europe': 2.0, 'Germany': 1.8, 'Berlin': 2.0,
+      'Middle East': 2.0, 'Suez Canal': 1.9, 'Korea': 2.0, 'Indochina': 2.0,
+      'South Asia': 2.0, 'East Asia': 2.0, 'Southeast Asia': 2.0, 'Pacific Islands': 1.8,
+      'North America': 1.3, 'Central America': 1.2, 'South America': 1.0, 'Caribbean': 1.2,
+      'North Africa': 1.7, 'Sub-Saharan Africa': 1.6
+    }
+  };
+  return distanceMap[country]?.[region] || 1.5;
+}
+
+// Convert cumulativeDeployments (server format) to flat array (deployment-impacts format)
+function flattenDeployments(cumulativeDeployments, year) {
+  const flat = [];
+  if (!cumulativeDeployments) return flat;
+  Object.entries(cumulativeDeployments).forEach(([region, countries]) => {
+    Object.entries(countries).forEach(([country, forces]) => {
+      // Create one entry per branch with troops > 0
+      if (forces.army > 0) flat.push({ country, region, branch: 'army', troops: forces.army, year });
+      if (forces.navy > 0) flat.push({ country, region, branch: 'navy', troops: forces.navy, year });
+      if (forces.airForce > 0) flat.push({ country, region, branch: 'airForce', troops: forces.airForce, year });
+    });
+  });
+  return flat;
 }
 
 // Helper function to resolve a specific crisis and apply effects
@@ -3281,13 +3622,48 @@ const countryId = countryData?.country_id || null;
     room.phase2.cumulativeDeployments[region][country].total += troops;
 
     // Add to deployment history for record keeping
-    room.phase2.deploymentHistory.push({
+    const deploymentRecord = {
       ...deployment,
+      branch: normalizedBranch === 'airForce' ? 'Air Force' : normalizedBranch.charAt(0).toUpperCase() + normalizedBranch.slice(1),
       timestamp: Date.now(),
       year: room.phase2.currentYear
-    });
+    };
+    room.phase2.deploymentHistory.push(deploymentRecord);
 
-    console.log(`✅ ${country} deployed ${troops} ${branch} to ${region}`);
+    // Sync deployments array (used by client for display)
+    if (!room.phase2.deployments) room.phase2.deployments = [];
+    room.phase2.deployments.push(deploymentRecord);
+
+    // --- Deduct deployment cost from gold reserves ---
+    const currentYear = room.phase2.currentYear;
+    const normalizedCountry = normalizeCountryName(country);
+    const countryData = room.phase2.yearlyData[currentYear]?.[normalizedCountry];
+    if (countryData) {
+      const distanceFactor = getDeploymentDistanceFactor(normalizedCountry, region);
+      const branchCostMultiplier = normalizedBranch === 'navy' ? 1.5 : normalizedBranch === 'airForce' ? 2.0 : 1.0;
+      const baseCost = getDeploymentBaseCost(region);
+      const deploymentCost = Math.round(baseCost * (troops / 50000) * branchCostMultiplier * distanceFactor);
+
+      countryData.goldReserves = Math.max(0, (countryData.goldReserves || 0) - deploymentCost);
+
+      console.log(`   💰 Cost: $${deploymentCost}M (base $${baseCost}M × ${(troops/50000).toFixed(1)} × ${branchCostMultiplier}x branch × ${distanceFactor}x distance)`);
+      console.log(`   📦 ${normalizedCountry} gold reserves now: $${countryData.goldReserves}M`);
+
+      // Notify the deploying player of the cost
+      const playerSocket = io.sockets.sockets.get(player.socketId);
+      if (playerSocket) {
+        playerSocket.emit('deploymentCostNotification', {
+          region,
+          troops,
+          branch: deploymentRecord.branch,
+          cost: deploymentCost,
+          goldRemaining: countryData.goldReserves,
+          distanceFactor
+        });
+      }
+    }
+
+    console.log(`✅ ${country} deployed ${troops} ${normalizedBranch} to ${region}`);
     console.log(`   Cumulative in ${region}: ${JSON.stringify(room.phase2.cumulativeDeployments[region][country])}`);
 
     // Check for potential conflicts but DON'T trigger battle yet
