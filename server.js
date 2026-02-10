@@ -3129,6 +3129,41 @@ const countryId = countryData?.country_id || null;
           room.roundScores = roundScores;
           room.gamePhase = 'results';
 
+          // --- PHASE 1 AUTO-ADVANCE (BEST REVISION) ---
+
+if (room.gamePhase === 'results' && room.currentRound <= 10) {
+
+  console.log(`⏳ Phase 1 auto-advance scheduled for round ${room.currentRound}`);
+
+  setTimeout(() => {
+
+    // Safety checks
+    if (!room) return;
+    if (room.gamePhase !== 'results') return;
+
+    // Advance round
+    room.currentRound++;
+    room.votes = {};
+    room.revoteCount = 0;
+    room.isTie = false;
+    room.noDecision = false;
+
+    if (room.currentRound > 10) {
+      initializePhase2(roomId);
+      console.log('🚀 Phase 1 complete → Phase 2 initialized');
+    } else {
+      room.gamePhase = 'voting';
+      console.log(`➡️ Auto-advanced to Phase 1 round ${room.currentRound}`);
+    }
+
+    broadcastToRoom(roomId);
+    saveState();
+    saveGameToDatabase(roomId);
+
+  }, 3000); // 3s results screen
+}
+
+
           // Send email notification for tie result
           const playerCount = Object.keys(room.players).length;
           sendAdminNotification(
