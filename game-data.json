@@ -192,6 +192,16 @@
       "id": 1,
       "title": "Reserve Currency System",
       "description": "What should be the foundation of the new international monetary system?",
+      "briefing": "The most contentious issue at Bretton Woods. The US delegation, led by Harry Dexter White, proposed anchoring the system to the US dollar (backed by gold at $35/oz). British economist John Maynard Keynes countered with 'Bancor' -- a new supranational currency managed by an international clearing union, designed to prevent any single nation from dominating global finance. The outcome will determine who controls the post-war monetary order.",
+      "nationalPositions": {
+        "USA": "With 70% of the world's gold reserves, a dollar-based system cements American financial supremacy. The White Plan keeps control in Washington.",
+        "UK": "Keynes designed Bancor specifically to prevent debtor nations like Britain from being squeezed by creditors. A dollar monopoly leaves the UK dependent on American goodwill.",
+        "USSR": "Moscow distrusts any system dominated by a single capitalist power. Multiple currencies or Bancor would limit American leverage over Soviet trade.",
+        "France": "France needs reconstruction aid and fears dollar dependence. Bancor or multiple currencies would give Paris more room to maneuver.",
+        "China": "China seeks American investment and military support against the Communists. Supporting the dollar strengthens the US alliance.",
+        "India": "As a future independent nation, India wants a system that doesn't lock developing countries into permanent subordination to the dollar.",
+        "Argentina": "Buenos Aires holds large gold and sterling reserves. Multiple currencies protect Argentine wealth from being devalued by American policy."
+      },
       "options": [
         {
           "id": "a",
@@ -217,6 +227,16 @@
       "id": 2,
       "title": "Exchange Rate System",
       "description": "How should exchange rates be managed?",
+      "briefing": "Before the war, competitive devaluations -- nations deliberately cheapening their currency to boost exports -- triggered trade wars and deepened the Depression. Delegates agree some stability is needed, but how much? Fixed rates provide predictability for trade but can trap countries in unsustainable positions. Adjustable pegs offer a middle ground: stable in normal times, with escape valves for crises.",
+      "nationalPositions": {
+        "USA": "Fixed rates pegged to the dollar make the US the anchor of global finance. American exporters benefit from predictable pricing.",
+        "UK": "Britain needs flexibility. Sterling was overvalued in the 1920s and the result was a decade of deflation and unemployment. Adjustable pegs are essential.",
+        "USSR": "The Soviet command economy sets its own prices. National sovereignty over rates keeps the ruble insulated from capitalist market pressures.",
+        "France": "The franc has been volatile since liberation. France needs adjustable rates to devalue when necessary without being punished by speculators.",
+        "China": "With civil war raging and hyperinflation spiraling, China cannot credibly maintain a fixed peg. Sovereignty over rates is a survival necessity.",
+        "India": "A newly independent India will need to set exchange rates that support development, not rates dictated by Washington or London.",
+        "Argentina": "The peso is strong now, but Buenos Aires wants the freedom to adjust rates to protect its agricultural exports from price swings."
+      },
       "options": [
         {
           "id": "a",
@@ -242,6 +262,16 @@
       "id": 3,
       "title": "Capital Controls",
       "description": "Should countries control capital movements?",
+      "briefing": "In the 1930s, 'hot money' -- speculative capital fleeing from country to country -- destabilized currencies and deepened the Depression. Keynes and White actually agreed that some capital controls were necessary. The question is whether controls should be temporary (while war-torn economies recover) or permanent features of the system. Free capital movement benefits wealthy creditor nations; controls protect weaker economies from destabilizing speculation.",
+      "nationalPositions": {
+        "USA": "American banks and investors want access to global markets. Free capital movement opens the world to US investment and strengthens the dollar's role.",
+        "UK": "Britain urgently needs controls to prevent capital flight from the pound. Without them, sterling reserves would hemorrhage overnight.",
+        "USSR": "The Soviet Union maintains absolute state control over all financial flows. Permanent controls are non-negotiable -- capitalism must not penetrate the planned economy.",
+        "France": "France's fragile recovery cannot withstand speculative attacks. Transitional controls are essential until the franc stabilizes.",
+        "China": "With hyperinflation and civil war, China needs controls to prevent total capital flight. Foreign speculators would strip the country bare.",
+        "India": "India's colonial economy was exploited by British capital for centuries. Controls let a future independent India direct investment toward development, not extraction.",
+        "Argentina": "Argentina has capital but also vulnerability. Transitional controls protect against American financial dominance while keeping markets accessible."
+      },
       "options": [
         {
           "id": "a",
@@ -267,6 +297,16 @@
       "id": 4,
       "title": "IMF Voting Power",
       "description": "How to distribute voting power?",
+      "briefing": "The IMF will be the new system's firefighter -- providing emergency loans to countries in financial trouble. But who controls the fire department? The US proposes voting weighted by economic size (gold reserves and GDP), which would give Washington an effective veto. Smaller nations want more equal representation, arguing that the institution should serve all members, not just the rich. This vote determines whether the IMF becomes a tool of American power or a genuinely international body.",
+      "nationalPositions": {
+        "USA": "America is putting up the most money. Voting power should reflect financial contribution -- those who pay more should have more say.",
+        "UK": "Britain is a great power and deserves recognition, but pure GDP weighting gives the US too much control. A middle ground preserves British influence.",
+        "USSR": "Weighted voting means American diktat. The USSR will not submit to an institution where Washington holds a veto over Soviet economic policy.",
+        "France": "France was a great power before the war and will be again. Substantial quotas for major powers protect French status without total US dominance.",
+        "China": "Equal distribution gives China a voice. Weighted voting marginalizes the world's most populous nation because it's also one of the poorest.",
+        "India": "India represents 400 million people. Weighting votes by gold reserves means colonial exploitation determines who has power in the new order.",
+        "Argentina": "Latin America deserves fair representation. GDP weighting entrenches the advantage of industrialized nations over commodity exporters."
+      },
       "options": [
         {
           "id": "a",
@@ -292,6 +332,16 @@
       "id": 5,
       "title": "Reconstruction Financing",
       "description": "How to rebuild war-torn economies?",
+      "briefing": "Europe and Asia lie in ruins. Factories are bombed, infrastructure destroyed, populations displaced. The question isn't whether reconstruction aid is needed -- it's who pays, who benefits, and what strings are attached. The US has the money but wants conditions (market reforms, open trade). The devastated nations want aid without being forced to reshape their economies to American specifications. Meanwhile, commodity exporters argue they deserve support too.",
+      "nationalPositions": {
+        "USA": "America will fund reconstruction through the World Bank, but with conditions ensuring recipient nations adopt market-friendly policies and open their markets.",
+        "UK": "Britain needs massive aid but chafes at conditions. Unconditional grants let London rebuild without being forced to dismantle Imperial Preference or the welfare state.",
+        "USSR": "Moscow suffered 27 million dead and vast destruction. The Soviets demand large-scale aid but refuse conditions that would open the planned economy to Western influence.",
+        "France": "As one of the most devastated nations, France argues that aid should prioritize countries with the greatest destruction, not the greatest political leverage.",
+        "China": "China supports the World Bank approach -- American conditions are acceptable if they come with American money and military protection against the Communists.",
+        "India": "Unconditional grants help both India and other colonized nations rebuild without new forms of economic dependency replacing the old colonial ones.",
+        "Argentina": "Argentina is a creditor, not a debtor -- but commodity exporters need development aid too. The new system shouldn't only serve war-devastated industrial nations."
+      },
       "options": [
         {
           "id": "a",
@@ -323,6 +373,16 @@
       "id": 6,
       "title": "Currency Stabilization",
       "description": "Address hyperinflation in war-torn nations?",
+      "briefing": "Hyperinflation is ravaging post-war economies. China's prices are rising 300% per year. France, Germany, and Eastern Europe face severe inflation that wipes out savings and destroys economic planning. How should the new system address this? Market-based reforms (austerity, tight money) work but cause unemployment and social unrest. IMF loans provide a cushion. State controls can freeze prices but create shortages and black markets.",
+      "nationalPositions": {
+        "USA": "Sound money requires market discipline -- balanced budgets, tight credit, and letting inefficient industries fail. Printing money to avoid pain only makes inflation worse.",
+        "UK": "Britain learned from the 1920s that austerity can be worse than inflation. IMF stabilization loans provide breathing room to adjust gradually without crushing the economy.",
+        "USSR": "The Soviet state controls all prices and wages. State currency controls are the only approach consistent with a planned economy. Market 'reforms' are capitalist ideology, not economics.",
+        "France": "France is suffering severe inflation but cannot afford American-style austerity -- it would trigger social revolution. IMF loans let France stabilize without mass unemployment.",
+        "China": "With 300% inflation, China is desperate for any help. IMF loans would provide critical support, though the situation may be beyond any single remedy.",
+        "India": "IMF stabilization loans offer the most balanced approach -- support without the political conditions of American aid or the rigidity of state controls.",
+        "Argentina": "Buenos Aires has managed inflation relatively well. IMF loans are the sensible middle ground -- available when needed, without ideological strings."
+      },
       "options": [
         {
           "id": "a",
@@ -348,6 +408,16 @@
       "id": 7,
       "title": "Trade Liberalization",
       "description": "How should international trade be regulated?",
+      "briefing": "The Smoot-Hawley tariff of 1930 helped turn a recession into the Great Depression by triggering global trade wars. Everyone agrees trade barriers should come down -- but how fast, and whose barriers? The US wants free trade (now that American industry dominates). Britain wants to keep Imperial Preference (favorable tariffs within the Commonwealth). Developing nations fear that free trade means being flooded with cheap American manufactured goods before their own industries can grow.",
+      "nationalPositions": {
+        "USA": "American industry is the world's most productive. Free trade opens global markets to US goods. Tariff barriers are relics of the failed 1930s.",
+        "UK": "Imperial Preference keeps the Commonwealth together and gives British goods guaranteed markets. Dissolving it for 'free trade' just means American dominance.",
+        "USSR": "The Soviet Union trades on state-to-state terms. Free trade is a mechanism for capitalist exploitation; imperial preferences are colonialism by another name.",
+        "France": "French industry is shattered and cannot compete with American factories. Gradual tariff reduction gives France time to rebuild before facing full competition.",
+        "China": "Free trade sounds fair but isn't -- it pits American industrial giants against Chinese peasant farmers. China needs protection while it industrializes.",
+        "India": "Imperial Preference actually benefits India with preferential access to British markets. But free trade would expose India's infant industries to destruction.",
+        "Argentina": "Argentine beef and grain are globally competitive, but industry is still developing. Gradual reduction protects new factories while keeping agricultural exports flowing."
+      },
       "options": [
         {
           "id": "a",
@@ -373,6 +443,16 @@
       "id": 8,
       "title": "Gold Standard vs Bretton Woods",
       "description": "Should gold remain the ultimate anchor?",
+      "briefing": "The classical gold standard (pre-1914) provided stability but also rigidity -- countries couldn't expand money supply during recessions. The interwar gold standard collapsed in the 1930s as nations abandoned it to fight deflation. Now the question: should the new system tie currencies to gold (benefiting nations with large reserves), maintain a looser gold link, or abandon gold entirely? The answer shapes whether monetary policy serves creditors or debtors.",
+      "nationalPositions": {
+        "USA": "America holds $20 billion in gold -- 70% of the world's supply. A fixed gold-dollar peg at $35/oz makes the dollar literally as good as gold and locks in US dominance.",
+        "UK": "Britain's gold reserves are thin. A strict gold peg would force deflationary austerity -- exactly what destroyed the British economy in the 1920s. Flexibility is essential.",
+        "USSR": "Gold is a fetish of capitalist finance. The Soviet economy runs on production plans, not gold reserves. Abandoning gold removes a tool of Western control.",
+        "France": "France has always been a gold-standard country at heart, but a flexible standard provides stability without the straitjacket of rigid convertibility.",
+        "China": "China has almost no gold reserves. A strict gold peg would permanently disadvantage China in the new monetary order.",
+        "India": "India has cultural affinity for gold but minimal official reserves. A flexible standard balances stability with the needs of developing nations.",
+        "Argentina": "Argentina holds significant gold reserves. A flexible standard protects their value while avoiding the deflation trap of a rigid peg."
+      },
       "options": [
         {
           "id": "a",
@@ -398,6 +478,16 @@
       "id": 9,
       "title": "Soviet Participation",
       "description": "Should the USSR join IMF and World Bank?",
+      "briefing": "The USSR sent a 50-person delegation to Bretton Woods and initially seemed interested in joining. But Stalin is deeply suspicious of Western-controlled institutions. If the Soviets participate, the system becomes truly global but must accommodate a command economy. If they don't, the world splits into competing economic blocs. The conditions attached to participation will determine whether Moscow signs on -- or walks away into economic isolation.",
+      "nationalPositions": {
+        "USA": "Soviet participation legitimizes the system, but only with transparency requirements and conditions that prevent Moscow from gaming the institutions.",
+        "UK": "Britain wants the Soviets in -- a split world means a poorer world. But London understands Washington's concern about unconditional access.",
+        "USSR": "The USSR will participate if treated as an equal partner, but refuses conditions that would require disclosing economic data or accepting capitalist oversight of the planned economy.",
+        "France": "France, liberated partly by Soviet blood, supports broad inclusion. Excluding the USSR risks a Cold War that would devastate European security.",
+        "China": "China is pragmatic -- Soviet participation matters less than American support. Beijing will follow Washington's lead on this issue.",
+        "India": "India favors inclusive institutions. Participation without political strings creates a more balanced system that serves all members, not just Western powers.",
+        "Argentina": "Buenos Aires supports unconditional participation. A bipolar split forces smaller nations to choose sides; an inclusive system preserves Argentina's Third Position."
+      },
       "options": [
         {
           "id": "a",
@@ -423,6 +513,16 @@
       "id": 10,
       "title": "Post-War Economic Order",
       "description": "What principles should govern the new system?",
+      "briefing": "This final vote defines the philosophy of the post-war world. A US-led liberal order means free markets, open trade, and American leadership -- efficient but dominated by Washington. Multilateral cooperation means shared governance through international institutions -- balanced but potentially slow and bureaucratic. National economic sovereignty means each nation charts its own course -- independent but risking the beggar-thy-neighbor chaos of the 1930s.",
+      "nationalPositions": {
+        "USA": "American leadership built the system and American money funds it. A US-led liberal order is the most efficient path to global prosperity.",
+        "UK": "Britain won't accept American hegemony any more than German. Multilateral cooperation preserves British influence and creates genuine partnership.",
+        "USSR": "National sovereignty is the only acceptable principle. The USSR will never submit its economic planning to an American-led 'liberal order' or even a multilateral body with Western majority voting.",
+        "France": "Multilateral cooperation lets France punch above its current weight. In a rules-based system, diplomacy matters more than GDP -- and France excels at diplomacy.",
+        "China": "Multilateral cooperation gives China a seat at the table. A US-led order would work too, given American support, but national sovereignty invites chaos.",
+        "India": "Multilateral cooperation protects newly independent nations from great-power domination. A US-led order just replaces British colonialism with American.",
+        "Argentina": "National sovereignty protects Peron's Third Position. But multilateral cooperation also works -- as long as it genuinely includes Latin American voices."
+      },
       "options": [
         {
           "id": "a",
