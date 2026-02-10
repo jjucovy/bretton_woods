@@ -2180,15 +2180,29 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         <div className="card">
                           <h3 style={{ marginTop: 0 }}>Current Standings</h3>
                           <div style={{ display: 'grid', gap: '10px' }}>
-                            {Object.entries(gameState.scores || {})
-                              .sort(([,a], [,b]) => b - a)
-                              .map(([country, score], idx) => (
+                            {(() => {
+                              // Deduplicate scores: normalize country names and merge
+                              const normalizeC = (c) => window.CountryUtils ? window.CountryUtils.normalizeCountryName(c) : c;
+                              const activeCountries = new Set(Object.values(gameState.players || {}).map(p => normalizeC(p.country)));
+                              const merged = {};
+                              Object.entries(gameState.scores || {}).forEach(([country, score]) => {
+                                const norm = normalizeC(country);
+                                if (!merged[norm] || score > merged[norm]) merged[norm] = score;
+                              });
+                              // Only show countries with active players (or non-zero scores)
+                              return Object.entries(merged)
+                                .filter(([country]) => activeCountries.has(country) || merged[country] > 0)
+                                .sort(([,a], [,b]) => b - a)
+                                .map(([country, score], idx) => {
+                                  const myNorm = normalizeC(playerCountry);
+                                  const isMe = country === myNorm;
+                                  return (
                                 <div key={country} style={{
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
                                   padding: '12px',
-                                  background: country === playerCountry ? '#eff6ff' : '#f8fafc',
+                                  background: isMe ? '#eff6ff' : '#f8fafc',
                                   borderRadius: '6px',
                                   borderLeft: '4px solid ' + (idx === 0 ? '#f59e0b' : '#cbd5e1')
                                 }}>
@@ -2199,7 +2213,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     <span style={{ fontWeight: 'bold' }}>
                                       {countries[country]?.name || country}
                                     </span>
-                                    {country === playerCountry && (
+                                    {isMe && (
                                       <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>
                                         (You)
                                       </span>
@@ -2209,7 +2223,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     {score} pts
                                   </div>
                                 </div>
-                              ))}
+                                  );
+                                });
+                            })()}
                           </div>
                         </div>
                       </div>
