@@ -1690,14 +1690,78 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 </h3>
                               </div>
                               
-                              <p style={{ 
-                                fontSize: '0.95rem', 
+                              <p style={{
+                                fontSize: '0.95rem',
                                 lineHeight: '1.6',
                                 color: '#475569',
                                 marginBottom: '20px'
                               }}>
                                 {currentIssue.description}
                               </p>
+
+                              {/* Historical briefing */}
+                              {currentIssue.briefing && (
+                                <div style={{
+                                  padding: '15px',
+                                  background: '#fffbeb',
+                                  borderRadius: '6px',
+                                  borderLeft: '4px solid #d97706',
+                                  marginBottom: '20px'
+                                }}>
+                                  <h4 style={{
+                                    margin: '0 0 8px 0',
+                                    fontSize: '0.85rem',
+                                    color: '#92400e',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em'
+                                  }}>
+                                    Historical Context
+                                  </h4>
+                                  <p style={{
+                                    margin: 0,
+                                    fontSize: '0.875rem',
+                                    lineHeight: '1.6',
+                                    color: '#78350f'
+                                  }}>
+                                    {currentIssue.briefing}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* National position for player's country */}
+                              {currentIssue.nationalPositions && playerCountry && (() => {
+                                const countryKey = getCountryNameForVoting(playerCountry);
+                                const position = currentIssue.nationalPositions[countryKey];
+                                if (!position) return null;
+                                return (
+                                  <div style={{
+                                    padding: '15px',
+                                    background: '#f0fdf4',
+                                    borderRadius: '6px',
+                                    borderLeft: '4px solid #16a34a',
+                                    marginBottom: '20px'
+                                  }}>
+                                    <h4 style={{
+                                      margin: '0 0 8px 0',
+                                      fontSize: '0.85rem',
+                                      color: '#166534',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.05em'
+                                    }}>
+                                      Your Delegation's Position ({countryKey})
+                                    </h4>
+                                    <p style={{
+                                      margin: 0,
+                                      fontSize: '0.875rem',
+                                      lineHeight: '1.6',
+                                      color: '#14532d',
+                                      fontStyle: 'italic'
+                                    }}>
+                                      "{position}"
+                                    </p>
+                                  </div>
+                                );
+                              })()}
 
                               {/* Country-specific interests - show which option favors you */}
                               {currentIssue.options && playerCountry && (
