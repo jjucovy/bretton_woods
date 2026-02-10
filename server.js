@@ -18,6 +18,14 @@ const {
 } = require('./shared/country-utils');
 const { queryDatabase } = require('./server/database');
 const { sendAdminNotification } = require('./server/email');
+const {
+  REGIONS: DEPLOYMENT_REGIONS,
+  calculateDeploymentCosts,
+  calculateDeploymentEconomics,
+  calculateRegionalControl,
+  detectDeploymentConflicts,
+  applyDeploymentEffects
+} = require('./deployment-impacts');
 // Economics functions (calculateAgreementBonus, calculateExchangeRate,
 // calculateYearEconomics, calculatePhase2Scores) are also available as a
 // module at ./server/economics.js. The inline definitions below are still
@@ -1773,6 +1781,34 @@ function calculateYearEconomics(roomId) {
       inflation += exchangeRateResult.change * 0.15;
     }
     
+    // === DEPLOYMENT MAINTENANCE COSTS ===
+    // Annual upkeep for all deployed troops (deducted from gold reserves and trade balance)
+    const flatDeployments = flattenDeployments(room.phase2.cumulativeDeployments, currentYear);
+    const countryDeployments = flatDeployments.filter(d => d.country === country);
+
+    let totalMaintenanceCost = 0;
+    countryDeployments.forEach(d => {
+      const distFactor = getDeploymentDistanceFactor(country, d.region);
+      const branchMult = d.branch === 'navy' ? 4.0 : d.branch === 'airForce' ? 6.0 : 1.0;
+      // ~$500-$6000 per soldier per year depending on branch and distance
+      const maintenance = d.troops * distFactor * 0.0005 * branchMult; // in $M
+      totalMaintenanceCost += maintenance;
+    });
+
+    if (totalMaintenanceCost > 0) {
+      // Maintenance hits gold reserves directly
+      goldReserves -= totalMaintenanceCost;
+      // Also drags on trade balance (supply shipments, logistics)
+      tradeBalance -= totalMaintenanceCost * 0.3;
+      // Overextension: more than 5 deployments hurts GDP
+      if (countryDeployments.length > 5) {
+        const overextensionPenalty = (countryDeployments.length - 5) * 0.2;
+        gdpGrowth -= overextensionPenalty;
+      }
+    }
+
+    goldReserves = Math.max(0, goldReserves);
+
     // Store results
     tempResults[country] = {
       gdpGrowth: Math.round(gdpGrowth * 10) / 10,
@@ -1784,6 +1820,7 @@ function calculateYearEconomics(roomId) {
       exchangeRate: Math.round(exchangeRateResult.rate * 100) / 100,
       exchangeRateChange: Math.round(exchangeRateResult.change * 10) / 10,
       militarySpending: milSpending,
+      deploymentMaintenanceCost: Math.round(totalMaintenanceCost),
       military: {
         army: armySize,
         navy: navySize,
@@ -1944,6 +1981,92 @@ function calculatePhase2Scores(roomId) {
   console.log(`Phase 2 final scores:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);
   return phase2Scores;
+}
+
+// --- Deployment cost helpers ---
+// Base deployment costs per region (in $M, for 50K troops)
+function getDeploymentBaseCost(region) {
+  const costs = {
+    'Western Europe': 100, 'Eastern Europe': 150, 'Germany': 80, 'Berlin': 200,
+    'Middle East': 180, 'Suez Canal': 150, 'Korea': 250, 'Indochina': 220,
+    'South Asia': 120, 'East Asia': 200, 'Southeast Asia': 180, 'Pacific Islands': 150,
+    'North America': 50, 'Central America': 100, 'South America': 120, 'Caribbean': 80,
+    'North Africa': 140, 'Sub-Saharan Africa': 160,
+    'Mediterranean': 130, 'Atlantic Ocean': 120, 'Pacific Ocean': 140,
+    'Indian Ocean': 150, 'Central Asia': 140, 'Latin America': 120, 'Africa': 160
+  };
+  return costs[region] || 100;
+}
+
+// Distance factor: how far region is from country (1.0 = near, 2.0 = far)
+function getDeploymentDistanceFactor(country, region) {
+  const distanceMap = {
+    'USA': {
+      'Western Europe': 1.5, 'Eastern Europe': 2.0, 'Germany': 1.5, 'Berlin': 2.0,
+      'Middle East': 1.8, 'Suez Canal': 1.8, 'Korea': 1.8, 'Indochina': 1.8,
+      'South Asia': 1.9, 'East Asia': 1.8, 'Southeast Asia': 1.7, 'Pacific Islands': 1.2,
+      'North America': 1.0, 'Central America': 1.0, 'South America': 1.3, 'Caribbean': 1.0,
+      'North Africa': 1.6, 'Sub-Saharan Africa': 1.7
+    },
+    'USSR': {
+      'Western Europe': 1.2, 'Eastern Europe': 1.0, 'Germany': 1.1, 'Berlin': 1.1,
+      'Middle East': 1.2, 'Suez Canal': 1.4, 'Korea': 1.3, 'Indochina': 1.6,
+      'South Asia': 1.3, 'East Asia': 1.3, 'Southeast Asia': 1.6, 'Pacific Islands': 1.8,
+      'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
+      'North Africa': 1.5, 'Sub-Saharan Africa': 1.6
+    },
+    'UK': {
+      'Western Europe': 1.0, 'Eastern Europe': 1.3, 'Germany': 1.0, 'Berlin': 1.2,
+      'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 1.9, 'Indochina': 1.6,
+      'South Asia': 1.5, 'East Asia': 1.9, 'Southeast Asia': 1.6, 'Pacific Islands': 1.9,
+      'North America': 1.3, 'Central America': 1.5, 'South America': 1.6, 'Caribbean': 1.4,
+      'North Africa': 1.1, 'Sub-Saharan Africa': 1.2
+    },
+    'France': {
+      'Western Europe': 1.0, 'Eastern Europe': 1.4, 'Germany': 1.0, 'Berlin': 1.3,
+      'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 2.0, 'Indochina': 1.5,
+      'South Asia': 1.7, 'East Asia': 2.0, 'Southeast Asia': 1.5, 'Pacific Islands': 2.0,
+      'North America': 1.5, 'Central America': 1.7, 'South America': 1.7, 'Caribbean': 1.6,
+      'North Africa': 1.0, 'Sub-Saharan Africa': 1.1
+    },
+    'China': {
+      'Western Europe': 2.0, 'Eastern Europe': 1.8, 'Germany': 2.0, 'Berlin': 2.0,
+      'Middle East': 1.6, 'Suez Canal': 1.8, 'Korea': 1.0, 'Indochina': 1.1,
+      'South Asia': 1.3, 'East Asia': 1.0, 'Southeast Asia': 1.1, 'Pacific Islands': 1.4,
+      'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
+      'North Africa': 1.9, 'Sub-Saharan Africa': 1.8
+    },
+    'India': {
+      'Western Europe': 1.8, 'Eastern Europe': 1.9, 'Germany': 1.8, 'Berlin': 1.9,
+      'Middle East': 1.3, 'Suez Canal': 1.4, 'Korea': 1.6, 'Indochina': 1.2,
+      'South Asia': 1.0, 'East Asia': 1.5, 'Southeast Asia': 1.2, 'Pacific Islands': 1.6,
+      'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
+      'North Africa': 1.5, 'Sub-Saharan Africa': 1.4
+    },
+    'Argentina': {
+      'Western Europe': 1.7, 'Eastern Europe': 2.0, 'Germany': 1.8, 'Berlin': 2.0,
+      'Middle East': 2.0, 'Suez Canal': 1.9, 'Korea': 2.0, 'Indochina': 2.0,
+      'South Asia': 2.0, 'East Asia': 2.0, 'Southeast Asia': 2.0, 'Pacific Islands': 1.8,
+      'North America': 1.3, 'Central America': 1.2, 'South America': 1.0, 'Caribbean': 1.2,
+      'North Africa': 1.7, 'Sub-Saharan Africa': 1.6
+    }
+  };
+  return distanceMap[country]?.[region] || 1.5;
+}
+
+// Convert cumulativeDeployments (server format) to flat array (deployment-impacts format)
+function flattenDeployments(cumulativeDeployments, year) {
+  const flat = [];
+  if (!cumulativeDeployments) return flat;
+  Object.entries(cumulativeDeployments).forEach(([region, countries]) => {
+    Object.entries(countries).forEach(([country, forces]) => {
+      // Create one entry per branch with troops > 0
+      if (forces.army > 0) flat.push({ country, region, branch: 'army', troops: forces.army, year });
+      if (forces.navy > 0) flat.push({ country, region, branch: 'navy', troops: forces.navy, year });
+      if (forces.airForce > 0) flat.push({ country, region, branch: 'airForce', troops: forces.airForce, year });
+    });
+  });
+  return flat;
 }
 
 // Helper function to resolve a specific crisis and apply effects
@@ -3499,13 +3622,48 @@ const countryId = countryData?.country_id || null;
     room.phase2.cumulativeDeployments[region][country].total += troops;
 
     // Add to deployment history for record keeping
-    room.phase2.deploymentHistory.push({
+    const deploymentRecord = {
       ...deployment,
+      branch: normalizedBranch === 'airForce' ? 'Air Force' : normalizedBranch.charAt(0).toUpperCase() + normalizedBranch.slice(1),
       timestamp: Date.now(),
       year: room.phase2.currentYear
-    });
+    };
+    room.phase2.deploymentHistory.push(deploymentRecord);
 
-    console.log(`✅ ${country} deployed ${troops} ${branch} to ${region}`);
+    // Sync deployments array (used by client for display)
+    if (!room.phase2.deployments) room.phase2.deployments = [];
+    room.phase2.deployments.push(deploymentRecord);
+
+    // --- Deduct deployment cost from gold reserves ---
+    const currentYear = room.phase2.currentYear;
+    const normalizedCountry = normalizeCountryName(country);
+    const countryData = room.phase2.yearlyData[currentYear]?.[normalizedCountry];
+    if (countryData) {
+      const distanceFactor = getDeploymentDistanceFactor(normalizedCountry, region);
+      const branchCostMultiplier = normalizedBranch === 'navy' ? 1.5 : normalizedBranch === 'airForce' ? 2.0 : 1.0;
+      const baseCost = getDeploymentBaseCost(region);
+      const deploymentCost = Math.round(baseCost * (troops / 50000) * branchCostMultiplier * distanceFactor);
+
+      countryData.goldReserves = Math.max(0, (countryData.goldReserves || 0) - deploymentCost);
+
+      console.log(`   💰 Cost: $${deploymentCost}M (base $${baseCost}M × ${(troops/50000).toFixed(1)} × ${branchCostMultiplier}x branch × ${distanceFactor}x distance)`);
+      console.log(`   📦 ${normalizedCountry} gold reserves now: $${countryData.goldReserves}M`);
+
+      // Notify the deploying player of the cost
+      const playerSocket = io.sockets.sockets.get(player.socketId);
+      if (playerSocket) {
+        playerSocket.emit('deploymentCostNotification', {
+          region,
+          troops,
+          branch: deploymentRecord.branch,
+          cost: deploymentCost,
+          goldRemaining: countryData.goldReserves,
+          distanceFactor
+        });
+      }
+    }
+
+    console.log(`✅ ${country} deployed ${troops} ${normalizedBranch} to ${region}`);
     console.log(`   Cumulative in ${region}: ${JSON.stringify(room.phase2.cumulativeDeployments[region][country])}`);
 
     // Check for potential conflicts but DON'T trigger battle yet

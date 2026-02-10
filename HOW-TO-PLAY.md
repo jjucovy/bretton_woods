@@ -141,7 +141,37 @@ Adjusting these within your military spending budget lets you project power in d
 
 ## Troop Deployment
 
-After setting policy, you can deploy troops to regions around the world. Deployments appear on the interactive map.
+After setting policy, you can deploy troops to 18 regions around the world. Deployments appear on the interactive map.
+
+### Deployment Costs
+
+Every deployment costs gold reserves. The cost depends on three factors:
+
+**Cost = Base Region Cost x (Troops / 50,000) x Branch Multiplier x Distance Factor**
+
+| Factor | Details |
+|--------|---------|
+| **Base Region Cost** | Ranges from $50M (North America) to $250M (Korea). Hotspots cost more. |
+| **Branch Multiplier** | Army: 1.0x, Navy: 1.5x, Air Force: 2.0x |
+| **Distance Factor** | 1.0x for nearby regions, up to 2.0x for far-away deployments. Each nation has different distances -- the USSR deploys cheaply to Eastern Europe (1.0x), while the USA pays full price (2.0x). |
+
+The region dropdown shows distance-adjusted costs for your nation. The deployment panel also shows your remaining gold reserves.
+
+### Annual Maintenance
+
+Deployed troops cost gold reserves **every year** they remain deployed:
+
+| Branch | Annual Maintenance per Soldier |
+|--------|-------------------------------|
+| **Army** | ~$500-1,000/soldier/year (depends on distance) |
+| **Navy** | ~$2,000-4,000/sailor/year (ships, fuel, maintenance) |
+| **Air Force** | ~$3,000-6,000/airman/year (planes, high-tech equipment) |
+
+### Overextension
+
+If you maintain **more than 5 active deployments**, you suffer a GDP penalty of **-0.2% per deployment** over the limit. Empires have limits.
+
+### Conflict Triggers
 
 - If multiple nations deploy forces to the **same region**, a **tension alert** appears.
 - At year's end, overlapping deployments can escalate into **military conflicts**.
