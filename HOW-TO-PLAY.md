@@ -73,12 +73,30 @@ In each round, a major international economic issue is presented for a vote. Iss
 - **Build coalitions.** Talk to other players and coordinate votes on issues that matter most to your nation.
 - **Trade votes.** You might concede on an issue that barely affects you in exchange for support on one that's critical.
 - **Watch the favors/opposes tags.** They show you exactly how each option impacts your score.
+- **Think long-term.** Your votes don't just earn points -- they shape the rules of Phase 2. Vote for a world order that benefits your nation's economy.
+
+### How Conference Votes Shape Phase 2
+
+Every vote in Phase 1 has direct consequences for how the post-war economy works. The "Conference Decisions" panel in Phase 2 shows what was decided and reminds players of the world they created.
+
+| Issue | How It Affects Phase 2 |
+|-------|----------------------|
+| **Reserve Currency** | If the dollar wins, the USA gets a large trade balance bonus (+400). If Bancor wins, the UK and France gain instead. If multiple currencies win, all non-US nations benefit. |
+| **Exchange Rate System** | Fixed pegs enforce a tight ±1% band on currency fluctuations. Adjustable pegs widen it to ±5%. National sovereignty gives near-floating rates with less forced pressure. |
+| **Capital Controls** | Free movement amplifies capital flows (1.5x effect of interest rate differentials). Permanent controls dampen them (0.3x), protecting developing nations from volatility. |
+| **IMF Voting Power** | Weighted voting gives the USA extra trade benefits. Equal distribution benefits China, India, and Argentina. |
+| **Reconstruction Financing** | Determines how much aid France, UK, and USSR receive. "Priority for devastated" gives France and USSR the most. "Unconditional grants" helps the UK and USSR. "Commodity exporters" boosts Argentina and India. |
+| **Currency Stabilization** | Affects how nations recover from inflation crises (via the agreement bonuses). |
+| **Trade Liberalization** | Free trade rewards low-tariff nations and punishes protectionism. Imperial preferences give the UK and India exclusive trade bonuses. Gradual reduction is the middle ground. |
+| **Gold Standard** | A fixed peg benefits the USA (gold holder). Abandoning gold frees developing nations from gold reserve pressure but hurts the USA. |
+| **Soviet Participation** | If the USSR is included unconditionally, its isolation penalties are much milder. If a separate Eastern system is endorsed, the USSR faces harsher trade cutoffs. |
+| **Post-War Order** | Shapes the overall cooperation bonuses via the Bretton Woods alignment system. |
 
 ---
 
 ## Phase 2: Post-War Economic Management (1946-1952)
 
-After the conference concludes, the game advances to Phase 2. You now manage your nation's economy and military year by year across 7 years.
+After the conference concludes, the game advances to Phase 2. You now manage your nation's economy and military year by year across 7 years. The rules of this world are shaped by the decisions your group made in Phase 1.
 
 ### Each Year Includes:
 
