@@ -705,6 +705,59 @@ function initializePhase2(roomId) {
   const phase1Outcomes = getPhase1Outcomes(roomId);
   console.log(`   Phase 1 outcomes:`, JSON.stringify(phase1Outcomes));
 
+  // Auto-apply occupation zones (treaty-mandated deployments, no cost)
+  const occupationZones = {
+    'USA': [{ region: 'Germany', troops: 200000, branch: 'army' }],
+    'UK': [{ region: 'Germany', troops: 150000, branch: 'army' }],
+    'France': [{ region: 'Germany', troops: 100000, branch: 'army' }],
+    'USSR': [
+      { region: 'Germany', troops: 300000, branch: 'army' },
+      { region: 'Eastern Europe', troops: 500000, branch: 'army' }
+    ]
+  };
+
+  if (!room.phase2.cumulativeDeployments) {
+    room.phase2.cumulativeDeployments = {};
+  }
+  if (!room.phase2.deploymentHistory) {
+    room.phase2.deploymentHistory = [];
+  }
+  if (!room.phase2.deployments) {
+    room.phase2.deployments = [];
+  }
+
+  Object.values(room.players).forEach(player => {
+    const country = normalizeCountryName(player.country);
+    const zones = occupationZones[country];
+    if (!zones) return;
+
+    zones.forEach(zone => {
+      const { region, troops, branch } = zone;
+      if (!room.phase2.cumulativeDeployments[region]) {
+        room.phase2.cumulativeDeployments[region] = {};
+      }
+      if (!room.phase2.cumulativeDeployments[region][country]) {
+        room.phase2.cumulativeDeployments[region][country] = { army: 0, navy: 0, airForce: 0, total: 0 };
+      }
+      room.phase2.cumulativeDeployments[region][country][branch] += troops;
+      room.phase2.cumulativeDeployments[region][country].total += troops;
+
+      const record = {
+        country,
+        region,
+        branch: branch.charAt(0).toUpperCase() + branch.slice(1),
+        troops,
+        year: 1946,
+        timestamp: Date.now(),
+        occupationZone: true
+      };
+      room.phase2.deploymentHistory.push(record);
+      room.phase2.deployments.push(record);
+
+      console.log(`   🏛️ Occupation zone: ${country} → ${region} (${troops.toLocaleString()} ${branch})`);
+    });
+  });
+
   // Check for 1946 crises at game start
   triggerCrisisIfNeeded(roomId, 1946);
 
@@ -1988,8 +2041,9 @@ function calculatePhase2Scores(roomId) {
 function getDeploymentBaseCost(region) {
   const costs = {
     'Western Europe': 100, 'Eastern Europe': 150, 'Germany': 80, 'Berlin': 200,
+    'Greece & Turkey': 160, 'Iran': 180, 'Taiwan': 220, 'India': 120, 'Pakistan': 140,
     'Middle East': 180, 'Suez Canal': 150, 'Korea': 250, 'Indochina': 220,
-    'South Asia': 120, 'East Asia': 200, 'Southeast Asia': 180, 'Pacific Islands': 150,
+    'East Asia': 200, 'Southeast Asia': 180, 'Pacific Islands': 150,
     'North America': 50, 'Central America': 100, 'South America': 120, 'Caribbean': 80,
     'North Africa': 140, 'Sub-Saharan Africa': 160,
     'Mediterranean': 130, 'Atlantic Ocean': 120, 'Pacific Ocean': 140,
@@ -2003,50 +2057,57 @@ function getDeploymentDistanceFactor(country, region) {
   const distanceMap = {
     'USA': {
       'Western Europe': 1.5, 'Eastern Europe': 2.0, 'Germany': 1.5, 'Berlin': 2.0,
+      'Greece & Turkey': 1.7, 'Iran': 1.9, 'Taiwan': 1.7,
       'Middle East': 1.8, 'Suez Canal': 1.8, 'Korea': 1.8, 'Indochina': 1.8,
-      'South Asia': 1.9, 'East Asia': 1.8, 'Southeast Asia': 1.7, 'Pacific Islands': 1.2,
+      'India': 1.9, 'Pakistan': 1.9, 'East Asia': 1.8, 'Southeast Asia': 1.7, 'Pacific Islands': 1.2,
       'North America': 1.0, 'Central America': 1.0, 'South America': 1.3, 'Caribbean': 1.0,
       'North Africa': 1.6, 'Sub-Saharan Africa': 1.7
     },
     'USSR': {
       'Western Europe': 1.2, 'Eastern Europe': 1.0, 'Germany': 1.1, 'Berlin': 1.1,
+      'Greece & Turkey': 1.1, 'Iran': 1.0, 'Taiwan': 1.5,
       'Middle East': 1.2, 'Suez Canal': 1.4, 'Korea': 1.3, 'Indochina': 1.6,
-      'South Asia': 1.3, 'East Asia': 1.3, 'Southeast Asia': 1.6, 'Pacific Islands': 1.8,
+      'India': 1.3, 'Pakistan': 1.2, 'East Asia': 1.3, 'Southeast Asia': 1.6, 'Pacific Islands': 1.8,
       'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
       'North Africa': 1.5, 'Sub-Saharan Africa': 1.6
     },
     'UK': {
       'Western Europe': 1.0, 'Eastern Europe': 1.3, 'Germany': 1.0, 'Berlin': 1.2,
+      'Greece & Turkey': 1.2, 'Iran': 1.4, 'Taiwan': 1.9,
       'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 1.9, 'Indochina': 1.6,
-      'South Asia': 1.5, 'East Asia': 1.9, 'Southeast Asia': 1.6, 'Pacific Islands': 1.9,
+      'India': 1.5, 'Pakistan': 1.5, 'East Asia': 1.9, 'Southeast Asia': 1.6, 'Pacific Islands': 1.9,
       'North America': 1.3, 'Central America': 1.5, 'South America': 1.6, 'Caribbean': 1.4,
       'North Africa': 1.1, 'Sub-Saharan Africa': 1.2
     },
     'France': {
       'Western Europe': 1.0, 'Eastern Europe': 1.4, 'Germany': 1.0, 'Berlin': 1.3,
+      'Greece & Turkey': 1.3, 'Iran': 1.5, 'Taiwan': 2.0,
       'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 2.0, 'Indochina': 1.5,
-      'South Asia': 1.7, 'East Asia': 2.0, 'Southeast Asia': 1.5, 'Pacific Islands': 2.0,
+      'India': 1.7, 'Pakistan': 1.7, 'East Asia': 2.0, 'Southeast Asia': 1.5, 'Pacific Islands': 2.0,
       'North America': 1.5, 'Central America': 1.7, 'South America': 1.7, 'Caribbean': 1.6,
       'North Africa': 1.0, 'Sub-Saharan Africa': 1.1
     },
     'China': {
       'Western Europe': 2.0, 'Eastern Europe': 1.8, 'Germany': 2.0, 'Berlin': 2.0,
+      'Greece & Turkey': 1.7, 'Iran': 1.5, 'Taiwan': 1.0,
       'Middle East': 1.6, 'Suez Canal': 1.8, 'Korea': 1.0, 'Indochina': 1.1,
-      'South Asia': 1.3, 'East Asia': 1.0, 'Southeast Asia': 1.1, 'Pacific Islands': 1.4,
+      'India': 1.3, 'Pakistan': 1.4, 'East Asia': 1.0, 'Southeast Asia': 1.1, 'Pacific Islands': 1.4,
       'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
       'North Africa': 1.9, 'Sub-Saharan Africa': 1.8
     },
     'India': {
       'Western Europe': 1.8, 'Eastern Europe': 1.9, 'Germany': 1.8, 'Berlin': 1.9,
+      'Greece & Turkey': 1.5, 'Iran': 1.2, 'Taiwan': 1.5,
       'Middle East': 1.3, 'Suez Canal': 1.4, 'Korea': 1.6, 'Indochina': 1.2,
-      'South Asia': 1.0, 'East Asia': 1.5, 'Southeast Asia': 1.2, 'Pacific Islands': 1.6,
+      'India': 1.0, 'Pakistan': 1.0, 'East Asia': 1.5, 'Southeast Asia': 1.2, 'Pacific Islands': 1.6,
       'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
       'North Africa': 1.5, 'Sub-Saharan Africa': 1.4
     },
     'Argentina': {
       'Western Europe': 1.7, 'Eastern Europe': 2.0, 'Germany': 1.8, 'Berlin': 2.0,
+      'Greece & Turkey': 1.9, 'Iran': 2.0, 'Taiwan': 2.0,
       'Middle East': 2.0, 'Suez Canal': 1.9, 'Korea': 2.0, 'Indochina': 2.0,
-      'South Asia': 2.0, 'East Asia': 2.0, 'Southeast Asia': 2.0, 'Pacific Islands': 1.8,
+      'India': 2.0, 'Pakistan': 2.0, 'East Asia': 2.0, 'Southeast Asia': 2.0, 'Pacific Islands': 1.8,
       'North America': 1.3, 'Central America': 1.2, 'South America': 1.0, 'Caribbean': 1.2,
       'North Africa': 1.7, 'Sub-Saharan Africa': 1.6
     }
@@ -3597,6 +3658,42 @@ const countryId = countryData?.country_id || null;
     const country = deployment.country;
     const branch = deployment.branch || 'Army';
     const troops = parseInt(deployment.troops) || 0;
+    const currentYear = room.phase2.currentYear;
+    const normalizedCountry = normalizeCountryName(country);
+
+    // Year-gate checks
+    if (region === 'Pakistan' && currentYear < 1947) {
+      console.log(`Deploy troops rejected: Pakistan not available until 1947`);
+      return;
+    }
+    if (region === 'Taiwan' && currentYear < 1949) {
+      console.log(`Deploy troops rejected: Taiwan not a flashpoint until 1949`);
+      return;
+    }
+
+    // Berlin requires presence in Germany first
+    if (region === 'Berlin') {
+      const germanyDeployments = room.phase2.cumulativeDeployments?.['Germany']?.[country];
+      const occupationZones = {
+        'USA': [{ region: 'Germany' }],
+        'UK': [{ region: 'Germany' }],
+        'France': [{ region: 'Germany' }],
+        'USSR': [{ region: 'Germany' }]
+      };
+      const hasGermanyPresence = (germanyDeployments && germanyDeployments.total > 0) ||
+        occupationZones[normalizedCountry]?.some(z => z.region === 'Germany');
+      if (!hasGermanyPresence) {
+        console.log(`Deploy troops rejected: ${country} needs Germany presence before deploying to Berlin`);
+        const playerSocket = io.sockets.sockets.get(player.socketId);
+        if (playerSocket) {
+          playerSocket.emit('deploymentRejected', {
+            region: 'Berlin',
+            reason: 'You must have forces in Germany before deploying to Berlin'
+          });
+        }
+        return;
+      }
+    }
 
     // Initialize region if doesn't exist
     if (!room.phase2.cumulativeDeployments[region]) {
@@ -3635,8 +3732,6 @@ const countryId = countryData?.country_id || null;
     room.phase2.deployments.push(deploymentRecord);
 
     // --- Deduct deployment cost from gold reserves ---
-    const currentYear = room.phase2.currentYear;
-    const normalizedCountry = normalizeCountryName(country);
     const countryData = room.phase2.yearlyData[currentYear]?.[normalizedCountry];
     if (countryData) {
       const distanceFactor = getDeploymentDistanceFactor(normalizedCountry, region);
