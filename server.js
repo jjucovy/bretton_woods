@@ -3163,7 +3163,7 @@ const countryId = countryData?.country_id || null;
           // Award base participation points only (no winner bonus)
           const roundScores = {};
           Object.entries(room.players).forEach(([id, player]) => {
-            const country = player.country;
+            const country = normalizeCountryName(player.country) || player.country;
             const points = 10; // Only participation points
             roundScores[country] = points;
             room.scores[country] = (room.scores[country] || 0) + points;
@@ -3221,7 +3221,8 @@ if (room.gamePhase === 'results' && room.currentRound <= 10) {
           // Save tie result to database
           try {
             const roundResultData = {
-              gameCode: room.gameId,
+              gameCode: roomId,
+              game_id: room.gameId,
               round: room.currentRound,
               phase: 1, // Phase 1 voting
               winningOptionId: 'TIE',
@@ -3273,48 +3274,44 @@ if (room.gamePhase === 'results' && room.currentRound <= 10) {
         // Calculate scores for this round
         const roundScores = {};
         Object.entries(room.players).forEach(([id, player]) => {
-          const country = player.country;
+          const country = normalizeCountryName(player.country) || player.country;
           const vote = room.votes[id].toLowerCase();
-          
+
           let points = 0;
-          
+
           // Base points for participation
           points += 10;
-          
+
           // Find the option they voted for
-          const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : 2;
+          const optionIndex = vote === 'a' ? 0 : vote === 'b' ? 1 : vote === 'c' ? 2 : 3;
           const votedOption = currentIssueOptions[optionIndex];
-          
+
           if (votedOption) {
             // Bonus for voting for winning option
             if (vote === winningOption) {
               points += 20; // Voted with winning side
             }
-            
+
             // Major bonus if the winning option favors your country
-            const winningOptionData = currentIssueOptions[winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : 2];
+            const winIdx = winningOption === 'a' ? 0 : winningOption === 'b' ? 1 : winningOption === 'c' ? 2 : 3;
+            const winningOptionData = currentIssueOptions[winIdx];
             if (winningOptionData && winningOptionData.favors && winningOptionData.favors.includes(country)) {
               points += 40; // Your country benefits from winning option
             }
-            
+
             // Penalty if winning option opposes your country
             if (winningOptionData && winningOptionData.opposes && winningOptionData.opposes.includes(country)) {
               points -= 10; // Your country hurt by winning option
             }
-            
+
             // Bonus for voting for option that favors you
             if (votedOption.favors && votedOption.favors.includes(country)) {
               points += 15; // Strategic vote for your interests
             }
           }
-          
+
           roundScores[country] = points;
-          const scoreKey = normalizeCountryName(country);
-          room.scores[scoreKey] = (room.scores[scoreKey] || 0) + points;
-          // Also store under original country code for display
-          if (country !== scoreKey) {
-            room.scores[country] = room.scores[scoreKey];
-          }
+          room.scores[country] = (room.scores[country] || 0) + points;
         });
         
         // Store results
@@ -3357,7 +3354,8 @@ if (room.gamePhase === 'results' && room.currentRound <= 10) {
         // Save round result to database
         try {
           const roundResultData = {
-            gameCode: room.gameId,
+            gameCode: roomId,
+            game_id: room.gameId,
             round: room.currentRound,
             phase: 1, // Phase 1 voting
             winningOptionId: winningOption,
@@ -5065,7 +5063,7 @@ async function initializeFromDatabase() {
             existingRoom.players[player.user_id] = {
               id: player.player_id,
               userId: player.user_id,
-              country: player.country_code,
+              country: normalizeCountryName(player.country_code) || player.country_code,
               ready: false,
               score: (player.phase1_score || 0) + (player.phase2_score || 0),
               phase1_score: player.phase1_score || 0,
@@ -5117,7 +5115,7 @@ async function initializeFromDatabase() {
           roomState.players[player.user_id] = {
             id: player.player_id,  // Keep actual player_id for DB operations
             userId: player.user_id,
-            country: player.country_code,
+            country: normalizeCountryName(player.country_code) || player.country_code,
             ready: false,
             score: (player.phase1_score || 0) + (player.phase2_score || 0),
             phase1_score: player.phase1_score || 0,
