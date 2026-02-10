@@ -12,13 +12,17 @@ const { useState } = React;
             'Western Europe': { cost: 100, hotspot: false, description: 'NATO territory, Marshall Plan zone' },
             'Eastern Europe': { cost: 150, hotspot: true, description: '⚠️ Soviet sphere - risk of conflict' },
             'Germany': { cost: 80, hotspot: true, description: '⚠️ Divided occupation zones' },
-            'Berlin': { cost: 200, hotspot: true, description: '🔥 FLASHPOINT - Deep in Soviet zone' },
+            'Berlin': { cost: 200, hotspot: true, description: '🔥 FLASHPOINT - Deep in Soviet zone (requires Germany presence)', requiresPresence: 'Germany' },
+            'Greece & Turkey': { cost: 160, hotspot: true, description: '🔥 FLASHPOINT - Truman Doctrine, communist insurgency' },
+            'Iran': { cost: 170, hotspot: true, description: '🔥 FLASHPOINT - Soviet withdrawal crisis, oil' },
             'Middle East': { cost: 180, hotspot: true, description: '⚠️ Oil resources, Suez Canal' },
             'Suez Canal': { cost: 150, hotspot: true, description: '⚠️ Strategic chokepoint' },
             'Korea': { cost: 250, hotspot: true, description: '🔥 FLASHPOINT - 38th parallel divide' },
+            'Taiwan': { cost: 200, hotspot: true, description: '🔥 FLASHPOINT - Nationalist retreat (from 1949)' },
             'Indochina': { cost: 220, hotspot: true, description: '⚠️ French colonial war zone' },
-            'South Asia': { cost: 120, hotspot: false, description: 'India/Pakistan region' },
-            'East Asia': { cost: 200, hotspot: true, description: '⚠️ China, Japan, Taiwan' },
+            'India': { cost: 120, hotspot: false, description: 'British Raj to 1947, then sovereign democracy' },
+            'Pakistan': { cost: 130, hotspot: true, description: '⚠️ Created Aug 1947, Kashmir conflict (from 1947)' },
+            'East Asia': { cost: 200, hotspot: true, description: '⚠️ China, Japan' },
             'Southeast Asia': { cost: 180, hotspot: false, description: 'Colonial transitions' },
             'Pacific Islands': { cost: 150, hotspot: false, description: 'US naval dominance' },
             'North America': { cost: 50, hotspot: false, description: 'US/Canada homeland' },
@@ -29,54 +33,71 @@ const { useState } = React;
             'Sub-Saharan Africa': { cost: 160, hotspot: false, description: 'European colonies' }
           };
 
+          // Occupation zones: automatic deployments by treaty (not optional)
+          // These are shown as info but cannot be added or removed by players
+          const occupationZones = {
+            'USA': [{ region: 'Germany', troops: 200000, branch: 'Army', note: 'US Occupation Zone (Bavaria, Hesse, Bremen)' }],
+            'UK': [{ region: 'Germany', troops: 150000, branch: 'Army', note: 'British Occupation Zone (North Rhine-Westphalia, Lower Saxony)' }],
+            'France': [{ region: 'Germany', troops: 100000, branch: 'Army', note: 'French Occupation Zone (Rhineland-Palatinate, Baden)' }],
+            'USSR': [{ region: 'Germany', troops: 300000, branch: 'Army', note: 'Soviet Occupation Zone (Saxony, Thuringia, Brandenburg)' },
+                     { region: 'Eastern Europe', troops: 500000, branch: 'Army', note: 'Red Army garrisons across Eastern Bloc' }]
+          };
+
           // Distance factors per country (1.0 = nearby, 2.0 = far)
           const distanceFactors = {
             'USA': {
               'Western Europe': 1.5, 'Eastern Europe': 2.0, 'Germany': 1.5, 'Berlin': 2.0,
+              'Greece & Turkey': 1.7, 'Iran': 1.9, 'Taiwan': 1.7,
               'Middle East': 1.8, 'Suez Canal': 1.8, 'Korea': 1.8, 'Indochina': 1.8,
-              'South Asia': 1.9, 'East Asia': 1.8, 'Southeast Asia': 1.7, 'Pacific Islands': 1.2,
+              'India': 1.9, 'Pakistan': 1.9, 'East Asia': 1.8, 'Southeast Asia': 1.7, 'Pacific Islands': 1.2,
               'North America': 1.0, 'Central America': 1.0, 'South America': 1.3, 'Caribbean': 1.0,
               'North Africa': 1.6, 'Sub-Saharan Africa': 1.7
             },
             'USSR': {
               'Western Europe': 1.2, 'Eastern Europe': 1.0, 'Germany': 1.1, 'Berlin': 1.1,
+              'Greece & Turkey': 1.1, 'Iran': 1.0, 'Taiwan': 1.5,
               'Middle East': 1.2, 'Suez Canal': 1.4, 'Korea': 1.3, 'Indochina': 1.6,
-              'South Asia': 1.3, 'East Asia': 1.3, 'Southeast Asia': 1.6, 'Pacific Islands': 1.8,
+              'India': 1.3, 'Pakistan': 1.2, 'East Asia': 1.3, 'Southeast Asia': 1.6, 'Pacific Islands': 1.8,
               'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
               'North Africa': 1.5, 'Sub-Saharan Africa': 1.6
             },
             'UK': {
               'Western Europe': 1.0, 'Eastern Europe': 1.3, 'Germany': 1.0, 'Berlin': 1.2,
+              'Greece & Turkey': 1.2, 'Iran': 1.4, 'Taiwan': 1.9,
               'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 1.9, 'Indochina': 1.6,
-              'South Asia': 1.5, 'East Asia': 1.9, 'Southeast Asia': 1.6, 'Pacific Islands': 1.9,
+              'India': 1.5, 'Pakistan': 1.5, 'East Asia': 1.9, 'Southeast Asia': 1.6, 'Pacific Islands': 1.9,
               'North America': 1.3, 'Central America': 1.5, 'South America': 1.6, 'Caribbean': 1.4,
               'North Africa': 1.1, 'Sub-Saharan Africa': 1.2
             },
             'France': {
               'Western Europe': 1.0, 'Eastern Europe': 1.4, 'Germany': 1.0, 'Berlin': 1.3,
+              'Greece & Turkey': 1.2, 'Iran': 1.5, 'Taiwan': 2.0,
               'Middle East': 1.3, 'Suez Canal': 1.2, 'Korea': 2.0, 'Indochina': 1.5,
-              'South Asia': 1.7, 'East Asia': 2.0, 'Southeast Asia': 1.5, 'Pacific Islands': 2.0,
+              'India': 1.7, 'Pakistan': 1.7, 'East Asia': 2.0, 'Southeast Asia': 1.5, 'Pacific Islands': 2.0,
               'North America': 1.5, 'Central America': 1.7, 'South America': 1.7, 'Caribbean': 1.6,
               'North Africa': 1.0, 'Sub-Saharan Africa': 1.1
             },
             'China': {
               'Western Europe': 2.0, 'Eastern Europe': 1.8, 'Germany': 2.0, 'Berlin': 2.0,
+              'Greece & Turkey': 1.8, 'Iran': 1.5, 'Taiwan': 1.0,
               'Middle East': 1.6, 'Suez Canal': 1.8, 'Korea': 1.0, 'Indochina': 1.1,
-              'South Asia': 1.3, 'East Asia': 1.0, 'Southeast Asia': 1.1, 'Pacific Islands': 1.4,
+              'India': 1.3, 'Pakistan': 1.4, 'East Asia': 1.0, 'Southeast Asia': 1.1, 'Pacific Islands': 1.4,
               'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
               'North Africa': 1.9, 'Sub-Saharan Africa': 1.8
             },
             'India': {
               'Western Europe': 1.8, 'Eastern Europe': 1.9, 'Germany': 1.8, 'Berlin': 1.9,
+              'Greece & Turkey': 1.5, 'Iran': 1.2, 'Taiwan': 1.6,
               'Middle East': 1.3, 'Suez Canal': 1.4, 'Korea': 1.6, 'Indochina': 1.2,
-              'South Asia': 1.0, 'East Asia': 1.5, 'Southeast Asia': 1.2, 'Pacific Islands': 1.6,
+              'India': 1.0, 'Pakistan': 1.0, 'East Asia': 1.5, 'Southeast Asia': 1.2, 'Pacific Islands': 1.6,
               'North America': 2.0, 'Central America': 2.0, 'South America': 2.0, 'Caribbean': 2.0,
               'North Africa': 1.5, 'Sub-Saharan Africa': 1.4
             },
             'Argentina': {
               'Western Europe': 1.7, 'Eastern Europe': 2.0, 'Germany': 1.8, 'Berlin': 2.0,
+              'Greece & Turkey': 1.9, 'Iran': 2.0, 'Taiwan': 2.0,
               'Middle East': 2.0, 'Suez Canal': 1.9, 'Korea': 2.0, 'Indochina': 2.0,
-              'South Asia': 2.0, 'East Asia': 2.0, 'Southeast Asia': 2.0, 'Pacific Islands': 1.8,
+              'India': 2.0, 'Pakistan': 2.0, 'East Asia': 2.0, 'Southeast Asia': 2.0, 'Pacific Islands': 1.8,
               'North America': 1.3, 'Central America': 1.2, 'South America': 1.0, 'Caribbean': 1.2,
               'North Africa': 1.7, 'Sub-Saharan Africa': 1.6
             }
@@ -107,8 +128,31 @@ const { useState } = React;
           // Get current deployments for this country
           const myDeployments = gameState?.phase2?.deployments?.filter(d => d.country === playerCountry) || [];
 
+          // Check if player has presence in a region (for prerequisite checks)
+          const hasPresenceIn = (region) => {
+            // Check player deployments
+            if (myDeployments.some(d => d.region === region)) return true;
+            // Check occupation zones
+            const normC = window.CountryUtils ? window.CountryUtils.normalizeCountryName(playerCountry) : playerCountry;
+            if (occupationZones[normC]?.some(z => z.region === region)) return true;
+            return false;
+          };
+
+          // Check if a region is available (year-gated or prerequisite-gated)
+          const isRegionAvailable = (region) => {
+            const data = strategicRegions[region];
+            // Berlin requires Germany presence
+            if (data?.requiresPresence && !hasPresenceIn(data.requiresPresence)) return false;
+            // Pakistan only exists from 1947
+            if (region === 'Pakistan' && currentYear < 1947) return false;
+            // Taiwan only a flashpoint from 1949 (Nationalist retreat)
+            if (region === 'Taiwan' && currentYear < 1949) return false;
+            return true;
+          };
+
           const handleDeploy = () => {
             if (!selectedRegion) return;
+            if (!isRegionAvailable(selectedRegion)) return;
 
             const deployment = {
               country: playerCountry,
@@ -178,6 +222,33 @@ const { useState } = React;
                 </div>
               )}
 
+              {/* Occupation Zone Info */}
+              {occupationZones[normalized] && (
+                <div style={{
+                  marginBottom: '20px',
+                  padding: '12px',
+                  background: '#eff6ff',
+                  borderRadius: '8px',
+                  border: '1px solid #93c5fd'
+                }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e40af', fontSize: '0.9rem' }}>
+                    🏛️ Treaty Obligations (automatic, no cost)
+                  </div>
+                  <div style={{ fontSize: '0.8rem', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {occupationZones[normalized].map((z, idx) => (
+                      <span key={idx} style={{
+                        background: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid #93c5fd'
+                      }}>
+                        🪖 {z.region}: {(z.troops/1000).toFixed(0)}K — {z.note}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
                   Deploy To Region
@@ -204,9 +275,10 @@ const { useState } = React;
                     const normCountry = window.CountryUtils ? window.CountryUtils.normalizeCountryName(playerCountry) : playerCountry;
                     const dist = distanceFactors[normCountry]?.[region] || 1.5;
                     const effectiveCost = Math.round(data.cost * dist);
+                    const available = isRegionAvailable(region);
                     return (
-                      <option key={region} value={region}>
-                        {data.hotspot ? '⚠️ ' : ''}{region} — ${effectiveCost}M{dist > 1.5 ? ' (far)' : dist < 1.2 ? ' (near)' : ''}
+                      <option key={region} value={region} disabled={!available}>
+                        {!available ? '🔒 ' : data.hotspot ? '⚠️ ' : ''}{region} — ${effectiveCost}M{dist > 1.5 ? ' (far)' : dist < 1.2 ? ' (near)' : ''}{!available ? (data.requiresPresence ? ` (need ${data.requiresPresence})` : ' (not yet)') : ''}
                       </option>
                     );
                   })}

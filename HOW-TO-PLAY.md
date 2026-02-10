@@ -141,7 +141,47 @@ Adjusting these within your military spending budget lets you project power in d
 
 ## Troop Deployment
 
-After setting policy, you can deploy troops to 18 regions around the world. Deployments appear on the interactive map.
+After setting policy, you can deploy troops to strategic regions around the world. Deployments appear on the interactive map.
+
+### Strategic Regions
+
+Regions include Cold War hotspots (marked with warning icons) and broader areas:
+
+| Region | Type | Notes |
+|--------|------|-------|
+| **Berlin** | Hotspot | Requires Germany presence first |
+| **Korea** | Hotspot | Korean War flashpoint (1950) |
+| **Greece & Turkey** | Hotspot | Truman Doctrine frontline |
+| **Iran** | Hotspot | Soviet-Western rivalry over oil |
+| **Taiwan** | Hotspot | Available from 1949 (Nationalist retreat) |
+| **Indochina** | Hotspot | French colonial war |
+| **Suez Canal** | Hotspot | Critical trade chokepoint |
+| **Germany** | Standard | Divided into occupation zones |
+| **Western/Eastern Europe** | Standard | Core alliance blocs |
+| **India / Pakistan** | Standard | Pakistan appears from 1947 |
+| **East Asia, Southeast Asia, Pacific Islands** | Standard | Pacific theater |
+| **Middle East, North/Sub-Saharan Africa** | Standard | Decolonization regions |
+| **North/Central/South America, Caribbean** | Standard | Western hemisphere |
+
+### Occupation Zones (Automatic)
+
+At the start of Phase 2, the four occupying powers automatically receive treaty-mandated deployments at no cost:
+
+| Nation | Zone | Troops |
+|--------|------|--------|
+| **USA** | Germany (Bavaria, Hesse, Bremen) | 200,000 Army |
+| **UK** | Germany (North Rhine-Westphalia, Lower Saxony) | 150,000 Army |
+| **France** | Germany (Rhineland-Palatinate, Baden) | 100,000 Army |
+| **USSR** | Germany (Saxony, Thuringia, Brandenburg) | 300,000 Army |
+| **USSR** | Eastern Europe (Red Army garrisons) | 500,000 Army |
+
+These count as presence for prerequisites (e.g., allowing Berlin deployments) and are shown in the "Treaty Obligations" panel.
+
+### Prerequisites and Year Gates
+
+- **Berlin** requires your nation to have forces in Germany first (occupation zones count)
+- **Pakistan** only available from 1947 (independence/partition)
+- **Taiwan** only available from 1949 (Nationalist retreat from mainland)
 
 ### Deployment Costs
 
