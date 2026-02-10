@@ -545,26 +545,8 @@ app.get('/api/export-users', (req, res) => {
 // ============================================
 
 
-// Auto-save every 2 minutes
-setInterval(() => {
-  saveState();
-  console.log('🔄 Auto-save completed');
-}, 2 * 60 * 1000);
-
-// Save on shutdown
-process.on('SIGINT', () => {
-  console.log('\n⚠️  Server shutting down...');
-  saveState();
-  console.log('✅ Final save completed');
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  console.log('\n⚠️  Server terminating...');
-  saveState();
-  console.log('✅ Final save completed');
-  process.exit(0);
-});
+// Auto-save and shutdown handlers are defined later (near server startup)
+// to ensure per-game Phase 2 state files are always included.
 
 // Password functions
 // (crypto already required at top of file)
@@ -5016,6 +4998,16 @@ async function initializeFromDatabase() {
         // (per-game file has deployment/battle data that main state might not fully capture)
         const savedPhase2State = loadGamePhase2State(gameCode);
         if (savedPhase2State && savedPhase2State.savedAt) {
+          // Use per-game file's currentYear if it's more recent than main state
+          if (savedPhase2State.currentYear && savedPhase2State.currentYear > (existingRoom.phase2.currentYear || 0)) {
+            console.log(`   📅 Per-game file has newer year (${savedPhase2State.currentYear} vs ${existingRoom.phase2.currentYear}) - using it`);
+            existingRoom.phase2.currentYear = savedPhase2State.currentYear;
+          }
+          // Use per-game file's yearlyData if it has more years
+          if (savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > Object.keys(existingRoom.phase2.yearlyData).length) {
+            console.log(`   📊 Per-game file has more yearly data - merging`);
+            existingRoom.phase2.yearlyData = { ...existingRoom.phase2.yearlyData, ...savedPhase2State.yearlyData };
+          }
           // Restore fields that might be missing from the main state file
           if (savedPhase2State.cumulativeDeployments && !existingRoom.phase2.cumulativeDeployments) {
             existingRoom.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments;
@@ -5140,9 +5132,13 @@ async function initializeFromDatabase() {
           roomState.phase2.scoreBreakdowns = savedPhase2State.scoreBreakdowns || {};
           console.log(`   ✅ Restored Phase 2 state from file (year: ${savedPhase2State.currentYear}, years: ${Object.keys(savedPhase2State.yearlyData).join(', ')}, saved: ${new Date(savedPhase2State.savedAt).toLocaleString()})`);
         } else if (wasInPhase2) {
-          // Fall back to fresh initialization only if game was supposed to be in Phase 2
-          console.log(`   ⚠️ No saved Phase 2 state found - initializing fresh...`);
-          initializePhase2(gameCode);
+          // No per-game file found. Only initialize fresh if we truly have no data at all.
+          if (roomState.phase2?.yearlyData && Object.keys(roomState.phase2.yearlyData).length > 0) {
+            console.log(`   ⚠️ No per-game file, but main state has yearlyData - keeping existing data (year: ${roomState.phase2.currentYear})`);
+          } else {
+            console.log(`   ⚠️ No saved Phase 2 state found anywhere - initializing fresh from 1946...`);
+            initializePhase2(gameCode);
+          }
         }
       }
 
@@ -5199,6 +5195,12 @@ process.on('unhandledRejection', (reason, promise) => {
   // Don't exit - just log. Save state as precaution.
   try {
     saveState();
+    Object.keys(globalState.rooms).forEach(roomId => {
+      const room = globalState.rooms[roomId];
+      if (room && room.phase2 && room.phase2.yearlyData) {
+        saveGamePhase2State(roomId);
+      }
+    });
   } catch (err) {
     console.error('❌ Precautionary save failed:', err);
   }
