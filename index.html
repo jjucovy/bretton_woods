@@ -2877,24 +2877,30 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           ) : !hasSubmitted ? (
                             <>
                               {/* Show Command Economy form for USSR and Communist China */}
-                              {isCommandEconomy(playerCountry, currentYear) ? (
-                              <CommandEconomyPolicyForm 
-                                currentYear={currentYear}
-                                playerId={playerId}
-                                socket={socket}
-                                roomId={currentRoomId}
-                                country={playerCountry}
-                                myData={myData}
-                              />
-                            ) : (
-                              <PolicySubmissionForm
+                              {(() => {
+                                const prevYear = currentYear - 1;
+                                const prevPolicy = gameState.phase2?.policies?.[prevYear]?.[normalizedCountry];
+                                return isCommandEconomy(playerCountry, currentYear) ? (
+                                <CommandEconomyPolicyForm
                                   currentYear={currentYear}
                                   playerId={playerId}
                                   socket={socket}
                                   roomId={currentRoomId}
+                                  country={playerCountry}
                                   myData={myData}
+                                  previousPolicy={prevPolicy}
                                 />
-                              )}
+                              ) : (
+                                <PolicySubmissionForm
+                                    currentYear={currentYear}
+                                    playerId={playerId}
+                                    socket={socket}
+                                    roomId={currentRoomId}
+                                    myData={myData}
+                                    previousPolicy={prevPolicy}
+                                  />
+                                );
+                              })()}
                               <TroopDeploymentInterface 
                                 playerCountry={playerCountry}
                                 gameState={gameState}

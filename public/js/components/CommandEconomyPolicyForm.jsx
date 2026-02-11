@@ -1,12 +1,12 @@
 const { useState } = React;
 
         // Command Economy Policy Form (USSR, Communist China)
-        function CommandEconomyPolicyForm({ currentYear, playerId, socket, roomId, country, myData }) {
-          const [fiveYearPlanTarget, setFiveYearPlanTarget] = useState(8); // % growth target
-          const [heavyIndustryAllocation, setHeavyIndustryAllocation] = useState(60); // % of resources
-          const [foreignTradeOrientation, setForeignTradeOrientation] = useState(50); // COMECON vs West trade
-          const [planFulfillmentPriority, setPlanFulfillmentPriority] = useState(70); // Credit allocation rigor
-          const [militarySpending, setMilitarySpending] = useState(15);
+        function CommandEconomyPolicyForm({ currentYear, playerId, socket, roomId, country, myData, previousPolicy }) {
+          const [fiveYearPlanTarget, setFiveYearPlanTarget] = useState(previousPolicy?.fiveYearPlanTarget ?? 8); // % growth target
+          const [heavyIndustryAllocation, setHeavyIndustryAllocation] = useState(previousPolicy?.heavyIndustryAllocation ?? 60); // % of resources
+          const [foreignTradeOrientation, setForeignTradeOrientation] = useState(previousPolicy?.foreignTradeOrientation ?? 50); // COMECON vs West trade
+          const [planFulfillmentPriority, setPlanFulfillmentPriority] = useState(previousPolicy?.planFulfillmentPriority ?? 70); // Credit allocation rigor
+          const [militarySpending, setMilitarySpending] = useState(previousPolicy?.militarySpending ?? 15);
           const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double-submit
 
           // Initialize military branches from previous year's data
