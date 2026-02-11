@@ -40,58 +40,52 @@ CREATE TABLE IF NOT EXISTS game_state_snapshots (
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- API handler to add to api.php on Hostinger:
+-- API handlers to add to api.php on Hostinger (uses $conn and query()/respond() helpers):
 --
 -- case 'saveGameStateSnapshot':
---     $stmt = $pdo->prepare("INSERT INTO game_state_snapshots
+--     $result = query($conn, "INSERT INTO game_state_snapshots
 --         (game_code, game_id, snapshot_type, phase, round_or_year,
 --          players, scores, round_history, current_round,
 --          current_year, yearly_data, policies, deployments,
 --          deployment_history, crises, battle_results, diplomatic_points,
 --          full_state, player_count)
---         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
---     $stmt->execute([
---         $data['game_code'],
---         $data['game_id'] ?? null,
---         $data['snapshot_type'],
---         $data['phase'],
---         $data['round_or_year'],
---         json_encode($data['players'] ?? []),
---         json_encode($data['scores'] ?? []),
---         json_encode($data['round_history'] ?? null),
---         $data['current_round'] ?? null,
---         $data['current_year'] ?? null,
---         json_encode($data['yearly_data'] ?? null),
---         json_encode($data['policies'] ?? null),
---         json_encode($data['deployments'] ?? null),
---         json_encode($data['deployment_history'] ?? null),
---         json_encode($data['crises'] ?? null),
---         json_encode($data['battle_results'] ?? null),
---         json_encode($data['diplomatic_points'] ?? null),
---         $data['full_state'] ?? null,
---         $data['player_count'] ?? 0
---     ]);
---     echo json_encode(['success' => true, 'data' => ['id' => $pdo->lastInsertId()]]);
+--         VALUES ('" . mysqli_real_escape_string($conn, $data['game_code']) . "',
+--                 " . (isset($data['game_id']) ? intval($data['game_id']) : "NULL") . ",
+--                 '" . mysqli_real_escape_string($conn, $data['snapshot_type']) . "',
+--                 " . intval($data['phase']) . ",
+--                 " . intval($data['round_or_year']) . ",
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['players'] ?? [])) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['scores'] ?? [])) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['round_history'] ?? null)) . "',
+--                 " . (isset($data['current_round']) ? intval($data['current_round']) : "NULL") . ",
+--                 " . (isset($data['current_year']) ? intval($data['current_year']) : "NULL") . ",
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['yearly_data'] ?? null)) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['policies'] ?? null)) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['deployments'] ?? null)) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['deployment_history'] ?? null)) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['crises'] ?? null)) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['battle_results'] ?? null)) . "',
+--                 '" . mysqli_real_escape_string($conn, json_encode($data['diplomatic_points'] ?? null)) . "',
+--                 '" . mysqli_real_escape_string($conn, $data['full_state'] ?? '') . "',
+--                 " . intval($data['player_count'] ?? 0) . ")");
+--     respond(['success' => true, 'id' => mysqli_insert_id($conn)]);
 --     break;
 --
 -- case 'getGameStateSnapshots':
---     $stmt = $pdo->prepare("SELECT id, game_code, snapshot_type, phase, round_or_year,
+--     $result = query($conn, "SELECT id, game_code, snapshot_type, phase, round_or_year,
 --         players, scores, current_round, current_year, player_count, created_at
 --         FROM game_state_snapshots
---         WHERE game_code = ?
+--         WHERE game_code = '" . mysqli_real_escape_string($conn, $data['game_code']) . "'
 --         ORDER BY created_at DESC");
---     $stmt->execute([$data['game_code']]);
---     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
---     echo json_encode(['success' => true, 'data' => $rows]);
+--     respond($result ?: []);
 --     break;
 --
 -- case 'getGameStateSnapshot':
---     $stmt = $pdo->prepare("SELECT * FROM game_state_snapshots WHERE id = ?");
---     $stmt->execute([$data['id']]);
---     $row = $stmt->fetch(PDO::FETCH_ASSOC);
---     if ($row) {
---         echo json_encode(['success' => true, 'data' => $row]);
+--     $result = query($conn, "SELECT * FROM game_state_snapshots
+--         WHERE id = " . intval($data['id']));
+--     if (is_array($result) && count($result) > 0) {
+--         respond($result[0]);
 --     } else {
---         echo json_encode(['success' => false, 'error' => 'Snapshot not found']);
+--         respond(['error' => 'Snapshot not found']);
 --     }
 --     break;
