@@ -296,6 +296,48 @@ function saveGamePhase2State(roomId) {
   }
 }
 
+// Save a complete game state snapshot to MySQL (Hostinger)
+// Called at end of each round (Phase 1) or year (Phase 2)
+async function saveGameStateSnapshot(roomId, snapshotType) {
+  const room = globalState.rooms[roomId];
+  if (!room) return;
+
+  try {
+    const isPhase2 = room.gamePhase === 'phase2' || room.gamePhase === 'complete';
+    const phase = isPhase2 ? 2 : 1;
+    const roundOrYear = isPhase2 ? (room.phase2?.currentYear || 1946) : (room.currentRound || 1);
+
+    const snapshotData = {
+      game_code: roomId,
+      game_id: room.gameId || null,
+      snapshot_type: snapshotType,
+      phase,
+      round_or_year: roundOrYear,
+      players: Object.fromEntries(
+        Object.entries(room.players).map(([id, p]) => [id, { country: p.country, score: p.score || 0 }])
+      ),
+      scores: room.scores || {},
+      round_history: room.roundHistory || [],
+      current_round: room.currentRound || 0,
+      current_year: room.phase2?.currentYear || null,
+      yearly_data: isPhase2 ? (room.phase2?.yearlyData || null) : null,
+      policies: isPhase2 ? (room.phase2?.policies || null) : null,
+      deployments: isPhase2 ? (room.phase2?.cumulativeDeployments || null) : null,
+      deployment_history: isPhase2 ? (room.phase2?.deploymentHistory || null) : null,
+      crises: isPhase2 ? (room.phase2?.crises || null) : null,
+      battle_results: isPhase2 ? (room.phase2?.battleResults || null) : null,
+      diplomatic_points: isPhase2 ? (room.phase2?.diplomaticPoints || null) : null,
+      full_state: JSON.stringify(room),
+      player_count: Object.keys(room.players).length
+    };
+
+    await queryDatabase('saveGameStateSnapshot', snapshotData);
+    console.log(`📸 Game state snapshot saved: ${roomId} [${snapshotType}] phase=${phase} round/year=${roundOrYear}`);
+  } catch (err) {
+    console.error(`⚠️ Failed to save game state snapshot for ${roomId}:`, err);
+  }
+}
+
 // Load Phase 2 state from per-game file
 function loadGamePhase2State(roomId) {
   try {
@@ -746,6 +788,7 @@ function initializePhase2(roomId) {
   // Save all state (main state file + per-game Phase 2 file)
   saveState();
   saveGamePhase2State(roomId);
+  saveGameStateSnapshot(roomId, 'phase_transition');
 }
 
 // Derive structured Phase 1 outcomes from roundHistory.
@@ -3205,6 +3248,7 @@ const countryId = countryData?.country_id || null;
               console.error('⚠️ Failed to save tie result to database:', err);
             });
             console.log(`✅ Round ${room.currentRound} tie result saved to database`);
+            saveGameStateSnapshot(roomId, 'round_end');
           } catch (err) {
             console.error('⚠️ Failed to save tie result to database:', err);
           }
@@ -3335,6 +3379,7 @@ const countryId = countryData?.country_id || null;
           };
           await queryDatabase('saveRoundResult', roundResultData);
           console.log(`✅ Round ${room.currentRound} result saved to database`);
+          saveGameStateSnapshot(roomId, 'round_end');
         } catch (err) {
           console.error('⚠️ Failed to save round result to database:', err);
         }
@@ -3566,6 +3611,7 @@ const countryId = countryData?.country_id || null;
             currentRoom.gamePhase = 'complete';
             currentRoom.phase2.active = false;
             console.log('Phase 2 complete! Final scores calculated.');
+            saveGameStateSnapshot(roomId, 'game_complete');
 
             broadcastToRoom(roomId);
             saveState();
@@ -3586,6 +3632,7 @@ const countryId = countryData?.country_id || null;
           triggerCrisisIfNeeded(roomId, currentRoom.phase2.currentYear);
 
           console.log(`✅ Auto-advanced to year ${currentRoom.phase2.currentYear}`);
+          saveGameStateSnapshot(roomId, 'year_end');
 
           // Check if we've reached the final year
           if (currentRoom.phase2.currentYear >= 1952) {
@@ -4289,6 +4336,7 @@ const countryId = countryData?.country_id || null;
           room.gamePhase = 'complete';
           room.phase2.active = false;
           console.log('Phase 2 complete! Final scores calculated.');
+          saveGameStateSnapshot(roomId, 'game_complete');
         } else {
           // Calculate economics
           calculateYearEconomics(roomId);
@@ -4302,6 +4350,7 @@ const countryId = countryData?.country_id || null;
           triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
 
           console.log(`✅ Advanced to year ${room.phase2.currentYear} after battle resolution`);
+          saveGameStateSnapshot(roomId, 'year_end');
         }
 
         broadcastToRoom(roomId);
@@ -4618,6 +4667,7 @@ const countryId = countryData?.country_id || null;
       room.gamePhase = 'complete';
       room.phase2.active = false;
       console.log('Phase 2 complete! Final scores calculated.');
+      saveGameStateSnapshot(roomId, 'game_complete');
 
       broadcastToRoom(roomId);
       saveState();
@@ -4648,7 +4698,8 @@ const countryId = countryData?.country_id || null;
     triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
     
     console.log(`✅ Advanced to year ${room.phase2.currentYear}`);
-    
+    saveGameStateSnapshot(roomId, 'year_end');
+
     // Check if we've reached the final year
     if (room.phase2.currentYear >= 1952) {
       console.log('Reached final year 1952. Next advance will complete Phase 2.');

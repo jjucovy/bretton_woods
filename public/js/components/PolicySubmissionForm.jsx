@@ -1,11 +1,11 @@
 const { useState } = React;
 
         // Policy Submission Form Component for Phase 2
-        function PolicySubmissionForm({ currentYear, playerId, socket, roomId, myData }) {
-          const [centralBankRate, setCentralBankRate] = useState(3.0);
-          const [exchangeRate, setExchangeRate] = useState(1.0);
-          const [tariffRate, setTariffRate] = useState(10);
-          const [militarySpending, setMilitarySpending] = useState(5); // % of GDP
+        function PolicySubmissionForm({ currentYear, playerId, socket, roomId, myData, previousPolicy }) {
+          const [centralBankRate, setCentralBankRate] = useState(previousPolicy?.centralBankRate ?? 3.0);
+          const [exchangeRate, setExchangeRate] = useState(previousPolicy?.exchangeRate ?? 1.0);
+          const [tariffRate, setTariffRate] = useState(previousPolicy?.tariffRate ?? 10);
+          const [militarySpending, setMilitarySpending] = useState(previousPolicy?.militarySpending ?? 5); // % of GDP
           const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double-submit
 
           // Initialize military branches from previous year's data
