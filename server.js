@@ -113,11 +113,9 @@ app.get('/api/available-games', async (req, res) => {
 
 // NEW: API endpoint to get all active games (for superadmin only)
 app.get('/api/active-games', async (req, res) => {
-  const { adminplayerid } = req.query;
-  
-  // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid);
-  if (!admin || admin.role !== 'superadmin') {
+  const adminId = req.query.adminPlayerId || req.query.adminplayerid;
+
+  if (!await verifyAdmin(adminId)) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
@@ -508,17 +506,55 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), async (re
 // USER MANAGEMENT API
 // ============================================
 
+// Helper: verify admin by checking globalState.users first, then falling back to DB
+async function verifyAdmin(playerIdParam) {
+  if (!playerIdParam) return false;
+
+  // Check in-memory users first
+  const localAdmin = Object.values(globalState.users).find(u => u.player?.id === playerIdParam);
+  if (localAdmin) return localAdmin.role === 'superadmin';
+
+  // Fallback: check database (needed after server restart when globalState.users is empty)
+  try {
+    const dbUsers = await queryDatabase('getAllUsers', {});
+    if (dbUsers && Array.isArray(dbUsers)) {
+      const dbUser = dbUsers.find(u => u.user_id === playerIdParam || String(u.user_id) === String(playerIdParam));
+      if (dbUser) {
+        return dbUser.is_teacher === '1' || dbUser.is_teacher === 1;
+      }
+    }
+  } catch (err) {
+    console.error('Error verifying admin via DB:', err);
+  }
+  return false;
+}
+
 // Get all users (admin only)
-app.get('/api/users', (req, res) => {
-  const { adminplayerid  } = req.query;
-  
-  // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid );
-  if (!admin || admin.role !== 'superadmin') {
+app.get('/api/users', async (req, res) => {
+  const adminId = req.query.adminPlayerId || req.query.adminplayerid;
+
+  if (!await verifyAdmin(adminId)) {
     return res.status(403).json({ error: 'Admin access required' });
   }
-  
-  // Return users without passwords
+
+  // Return users from database (authoritative source)
+  try {
+    const dbUsers = await queryDatabase('getAllUsers', {});
+    if (dbUsers && Array.isArray(dbUsers)) {
+      const users = dbUsers.map(u => ({
+        username: u.username,
+        playerid: u.user_id,
+        role: (u.is_teacher === '1' || u.is_teacher === 1) ? 'superadmin' : 'player',
+        createdAt: u.created_at,
+        lastLogin: u.last_login
+      }));
+      return res.json({ users });
+    }
+  } catch (err) {
+    console.error('Error loading users from DB:', err);
+  }
+
+  // Fallback to in-memory users
   const users = Object.entries(globalState.users).map(([username, data]) => ({
     username,
     playerid: data.player.id,
@@ -526,45 +562,35 @@ app.get('/api/users', (req, res) => {
     createdAt: data.createdAt,
     lastLogin: data.lastLogin
   }));
-  
+
   res.json({ users });
 });
 
 // Delete user (admin only)
-app.delete('/api/users/:username', express.json(), (req, res) => {
+app.delete('/api/users/:username', express.json(), async (req, res) => {
   const { username } = req.params;
-  const { adminplayerid  } = req.body;
-  
-  // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid );
-  if (!admin || admin.role !== 'superadmin') {
+  const adminId = req.body.adminPlayerId || req.body.adminplayerid;
+
+  if (!await verifyAdmin(adminId)) {
     return res.status(403).json({ error: 'Admin access required' });
   }
-  
-  // Don't allow deleting self
-  const adminUsername = Object.keys(globalState.users).find(u => globalState.users[u].player.id === adminplayerid );
-  if (username === adminUsername) {
-    return res.status(400).json({ error: 'Cannot delete your own account' });
-  }
-  
+
   if (!globalState.users[username]) {
     return res.status(404).json({ error: 'User not found' });
   }
-  
+
   delete globalState.users[username];
   saveState();
-  
+
   console.log(`User deleted: ${username} by admin`);
   res.json({ success: true, message: 'User deleted successfully' });
 });
 
 // Export user database (admin only)
-app.get('/api/export-users', (req, res) => {
-  const { adminplayerid  } = req.query;
-  
-  // Verify admin
-  const admin = Object.values(globalState.users).find(u => u.player.id === adminplayerid );
-  if (!admin || admin.role !== 'superadmin') {
+app.get('/api/export-users', async (req, res) => {
+  const adminId = req.query.adminPlayerId || req.query.adminplayerid;
+
+  if (!await verifyAdmin(adminId)) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
