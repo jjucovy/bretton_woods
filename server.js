@@ -31,6 +31,23 @@ const {
 // module at ./server/economics.js. The inline definitions below are still
 // used by the socket handlers and will be migrated incrementally.
 
+// Password hashing using Node's built-in crypto (scrypt)
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  // Handle unhashed passwords (legacy: stored before hashing was added)
+  if (!stored.includes(':') || stored.length < 50) {
+    return password === stored;
+  }
+  const [salt, hash] = stored.split(':');
+  const testHash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return hash === testHash;
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
@@ -2297,10 +2314,13 @@ io.on('connection', (socket) => {
     const role = isSuperAdmin ? 'superadmin' : 'player';
 
     try {
+      // Hash password before storing
+      const hashedPassword = hashPassword(password);
+
       // Create user in database
       const result = await queryDatabase('createUser', {
         username: username,
-        password: password,
+        password: hashedPassword,
         role: isSuperAdmin ? 'teacher' : 'student',
         email: email,
         displayName: username
@@ -2364,8 +2384,15 @@ io.on('connection', (socket) => {
       }
 
       console.log('User found in database:', dbUser.username, 'user_id:', dbUser.user_id);
-      
-      // For now, accept the password (in production, verify against password_hash)
+
+      // Verify password against stored hash
+      const storedPassword = dbUser.password_hash || dbUser.password || '';
+      if (!verifyPassword(password, storedPassword)) {
+        console.log('ERROR: Password mismatch for user:', username);
+        socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
+        return;
+      }
+
       const role = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1) ? 'superadmin' : 'player';
       console.log('Login successful, role:', role);
       
