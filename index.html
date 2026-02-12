@@ -767,6 +767,22 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             return normalized || countries[countryCode]?.name || countryCode;
           };
 
+          // Get country theme (colors, flag, leader, motto, etc.)
+          const getCountryTheme = (countryKey) => {
+            const c = countries[countryKey];
+            if (!c?.theme) {
+              return {
+                flag: '', primary: '#334155', secondary: '#64748b', light: '#f1f5f9',
+                lighter: '#f8fafc', accent: '#334155', gradient: 'linear-gradient(135deg, #334155 0%, #64748b 100%)',
+                headerGradient: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                borderColor: '#64748b', textDark: '#334155', textMedium: '#64748b',
+                name: countryKey, leader: '', currency: '', motto: ''
+              };
+            }
+            return { ...c.theme, flag: c.flag || '', name: c.name, leader: c.leader || '', currency: c.currency || '', motto: c.motto || '' };
+          };
+          const myTheme = playerCountry ? getCountryTheme(playerCountry) : null;
+
 
           // NEW: Game selection screen (for both superadmin and regular users)
           if (isAuthenticated && showGameSelection) {
@@ -1577,29 +1593,32 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           </div>
                         )}
 
-                        {/* Round Header */}
+                        {/* Round Header - Country Themed */}
                         <div style={{
                           padding: '20px',
-                          background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                          background: myTheme ? myTheme.headerGradient : 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
                           borderRadius: '8px',
                           marginBottom: '20px',
-                          border: '2px solid #3b82f6'
+                          border: `2px solid ${myTheme?.borderColor || '#3b82f6'}`
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                              <h2 style={{ color: '#1e40af', margin: 0, fontSize: '1.5rem' }}>
+                              <h2 style={{ color: myTheme?.textDark || '#1e40af', margin: 0, fontSize: '1.5rem' }}>
                                 Round {gameState.currentRound} of 10
                               </h2>
-                              <p style={{ color: '#3b82f6', margin: '5px 0 0 0', fontSize: '0.875rem' }}>
+                              <p style={{ color: myTheme?.textMedium || '#3b82f6', margin: '5px 0 0 0', fontSize: '0.875rem' }}>
                                 Phase 1: Conference Voting
                               </p>
                             </div>
-                            {userRole !== 'superadmin' && (() => {
+                            {userRole !== 'superadmin' && myTheme && (() => {
                               const countryNameForScoring = getCountryNameForVoting(playerCountry);
                               return (
                               <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
+                                <div style={{ fontSize: '1.5rem', marginBottom: '2px' }}>{myTheme.flag}</div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: myTheme.textDark }}>
+                                  {myTheme.name}
+                                </div>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: myTheme.textDark }}>
                                   {gameState.scores?.[countryNameForScoring] || 0} pts
                                 </div>
                               </div>
@@ -1607,6 +1626,35 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             })()}
                           </div>
                         </div>
+
+                        {/* Country Identity Banner */}
+                        {userRole !== 'superadmin' && myTheme && (
+                          <div style={{
+                            padding: '12px 20px',
+                            background: myTheme.gradient,
+                            borderRadius: '8px',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            color: 'white'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <span style={{ fontSize: '2rem' }}>{myTheme.flag}</span>
+                              <div>
+                                <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                  Delegation of {myTheme.name}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+                                  Lead Delegate: {myTheme.leader} &middot; {myTheme.motto}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.85 }}>
+                              {myTheme.currency}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Observer View */}
                         {userRole === 'superadmin' && (
@@ -1647,11 +1695,14 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         borderRadius: '6px',
                                         borderLeft: '4px solid ' + (gameState.votes?.[player.id] ? '#16a34a' : '#cbd5e1')
                                       }}>
+                                        <span style={{ fontSize: '1.1rem', marginRight: '6px' }}>
+                                          {countries[player.country]?.flag || ''}
+                                        </span>
                                         <span style={{ fontWeight: 'bold' }}>
                                           {countries[player.country]?.name || player.country}
                                         </span>
-                                        <span style={{ 
-                                          marginLeft: '10px', 
+                                        <span style={{
+                                          marginLeft: '10px',
                                           color: gameState.votes?.[player.id] ? '#16a34a' : '#64748b',
                                           fontSize: '0.875rem'
                                         }}>
@@ -1736,25 +1787,25 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 return (
                                   <div style={{
                                     padding: '15px',
-                                    background: '#f0fdf4',
+                                    background: myTheme ? myTheme.lighter : '#f0fdf4',
                                     borderRadius: '6px',
-                                    borderLeft: '4px solid #16a34a',
+                                    borderLeft: `4px solid ${myTheme?.borderColor || '#16a34a'}`,
                                     marginBottom: '20px'
                                   }}>
                                     <h4 style={{
                                       margin: '0 0 8px 0',
                                       fontSize: '0.85rem',
-                                      color: '#166534',
+                                      color: myTheme?.textDark || '#166534',
                                       textTransform: 'uppercase',
                                       letterSpacing: '0.05em'
                                     }}>
-                                      Your Delegation's Position ({countryKey})
+                                      {myTheme?.flag} Your Delegation's Position ({countryKey})
                                     </h4>
                                     <p style={{
                                       margin: 0,
                                       fontSize: '0.875rem',
                                       lineHeight: '1.6',
-                                      color: '#14532d',
+                                      color: myTheme?.textDark || '#14532d',
                                       fontStyle: 'italic'
                                     }}>
                                       "{position}"
@@ -2128,14 +2179,15 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             return (
                             <div style={{
                               padding: '20px',
-                              background: 'white',
+                              background: myTheme ? myTheme.lighter : 'white',
                               borderRadius: '8px',
-                              marginBottom: '20px'
+                              marginBottom: '20px',
+                              borderLeft: `4px solid ${myTheme?.borderColor || '#3b82f6'}`
                             }}>
-                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
-                                Your Score This Round
+                              <div style={{ fontSize: '0.875rem', color: myTheme?.textMedium || '#64748b', marginBottom: '5px' }}>
+                                {myTheme?.flag} {myTheme?.name} — Score This Round
                               </div>
-                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: myTheme?.textDark || '#3b82f6' }}>
                                 +{gameState.roundScores?.[countryNameForScoring] || 0} pts
                               </div>
                               <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
@@ -2196,30 +2248,33 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 .map(([country, score], idx) => {
                                   const myNorm = normalizeC(playerCountry);
                                   const isMe = country === myNorm;
+                                  const rowTheme = getCountryTheme(country);
                                   return (
                                 <div key={country} style={{
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
                                   padding: '12px',
-                                  background: isMe ? '#eff6ff' : '#f8fafc',
+                                  background: isMe ? (rowTheme.lighter || '#eff6ff') : '#f8fafc',
                                   borderRadius: '6px',
-                                  borderLeft: '4px solid ' + (idx === 0 ? '#f59e0b' : '#cbd5e1')
+                                  borderLeft: `4px solid ${isMe ? (rowTheme.borderColor || '#3b82f6') : idx === 0 ? '#f59e0b' : '#cbd5e1'}`,
+                                  border: isMe ? `2px solid ${rowTheme.borderColor || '#3b82f6'}` : undefined
                                 }}>
-                                  <div>
-                                    <span style={{ fontWeight: 'bold', marginRight: '10px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>{rowTheme.flag}</span>
+                                    <span style={{ fontWeight: 'bold', marginRight: '4px' }}>
                                       {idx + 1}.
                                     </span>
-                                    <span style={{ fontWeight: 'bold' }}>
+                                    <span style={{ fontWeight: 'bold', color: isMe ? rowTheme.textDark : undefined }}>
                                       {countries[country]?.name || country}
                                     </span>
                                     {isMe && (
-                                      <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>
+                                      <span style={{ fontSize: '0.8rem', color: rowTheme.textMedium }}>
                                         (You)
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                  <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: isMe ? rowTheme.textDark : undefined }}>
                                     {score} pts
                                   </div>
                                 </div>
@@ -2668,20 +2723,74 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
                           )}
 
-                          <div style={{
-                            padding: '30px',
-                            background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
-                            borderRadius: '8px',
-                            marginBottom: '20px',
-                            textAlign: 'center'
-                          }}>
-                            <h1 style={{ margin: 0, marginBottom: '10px', color: '#3730a3' }}>
-                              🏛️ Post-War Economic Management
-                            </h1>
-                            <p style={{ fontSize: '1.25rem', color: '#4338ca', margin: 0 }}>
-                              Year {currentYear} ({currentYear - 1945} of 7)
-                            </p>
-                          </div>
+                          {/* Phase 2 Header - Country Themed */}
+                          {userRole !== 'superadmin' && myTheme ? (
+                            <div style={{
+                              borderRadius: '8px',
+                              marginBottom: '20px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                padding: '16px 24px',
+                                background: myTheme.gradient,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                color: 'white'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                  <span style={{ fontSize: '2.5rem' }}>{myTheme.flag}</span>
+                                  <div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '1.3rem' }}>
+                                      {myTheme.name}
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                                      {myTheme.leader} &middot; {myTheme.currency}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                                    {currentYear}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                    Year {currentYear - 1945} of 7
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{
+                                padding: '8px 24px',
+                                background: myTheme.headerGradient,
+                                borderBottom: `2px solid ${myTheme.borderColor}`,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                fontSize: '0.8rem'
+                              }}>
+                                <span style={{ color: myTheme.textDark, fontWeight: '600' }}>
+                                  Post-War Economic Management
+                                </span>
+                                <span style={{ color: myTheme.textMedium, fontStyle: 'italic' }}>
+                                  {myTheme.motto}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{
+                              padding: '30px',
+                              background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                              borderRadius: '8px',
+                              marginBottom: '20px',
+                              textAlign: 'center'
+                            }}>
+                              <h1 style={{ margin: 0, marginBottom: '10px', color: '#3730a3' }}>
+                                Post-War Economic Management
+                              </h1>
+                              <p style={{ fontSize: '1.25rem', color: '#4338ca', margin: 0 }}>
+                                Year {currentYear} ({currentYear - 1945} of 7)
+                              </p>
+                            </div>
+                          )}
 
                           {/* Economic Dashboard - Only for Players */}
                           {userRole !== 'superadmin' && (
@@ -2689,10 +2798,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               background: 'white',
                               borderRadius: '12px',
                               padding: '24px',
-                              marginBottom: '20px'
+                              marginBottom: '20px',
+                              borderTop: `3px solid ${myTheme?.borderColor || '#6366f1'}`
                             }}>
-                              <h2 style={{ marginTop: 0, marginBottom: '20px' }}>
-                                Economic Indicators - {countries[playerCountry]?.name}
+                              <h2 style={{ marginTop: 0, marginBottom: '20px', color: myTheme?.textDark || '#1e293b' }}>
+                                {myTheme?.flag} Economic Indicators - {countries[playerCountry]?.name}
                               </h2>
                               <div style={{
                                 display: 'grid',
@@ -3421,6 +3531,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             opacity: player.disconnected ? 0.7 : 1
                           }}>
                             <div>
+                              <span style={{ fontSize: '1.1rem', marginRight: '6px' }}>
+                                {countries[player.country]?.flag || ''}
+                              </span>
                               <span style={{ fontWeight: 'bold' }}>
                                 {countries[player.country]?.name || player.country}
                               </span>
@@ -3480,19 +3593,26 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             {availableCountries.map(key => {
                               const country = countries[key];
                               if (!country) return null;
+                              const cTheme = getCountryTheme(key);
                               return (
                                 <div
                                   key={key}
-                                  className={`country-card ${country.color}`}
+                                  className="country-card"
                                   onClick={() => handleJoinGame(key)}
-                                  style={{ cursor: 'pointer' }}
+                                  style={{ cursor: 'pointer', background: cTheme.gradient }}
                                 >
-                                  <h3>{country.name}</h3>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '1.8rem' }}>{cTheme.flag}</span>
+                                    <h3 style={{ margin: 0 }}>{country.name}</h3>
+                                  </div>
+                                  <p style={{ fontSize: '0.8rem', marginBottom: '6px', opacity: 0.95 }}>
+                                    {cTheme.leader} &middot; {cTheme.currency}
+                                  </p>
                                   <p style={{ fontSize: '0.875rem', marginBottom: '12px', opacity: '0.9' }}>
                                     {country.economicPosition}
                                   </p>
-                                  <p style={{ fontSize: '0.75rem', opacity: '0.8' }}>
-                                    {country.role}
+                                  <p style={{ fontSize: '0.7rem', opacity: '0.8', fontStyle: 'italic' }}>
+                                    "{cTheme.motto}"
                                   </p>
                                 </div>
                               );
@@ -3519,16 +3639,23 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       <div>
                         <div style={{
                           padding: '16px',
-                          background: '#eff6ff',
+                          background: myTheme ? myTheme.headerGradient : '#eff6ff',
                           borderRadius: '8px',
-                          marginBottom: '20px'
+                          marginBottom: '20px',
+                          border: `2px solid ${myTheme?.borderColor || '#3b82f6'}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '14px'
                         }}>
-                          <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>
-                            You are playing as: {countries[playerCountry]?.name || playerCountry}
-                          </p>
-                          <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                            You are committed to this country for the game.
-                          </p>
+                          <span style={{ fontSize: '2.5rem' }}>{myTheme?.flag}</span>
+                          <div>
+                            <p style={{ fontWeight: 'bold', marginBottom: '4px', color: myTheme?.textDark || '#1e293b', fontSize: '1.1rem' }}>
+                              Delegation of {countries[playerCountry]?.name || playerCountry}
+                            </p>
+                            <p style={{ fontSize: '0.8rem', color: myTheme?.textMedium || '#64748b', margin: 0 }}>
+                              {myTheme?.leader} &middot; {myTheme?.motto}
+                            </p>
+                          </div>
                         </div>
 
                         <button
