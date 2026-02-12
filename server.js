@@ -3374,6 +3374,8 @@ const countryId = countryData?.country_id || null;
               voteTally: voteTally,
               votes: room.votes,
               issueTitle: issueTitle,
+              roundScores: roundScores,
+              totalScores: { ...room.scores },
               timestamp: Date.now()
             }
           };
@@ -5141,6 +5143,64 @@ async function initializeFromDatabase() {
         }
       } else {
         console.log(`   No players found for game ${gameCode}`);
+      }
+
+      // Rebuild room.scores from player data (fallback - always available)
+      for (const player of Object.values(roomState.players)) {
+        const country = player.country;
+        if (country && player.phase1_score) {
+          roomState.scores[country] = (roomState.scores[country] || 0) + player.phase1_score;
+        }
+      }
+      console.log(`   📊 Scores rebuilt from player data:`, roomState.scores);
+
+      // Try to restore full state from latest game state snapshot (has scores, roundHistory, gamePhase)
+      try {
+        const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
+        if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
+          const latest = snapshots[0]; // Most recent snapshot (ordered by created_at DESC)
+          console.log(`   📸 Found ${snapshots.length} snapshot(s), latest: type=${latest.snapshot_type}, phase=${latest.phase}, round/year=${latest.round_or_year}`);
+
+          // Restore scores from snapshot (more reliable than player-level data)
+          let snapshotScores = latest.scores;
+          if (typeof snapshotScores === 'string') {
+            try { snapshotScores = JSON.parse(snapshotScores); } catch(e) { snapshotScores = null; }
+          }
+          if (snapshotScores && typeof snapshotScores === 'object') {
+            // Use snapshot scores - they're the cumulative totals at that point
+            const hasNonZero = Object.values(snapshotScores).some(v => v > 0);
+            if (hasNonZero) {
+              roomState.scores = { ...roomState.scores, ...snapshotScores };
+              console.log(`   ✅ Scores restored from snapshot:`, roomState.scores);
+            }
+          }
+
+          // Restore round history from snapshot
+          let snapshotHistory = latest.round_history;
+          if (typeof snapshotHistory === 'string') {
+            try { snapshotHistory = JSON.parse(snapshotHistory); } catch(e) { snapshotHistory = null; }
+          }
+          if (snapshotHistory && Array.isArray(snapshotHistory) && snapshotHistory.length > 0) {
+            roomState.roundHistory = snapshotHistory;
+            console.log(`   ✅ Round history restored (${snapshotHistory.length} rounds)`);
+          }
+
+          // Use snapshot's round/phase info for more accurate state
+          // If we're in Phase 1 and the snapshot says the current round was completed,
+          // set phase to 'results' so the host can advance
+          if (roomState.gamePhase === 'voting' && latest.snapshot_type === 'round_end') {
+            const snapshotRound = latest.round_or_year;
+            if (snapshotRound === roomState.currentRound) {
+              // The current round already had its vote completed - show results
+              roomState.gamePhase = 'results';
+              console.log(`   ✅ Phase corrected to 'results' (round ${snapshotRound} vote was already completed)`);
+            }
+          }
+        } else {
+          console.log(`   ⚠️ No game state snapshots found for ${gameCode}`);
+        }
+      } catch (snapshotErr) {
+        console.error(`   ⚠️ Failed to load snapshots for ${gameCode}:`, snapshotErr);
       }
 
       globalState.rooms[gameCode] = roomState;
