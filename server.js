@@ -636,17 +636,6 @@ app.get('/api/export-users', async (req, res) => {
 // Password functions
 // (crypto already required at top of file)
 
-// Simple password hashing (for educational use - in production use bcrypt)
-// Using SHA256 with salt for better security
-function hashPassword(password) {
-  const salt = 'bretton-woods-2024'; // Static salt for consistency
-  return crypto.createHash('sha256').update(salt + password).digest('hex');
-}
-
-function verifyPassword(password, hashedPassword) {
-  return hashPassword(password) === hashedPassword;
-}
-
 // Helper to update room list
 function updateRoomList() {
   globalState.roomList = Object.keys(globalState.rooms).map(roomId => {
