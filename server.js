@@ -31,6 +31,23 @@ const {
 // module at ./server/economics.js. The inline definitions below are still
 // used by the socket handlers and will be migrated incrementally.
 
+// Password hashing using Node's built-in crypto (scrypt)
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  // Handle unhashed passwords (legacy: stored before hashing was added)
+  if (!stored.includes(':') || stored.length < 50) {
+    return password === stored;
+  }
+  const [salt, hash] = stored.split(':');
+  const testHash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return hash === testHash;
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
@@ -2297,10 +2314,13 @@ io.on('connection', (socket) => {
     const role = isSuperAdmin ? 'superadmin' : 'player';
 
     try {
+      // Hash password before storing
+      const hashedPassword = hashPassword(password);
+
       // Create user in database
       const result = await queryDatabase('createUser', {
         username: username,
-        password: password,
+        password: hashedPassword,
         role: isSuperAdmin ? 'teacher' : 'student',
         email: email,
         displayName: username
@@ -2364,8 +2384,15 @@ io.on('connection', (socket) => {
       }
 
       console.log('User found in database:', dbUser.username, 'user_id:', dbUser.user_id);
-      
-      // For now, accept the password (in production, verify against password_hash)
+
+      // Verify password against stored hash
+      const storedPassword = dbUser.password_hash || dbUser.password || '';
+      if (!verifyPassword(password, storedPassword)) {
+        console.log('ERROR: Password mismatch for user:', username);
+        socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
+        return;
+      }
+
       const role = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1) ? 'superadmin' : 'player';
       console.log('Login successful, role:', role);
       
@@ -3241,40 +3268,28 @@ const countryId = countryData?.country_id || null;
           room.roundScores = roundScores;
           room.gamePhase = 'results';
 
-          // --- PHASE 1 AUTO-ADVANCE (BEST REVISION) ---
-
-if (room.gamePhase === 'results' && room.currentRound <= 10) {
-
-  console.log(`⏳ Phase 1 auto-advance scheduled for round ${room.currentRound}`);
-
-  setTimeout(() => {
-
-    // Safety checks
-    if (!room) return;
-    if (room.gamePhase !== 'results') return;
-
-    // Advance round
-    room.currentRound++;
-    room.votes = {};
-    room.revoteCount = 0;
-    room.isTie = false;
-    room.noDecision = false;
-
-    if (room.currentRound > 10) {
-      initializePhase2(roomId);
-      console.log('🚀 Phase 1 complete → Phase 2 initialized');
-    } else {
-      room.gamePhase = 'voting';
-      console.log(`➡️ Auto-advanced to Phase 1 round ${room.currentRound}`);
-    }
-
-    broadcastToRoom(roomId);
-    saveState();
-    saveGameToDatabase(roomId);
-
-  }, 3000); // 3s results screen
-}
-
+          // Load issue title and save individual votes for tie
+          let tieIssueTitle = '';
+          try {
+            const gd = JSON.parse(fs.readFileSync(path.join(__dirname, 'game-data.json'), 'utf8'));
+            const ci = gd.issues[room.currentRound - 1];
+            if (ci) tieIssueTitle = ci.title;
+          } catch (e) {}
+          Object.entries(room.players).forEach(([id, player]) => {
+            const vote = room.votes[id]?.toLowerCase();
+            if (!vote) return;
+            const country = normalizeCountryName(player.country) || player.country;
+            queryDatabase('saveGameVote', {
+              game_id: room.gameId,
+              player_id: player.id,
+              round_number: room.currentRound,
+              issue_id: room.currentRound,
+              issue_title: tieIssueTitle || `Issue ${room.currentRound}`,
+              option_id: vote,
+              option_text: `Option ${vote.toUpperCase()} (Tie - no decision)`,
+              points_earned: roundScores[country] || 0
+            }).catch(err => console.error('⚠️ Failed to save tie vote:', err));
+          });
 
           // Send email notification for tie result
           const playerCount = Object.keys(room.players).length;
@@ -3383,12 +3398,12 @@ if (room.gamePhase === 'results' && room.currentRound <= 10) {
           roundScores[country] = points;
           room.scores[country] = (room.scores[country] || 0) + points;
         });
-        
+
         // Store results
         room.voteTally = voteTally;
         room.roundScores = roundScores;
         room.gamePhase = 'results';
-        
+
         // Save to round history for Phase 2 calculations
         let issueTitle = '';
         try {
@@ -3420,6 +3435,25 @@ if (room.gamePhase === 'results' && room.currentRound <= 10) {
           winningOption: room.roundOutcome
         });
         console.log(`✅ Saved to round history for Phase 2 calculations`);
+
+        // Save individual votes to game_votes table
+        Object.entries(room.players).forEach(([id, player]) => {
+          const vote = room.votes[id]?.toLowerCase();
+          if (!vote) return;
+          const country = normalizeCountryName(player.country) || player.country;
+          const optIdx = vote === 'a' ? 0 : vote === 'b' ? 1 : vote === 'c' ? 2 : 3;
+          const optionData = currentIssueOptions[optIdx];
+          queryDatabase('saveGameVote', {
+            game_id: room.gameId,
+            player_id: player.id,
+            round_number: room.currentRound,
+            issue_id: room.currentRound,
+            issue_title: issueTitle || `Issue ${room.currentRound}`,
+            option_id: vote,
+            option_text: optionData?.text || `Option ${vote.toUpperCase()}`,
+            points_earned: roundScores[country] || 0
+          }).catch(err => console.error('⚠️ Failed to save vote:', err));
+        });
 
         // Save round result to database
         try {
