@@ -3268,6 +3268,29 @@ const countryId = countryData?.country_id || null;
           room.roundScores = roundScores;
           room.gamePhase = 'results';
 
+          // Load issue title and save individual votes for tie
+          let tieIssueTitle = '';
+          try {
+            const gd = JSON.parse(fs.readFileSync(path.join(__dirname, 'game-data.json'), 'utf8'));
+            const ci = gd.issues[room.currentRound - 1];
+            if (ci) tieIssueTitle = ci.title;
+          } catch (e) {}
+          Object.entries(room.players).forEach(([id, player]) => {
+            const vote = room.votes[id]?.toLowerCase();
+            if (!vote) return;
+            const country = normalizeCountryName(player.country) || player.country;
+            queryDatabase('saveGameVote', {
+              game_id: room.gameId,
+              player_id: player.id,
+              round_number: room.currentRound,
+              issue_id: room.currentRound,
+              issue_title: tieIssueTitle || `Issue ${room.currentRound}`,
+              option_id: vote,
+              option_text: `Option ${vote.toUpperCase()} (Tie - no decision)`,
+              points_earned: roundScores[country] || 0
+            }).catch(err => console.error('⚠️ Failed to save tie vote:', err));
+          });
+
           // Send email notification for tie result
           const playerCount = Object.keys(room.players).length;
           sendAdminNotification(
@@ -3375,12 +3398,12 @@ const countryId = countryData?.country_id || null;
           roundScores[country] = points;
           room.scores[country] = (room.scores[country] || 0) + points;
         });
-        
+
         // Store results
         room.voteTally = voteTally;
         room.roundScores = roundScores;
         room.gamePhase = 'results';
-        
+
         // Save to round history for Phase 2 calculations
         let issueTitle = '';
         try {
@@ -3412,6 +3435,25 @@ const countryId = countryData?.country_id || null;
           winningOption: room.roundOutcome
         });
         console.log(`✅ Saved to round history for Phase 2 calculations`);
+
+        // Save individual votes to game_votes table
+        Object.entries(room.players).forEach(([id, player]) => {
+          const vote = room.votes[id]?.toLowerCase();
+          if (!vote) return;
+          const country = normalizeCountryName(player.country) || player.country;
+          const optIdx = vote === 'a' ? 0 : vote === 'b' ? 1 : vote === 'c' ? 2 : 3;
+          const optionData = currentIssueOptions[optIdx];
+          queryDatabase('saveGameVote', {
+            game_id: room.gameId,
+            player_id: player.id,
+            round_number: room.currentRound,
+            issue_id: room.currentRound,
+            issue_title: issueTitle || `Issue ${room.currentRound}`,
+            option_id: vote,
+            option_text: optionData?.text || `Option ${vote.toUpperCase()}`,
+            points_earned: roundScores[country] || 0
+          }).catch(err => console.error('⚠️ Failed to save vote:', err));
+        });
 
         // Save round result to database
         try {
