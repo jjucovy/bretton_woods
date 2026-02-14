@@ -69,6 +69,12 @@
             100% { stroke-opacity: 0.4; }
         }
 
+        /* Ensure Leaflet divIcon markers render without default icon styles */
+        .leaflet-div-icon {
+            background: none !important;
+            border: none !important;
+        }
+
         .battle-label {
             animation: battle-label-flash 1s ease-in-out infinite;
         }
