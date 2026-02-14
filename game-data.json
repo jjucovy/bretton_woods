@@ -202,88 +202,88 @@
   "economicData": {
     "USA": {
       "goldReserves": 20000,
-      "tradeBalance": 6800,
-      "gdp": 210000,
-      "warDebt": 250000,
+      "tradeBalance": 7800,
+      "gdp": 228000,
+      "warDebt": 269000,
       "industrialOutput": 100,
       "military": {
-        "army": 1070000,
-        "navy": 484000,
-        "airForce": 390000,
-        "total": 1944000
+        "army": 1890000,
+        "navy": 984000,
+        "airForce": 455000,
+        "total": 3329000
       }
     },
     "UK": {
-      "goldReserves": 1800,
-      "tradeBalance": -2000,
-      "gdp": 61000,
-      "warDebt": 120000,
-      "industrialOutput": 35,
+      "goldReserves": 2300,
+      "tradeBalance": -1400,
+      "gdp": 55000,
+      "warDebt": 27000,
+      "industrialOutput": 30,
       "military": {
-        "army": 600000,
-        "navy": 350000,
-        "airForce": 150000,
-        "total": 1100000
+        "army": 876000,
+        "navy": 525000,
+        "airForce": 300000,
+        "total": 1701000
       }
     },
     "USSR": {
-      "goldReserves": 2500,
-      "tradeBalance": -1000,
-      "gdp": 126000,
-      "warDebt": 50000,
-      "industrialOutput": 60,
+      "goldReserves": 2000,
+      "tradeBalance": -500,
+      "gdp": 65000,
+      "warDebt": 0,
+      "industrialOutput": 38,
       "military": {
-        "army": 2400000,
-        "navy": 300000,
-        "airForce": 200000,
-        "total": 2900000
+        "army": 8800000,
+        "navy": 600000,
+        "airForce": 500000,
+        "total": 9900000
       }
     },
     "France": {
-      "goldReserves": 500,
-      "tradeBalance": -1500,
-      "gdp": 37000,
-      "warDebt": 45000,
-      "industrialOutput": 15,
+      "goldReserves": 790,
+      "tradeBalance": -1200,
+      "gdp": 28000,
+      "warDebt": 17000,
+      "industrialOutput": 12,
       "military": {
-        "army": 500000,
-        "navy": 180000,
-        "airForce": 120000,
-        "total": 800000
+        "army": 550000,
+        "navy": 100000,
+        "airForce": 65000,
+        "total": 715000
       }
     },
     "China": {
-      "goldReserves": 300,
-      "tradeBalance": -800,
-      "gdp": 45000,
-      "warDebt": 35000,
-      "industrialOutput": 8,
+      "goldReserves": 250,
+      "tradeBalance": -600,
+      "gdp": 22000,
+      "warDebt": 1500,
+      "industrialOutput": 5,
       "military": {
-        "army": 2200000,
-        "navy": 50000,
-        "airForce": 450000,
-        "total": 2700000
+        "army": 3700000,
+        "navy": 35000,
+        "airForce": 100000,
+        "total": 3835000
       }
     },
     "India": {
-      "goldReserves": 800,
-      "tradeBalance": 400,
-      "gdp": 55000,
-      "warDebt": 20000,
-      "industrialOutput": 12,
+      "goldReserves": 1200,
+      "tradeBalance": -200,
+      "gdp": 24000,
+      "warDebt": 0,
+      "industrialOutput": 6,
       "military": {
-        "army": 1800000,
+        "army": 1100000,
         "navy": 30000,
-        "airForce": 170000,
-        "total": 2000000
+        "airForce": 20000,
+        "total": 1150000
       }
     },
     "Argentina": {
-      "goldReserves": 1500,
-      "tradeBalance": 2000,
-      "gdp": 35000,
+      "goldReserves": 1600,
+      "tradeBalance": 1200,
+      "gdp": 14000,
       "warDebt": 0,
-      "industrialOutput": 22,
+      "industrialOutput": 8,
       "foreignCredits": 1800,
       "commodityExports": {
         "grain": 4500,
@@ -291,10 +291,10 @@
         "wool": 800
       },
       "military": {
-        "army": 130000,
-        "navy": 45000,
-        "airForce": 25000,
-        "total": 200000
+        "army": 100000,
+        "navy": 25000,
+        "airForce": 10000,
+        "total": 135000
       },
       "specialResources": ["Agricultural Surplus", "British Debt Holdings", "Strategic Neutrality"]
     }
