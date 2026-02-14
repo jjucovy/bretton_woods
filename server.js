@@ -732,8 +732,19 @@ function initializePhase2(roomId) {
       return; // Skip this country
     }
 
+    // Historical 1946 GDP growth rates (real, vs 1945)
+    const initialGdpGrowth = {
+      'USA': -11.6,      // Massive demobilization: war production halted, 12M soldiers returning
+      'UK': -2.5,        // Exhausted by war, severe austerity, rationing continues
+      'USSR': -2.0,      // War devastation recovery just beginning, 27M dead
+      'France': 16.5,    // Rapid recovery from near-zero occupation-era output
+      'China': -3.5,     // Civil war escalating between KMT and CCP
+      'India': 1.2,      // Modest growth, pre-independence economic stirrings
+      'Argentina': 8.3   // Post-war commodity export boom, Perón industrialization
+    };
+
     room.phase2.yearlyData[1946][country] = {
-      gdpGrowth: 0,
+      gdpGrowth: initialGdpGrowth[country] || 0,
       goldReserves: initialData.goldReserves || 1000,
       unemployment: getInitialUnemployment(country),
       tradeBalance: initialData.tradeBalance || 0,
