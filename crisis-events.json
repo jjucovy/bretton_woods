@@ -4,10 +4,10 @@
       "id": "china-civil-war",
       "year": 1946,
       "title": "🇨🇳 Chinese Civil War Intensifies",
-      "description": "Full-scale war erupts between Nationalist (KMT) and Communist (CCP) forces. External powers must choose sides.",
-      "affectedCountries": ["China", "USA", "USSR"],
+      "description": "Full-scale war erupts between Nationalist (KMT) and Communist (CCP) forces. The world's most populous nation hangs in the balance. Every major power must choose a side — or pay the price of inaction.",
+      "affectedCountries": ["China", "USA", "USSR", "UK", "India"],
       "primaryActors": ["China", "USA", "USSR"],
-      "historicalContext": "After WWII, the Chinese Civil War resumes. Nationalists control cities, Communists control countryside. US backs KMT, USSR aids CCP.",
+      "historicalContext": "After WWII, the Chinese Civil War resumes. Nationalists control cities but are riddled with corruption. Communists control the countryside and have peasant support. US backs KMT, USSR aids CCP. The outcome will reshape Asia for decades.",
       "deploymentTrigger": {
         "region": "East Asia",
         "requiredCountries": ["USSR", "USA"],
@@ -27,7 +27,11 @@
               "inflation": 50,
               "unemployment": 2.0
             },
-            "outcome": "If USA provides aid, you hold major cities longer. Without support, offensive fails by 1949."
+            "crossEffects": {
+              "USA": { "diplomaticPoints": -3, "tradeBalance": -400 },
+              "USSR": { "tradeBalance": -200 }
+            },
+            "outcome": "All-out war devastates the economy. Cities change hands repeatedly. Foreign backers are drawn deeper — USA pressured to increase aid shipments, USSR forced to counter-supply CCP. Delays communist victory but destruction is catastrophic."
           },
           {
             "id": "negotiate-coalition",
@@ -35,53 +39,132 @@
             "cost": 0,
             "effects": {
               "gdpGrowth": -0.5,
-              "diplomaticPoints": 5
+              "diplomaticPoints": 8
             },
-            "outcome": "Mao rejects power-sharing. Communists use ceasefire to regroup and prepare final offensive."
+            "crossEffects": {
+              "USA": { "diplomaticPoints": 3 },
+              "India": { "diplomaticPoints": 5 },
+              "UK": { "diplomaticPoints": 3 }
+            },
+            "outcome": "Mao uses ceasefire to consolidate rural bases. But the breathing room lets civilians evacuate cities and foreign observers praise the attempt. India and UK welcome the diplomacy. Communists still prepare their final offensive, but the world sees China tried peace first."
           }
         ],
         "USA": [
           {
             "id": "massive-aid",
-            "text": "💰 Massive Military Aid to Nationalists",
+            "text": "💰 Massive Military Aid to Nationalists ($2B)",
             "cost": 2000,
             "effects": {
               "tradeBalance": -2000,
-              "diplomaticPoints": -5
+              "diplomaticPoints": 10
             },
-            "outcome": "Aid helps but Nationalist corruption means most equipment lost. 'Who lost China?' crisis at home."
+            "crossEffects": {
+              "USSR": { "diplomaticPoints": -8, "tradeBalance": -300 },
+              "UK": { "diplomaticPoints": 5 },
+              "India": { "diplomaticPoints": 5 },
+              "China": { "gdpGrowth": -1.5, "inflation": 10 }
+            },
+            "outcome": "Nationalist corruption wastes much of the aid, but the sheer scale forces Stalin to match it or look weak. Soviet Politburo hawks demand counter-escalation — draining USSR resources. Allied nations are reassured by American resolve. India gains leverage as a non-aligned mediator. The war grinds on longer, devastating China's economy further, but containment credibility is preserved."
           },
           {
             "id": "disengage",
-            "text": "🏳️ Disengage - Accept Communist Victory",
+            "text": "🏳️ Withdraw Support — Accept the Inevitable",
             "cost": 0,
             "effects": {
-              "diplomaticPoints": -10,
-              "globalTension": 5
+              "diplomaticPoints": -15,
+              "gdpGrowth": -1.0
             },
-            "outcome": "Communists win by 1949. Domestic criticism but save resources."
+            "crossEffects": {
+              "USSR": { "diplomaticPoints": 10 },
+              "UK": { "diplomaticPoints": -5 },
+              "India": { "diplomaticPoints": 3 },
+              "China": { "gdpGrowth": 1.0 },
+              "France": { "diplomaticPoints": -3 }
+            },
+            "outcome": "Communists sweep to victory. Washington erupts — 'Who Lost China?' becomes a weapon. McCarthyism accelerates. Every American ally questions US reliability. Britain and France fear they'll be next to be abandoned. The USSR celebrates its greatest ideological victory since 1917. But you saved $2 billion and kept your troops home."
           }
         ],
         "USSR": [
           {
             "id": "aid-ccp",
-            "text": "🚩 Provide Arms to Communist Forces",
+            "text": "🚩 Major Arms Shipments to Communist Forces",
             "cost": 600,
             "militaryRequired": { "army": 500000 },
             "effects": {
               "tradeBalance": -600,
-              "diplomaticPoints": 5
+              "diplomaticPoints": 12
             },
-            "outcome": "Soviet aid helps CCP win by 1949. China becomes communist ally."
+            "crossEffects": {
+              "USA": { "diplomaticPoints": -5 },
+              "China": { "gdpGrowth": -2.0, "inflation": 15 },
+              "UK": { "diplomaticPoints": -3 },
+              "France": { "diplomaticPoints": -3 }
+            },
+            "outcome": "Soviet weapons flood Manchuria. Mao's armies gain decisive firepower advantage. The West watches in alarm — containment is failing. Britain and France worry about communist expansion reaching their colonies. But within the Communist world, Moscow's prestige soars. A grateful Mao signs the Sino-Soviet Treaty."
           },
           {
             "id": "diplomatic-support",
-            "text": "📢 Diplomatic Support Only",
+            "text": "📢 Cautious Diplomatic Support Only",
             "cost": 100,
             "effects": {
-              "diplomaticPoints": 3
+              "diplomaticPoints": 3,
+              "tradeBalance": -100
             },
-            "outcome": "Public support for CCP without major resource commitment. Mao wins anyway but less grateful."
+            "crossEffects": {
+              "China": { "diplomaticPoints": -5 }
+            },
+            "outcome": "Moscow offers speeches but not guns. Mao wins anyway through sheer numbers and peasant support — but he remembers who actually helped. The seeds of the Sino-Soviet split are planted early. China's future communism will be more independent, more unpredictable, and less grateful to Moscow."
+          }
+        ],
+        "UK": [
+          {
+            "id": "protect-hong-kong",
+            "text": "🏰 Reinforce Hong Kong Garrison",
+            "cost": 300,
+            "militaryRequired": { "army": 30000 },
+            "effects": {
+              "tradeBalance": -300,
+              "diplomaticPoints": 5
+            },
+            "crossEffects": {
+              "China": { "diplomaticPoints": -3 }
+            },
+            "outcome": "Station troops in Hong Kong as civil war rages nearby. The colony becomes a refuge for Nationalist elites and their gold. Whoever wins China will remember British gunboats at their doorstep — but Hong Kong's trade position is secured for decades."
+          },
+          {
+            "id": "commercial-neutrality",
+            "text": "🏪 Maintain Commercial Ties with Both Sides",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 200,
+              "diplomaticPoints": -3
+            },
+            "outcome": "Pragmatic British merchants trade with whoever controls the ports. Profits flow but both sides view Britain as unprincipled. Americans are annoyed at the fence-sitting."
+          }
+        ],
+        "India": [
+          {
+            "id": "non-aligned-mediation",
+            "text": "🕊️ Offer Non-Aligned Mediation",
+            "cost": 50,
+            "effects": {
+              "diplomaticPoints": 12
+            },
+            "crossEffects": {
+              "China": { "diplomaticPoints": 3 },
+              "USA": { "diplomaticPoints": 2 },
+              "USSR": { "diplomaticPoints": 2 }
+            },
+            "outcome": "Nehru positions India as the voice of reason between superpowers. Both sides publicly welcome mediation (privately ignoring it). India's prestige as leader of the non-aligned world soars. Everyone owes you a favor."
+          },
+          {
+            "id": "focus-domestic",
+            "text": "🏠 Focus on Domestic Challenges",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 0.5
+            },
+            "outcome": "India has its own problems — partition looms. Stay out of China's civil war and focus scarce resources on building the new nation. A pragmatic choice, but a missed opportunity for diplomatic influence."
           }
         ]
       }
