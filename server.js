@@ -1242,20 +1242,53 @@ function triggerCrisisIfNeeded(roomId, year, options = {}) {
     room.phase2.crises.active = [];
   }
 
+  // Determine which countries have active players in this room
+  const activePlayerCountries = new Set();
+  Object.values(room.players).forEach(p => {
+    if (p.country) {
+      activePlayerCountries.add(p.country);
+      const normalized = normalizeCountryName(p.country);
+      if (normalized) activePlayerCountries.add(normalized);
+    }
+  });
+
   for (const crisis of triggeredCrises) {
     console.log(`🚨 Triggering crisis: ${crisis.title}${crisis.triggeredByDeployment ? ' [DEPLOYMENT-TRIGGERED]' : ''}`);
     if (crisis.triggerReason) {
       console.log(`   Reason: ${crisis.triggerReason}`);
     }
 
+    // Filter affected countries and options to only include countries with active players
+    const filteredAffected = crisis.affectedCountries.filter(c =>
+      activePlayerCountries.has(c) || activePlayerCountries.has(normalizeCountryName(c))
+    );
+    const filteredOptions = {};
+    Object.keys(crisis.options).forEach(c => {
+      if (activePlayerCountries.has(c) || activePlayerCountries.has(normalizeCountryName(c))) {
+        filteredOptions[c] = crisis.options[c];
+      }
+    });
+
+    // Skip this crisis entirely if no active players are affected
+    if (filteredAffected.length === 0) {
+      console.log(`   ⏭️ Skipping "${crisis.title}" — no active players among affected countries`);
+      continue;
+    }
+
     room.phase2.crises.active.push({
       ...crisis,
+      affectedCountries: filteredAffected,
+      options: filteredOptions,
       triggeredAt: Date.now(),
       resolved: false,
       responses: {} // Track responses per crisis
     });
 
-    console.log(`   Affected countries:`, crisis.affectedCountries);
+    console.log(`   Affected countries (active players only):`, filteredAffected);
+    if (filteredAffected.length < crisis.affectedCountries.length) {
+      const skipped = crisis.affectedCountries.filter(c => !filteredAffected.includes(c));
+      console.log(`   Skipped (no player):`, skipped);
+    }
   }
 
   console.log(`✋ ${triggeredCrises.length} crisis(es) active - waiting for player responses`);
@@ -2272,9 +2305,18 @@ function resolveCrisisEffects(roomId, crisisId = null) {
       }
 
       // Apply cross-country effects (this country's choice impacts other nations)
+      // Only apply to countries that have active players (have year data)
       const crossEffects = choice.crossEffects || {};
       Object.entries(crossEffects).forEach(([targetCountry, targetEffects]) => {
         const normTarget = normalizeCountryName(targetCountry) || targetCountry;
+        // Skip cross-effects for countries not in the game
+        const hasPlayer = Object.values(room.players).some(p =>
+          p.country === targetCountry || normalizeCountryName(p.country) === normTarget
+        );
+        if (!hasPlayer) {
+          console.log(`    → Skipping cross-effect on ${normTarget} (no active player)`);
+          return;
+        }
         if (!room.phase2.yearlyData[currentYear][normTarget]) {
           const prevYear = currentYear - 1;
           room.phase2.yearlyData[currentYear][normTarget] = {
