@@ -5329,8 +5329,25 @@ async function initializeFromDatabase() {
       try {
         const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
         if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
-          const latest = snapshots[0]; // Most recent snapshot (ordered by created_at DESC)
-          console.log(`   📸 Found ${snapshots.length} snapshot(s), latest: type=${latest.snapshot_type}, phase=${latest.phase}, round/year=${latest.round_or_year}`);
+          // getGameStateSnapshots returns lightweight data (no full_state, yearly_data, etc.)
+          // Use getGameStateSnapshot (singular) with the ID to fetch the complete record
+          const latestMeta = snapshots[0];
+          console.log(`   📸 Found ${snapshots.length} snapshot(s), latest: id=${latestMeta.id}, type=${latestMeta.snapshot_type}, phase=${latestMeta.phase}, round/year=${latestMeta.round_or_year}`);
+
+          let latest = latestMeta; // fallback to lightweight data
+          if (latestMeta.id) {
+            try {
+              const fullSnapshot = await queryDatabase('getGameStateSnapshot', { id: latestMeta.id });
+              if (fullSnapshot && !fullSnapshot.error) {
+                latest = fullSnapshot;
+                console.log(`   📸 Fetched full snapshot (id=${latestMeta.id}), has full_state: ${!!latest.full_state}, has yearly_data: ${!!latest.yearly_data}`);
+              } else {
+                console.log(`   ⚠️ Could not fetch full snapshot by id=${latestMeta.id}, using lightweight data`);
+              }
+            } catch (fetchErr) {
+              console.log(`   ⚠️ Error fetching full snapshot: ${fetchErr.message}`);
+            }
+          }
 
           // Try to restore from full_state first (contains everything)
           let fullStateRestored = false;
