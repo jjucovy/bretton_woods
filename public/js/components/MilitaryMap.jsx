@@ -30,7 +30,13 @@ const REGION_COORDINATES = {
   'Germany': { lat: 51.0, lng: 10.0, name: 'Germany' },
   'Japan': { lat: 36.0, lng: 138.0, name: 'Japan' },
   'Suez Canal': { lat: 30.5, lng: 32.3, name: 'Suez Canal Zone' },
-  'Berlin': { lat: 52.5, lng: 13.4, name: 'Berlin' }
+  'Berlin': { lat: 52.5, lng: 13.4, name: 'Berlin' },
+  // Deployment regions that were missing:
+  'Greece & Turkey': { lat: 39.0, lng: 27.0, name: 'Greece & Turkey' },
+  'Iran': { lat: 32.4, lng: 53.7, name: 'Iran' },
+  'Taiwan': { lat: 23.7, lng: 121.0, name: 'Taiwan' },
+  'India': { lat: 22.0, lng: 78.9, name: 'India' },
+  'Pakistan': { lat: 30.4, lng: 69.3, name: 'Pakistan' }
 };
 
 const COUNTRY_COLORS = {
