@@ -413,7 +413,7 @@ async function saveGameToDatabase(roomId) {
 
     // Add Phase 2 year if available (don't require active since game might be complete)
     if (room.phase2?.currentYear) {
-      //updateData.currentYear = room.phase2.currentYear;
+      updateData.currentYear = room.phase2.currentYear;
     }
 
     // Mark as ended if complete
@@ -5323,44 +5323,159 @@ async function initializeFromDatabase() {
       }
       console.log(`   📊 Scores rebuilt from player data:`, roomState.scores);
 
-      // Try to restore full state from latest game state snapshot (has scores, roundHistory, gamePhase)
+      // Try to restore full state from latest game state snapshot
+      // The snapshot's full_state field contains a complete JSON dump of the room,
+      // which is the most reliable source on Render where file system is ephemeral
       try {
         const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
         if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
           const latest = snapshots[0]; // Most recent snapshot (ordered by created_at DESC)
           console.log(`   📸 Found ${snapshots.length} snapshot(s), latest: type=${latest.snapshot_type}, phase=${latest.phase}, round/year=${latest.round_or_year}`);
 
-          // Restore scores from snapshot (more reliable than player-level data)
-          let snapshotScores = latest.scores;
-          if (typeof snapshotScores === 'string') {
-            try { snapshotScores = JSON.parse(snapshotScores); } catch(e) { snapshotScores = null; }
-          }
-          if (snapshotScores && typeof snapshotScores === 'object') {
-            // Use snapshot scores - they're the cumulative totals at that point
-            const hasNonZero = Object.values(snapshotScores).some(v => v > 0);
-            if (hasNonZero) {
-              roomState.scores = { ...roomState.scores, ...snapshotScores };
-              console.log(`   ✅ Scores restored from snapshot:`, roomState.scores);
+          // Try to restore from full_state first (contains everything)
+          let fullStateRestored = false;
+          if (latest.full_state) {
+            try {
+              const fullState = typeof latest.full_state === 'string' ? JSON.parse(latest.full_state) : latest.full_state;
+              if (fullState && typeof fullState === 'object') {
+                // Restore core game state
+                if (fullState.currentRound) roomState.currentRound = fullState.currentRound;
+                if (fullState.gamePhase) roomState.gamePhase = fullState.gamePhase;
+                if (fullState.gameStarted !== undefined) roomState.gameStarted = fullState.gameStarted;
+                if (fullState.scores) roomState.scores = fullState.scores;
+                if (fullState.roundHistory) roomState.roundHistory = fullState.roundHistory;
+                if (fullState.votes) roomState.votes = fullState.votes;
+
+                // Restore Phase 2 state (critical for year progression)
+                if (fullState.phase2) {
+                  roomState.phase2 = {
+                    ...roomState.phase2,
+                    currentYear: fullState.phase2.currentYear || roomState.phase2.currentYear,
+                    active: fullState.phase2.active !== undefined ? fullState.phase2.active : roomState.phase2.active,
+                    yearlyData: fullState.phase2.yearlyData || roomState.phase2.yearlyData || {},
+                    policies: fullState.phase2.policies || roomState.phase2.policies || {},
+                    achievements: fullState.phase2.achievements || {},
+                    crises: fullState.phase2.crises || { active: null, history: [], responses: {} },
+                    cumulativeDeployments: fullState.phase2.cumulativeDeployments || {},
+                    deploymentHistory: fullState.phase2.deploymentHistory || [],
+                    pendingConflictZones: fullState.phase2.pendingConflictZones || {},
+                    activeConflicts: fullState.phase2.activeConflicts || [],
+                    battleResults: fullState.phase2.battleResults || [],
+                    battleDecisions: fullState.phase2.battleDecisions || {},
+                    battleOptions: fullState.phase2.battleOptions || {},
+                    diplomaticStances: fullState.phase2.diplomaticStances || {},
+                    diplomaticPoints: fullState.phase2.diplomaticPoints || {},
+                    awaitingDiplomaticResolution: fullState.phase2.awaitingDiplomaticResolution || false,
+                    scoreBreakdowns: fullState.phase2.scoreBreakdowns || {},
+                    readyPlayers: fullState.phase2.readyPlayers || [],
+                    maxYears: fullState.phase2.maxYears || 7
+                  };
+                  console.log(`   ✅ Full state restored from snapshot: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2.currentYear}, yearlyData years: ${Object.keys(roomState.phase2.yearlyData).join(', ')}`);
+                  fullStateRestored = true;
+                }
+
+                // Restore players from full_state but merge with DB players (DB has latest scores)
+                // Keep DB player data as primary, just fill in missing fields from snapshot
+                if (fullState.players) {
+                  Object.entries(fullState.players).forEach(([pid, snapshotPlayer]) => {
+                    if (roomState.players[pid]) {
+                      // Merge snapshot data into DB player (DB is authoritative for scores)
+                      roomState.players[pid] = {
+                        ...snapshotPlayer,
+                        ...roomState.players[pid]
+                      };
+                    }
+                  });
+                }
+              }
+            } catch (parseErr) {
+              console.error(`   ⚠️ Failed to parse full_state from snapshot:`, parseErr);
             }
           }
 
-          // Restore round history from snapshot
-          let snapshotHistory = latest.round_history;
-          if (typeof snapshotHistory === 'string') {
-            try { snapshotHistory = JSON.parse(snapshotHistory); } catch(e) { snapshotHistory = null; }
-          }
-          if (snapshotHistory && Array.isArray(snapshotHistory) && snapshotHistory.length > 0) {
-            roomState.roundHistory = snapshotHistory;
-            console.log(`   ✅ Round history restored (${snapshotHistory.length} rounds)`);
+          // Fallback: restore individual fields if full_state wasn't available or failed
+          if (!fullStateRestored) {
+            // Restore scores from snapshot
+            let snapshotScores = latest.scores;
+            if (typeof snapshotScores === 'string') {
+              try { snapshotScores = JSON.parse(snapshotScores); } catch(e) { snapshotScores = null; }
+            }
+            if (snapshotScores && typeof snapshotScores === 'object') {
+              const hasNonZero = Object.values(snapshotScores).some(v => v > 0);
+              if (hasNonZero) {
+                roomState.scores = { ...roomState.scores, ...snapshotScores };
+                console.log(`   ✅ Scores restored from snapshot:`, roomState.scores);
+              }
+            }
+
+            // Restore round history from snapshot
+            let snapshotHistory = latest.round_history;
+            if (typeof snapshotHistory === 'string') {
+              try { snapshotHistory = JSON.parse(snapshotHistory); } catch(e) { snapshotHistory = null; }
+            }
+            if (snapshotHistory && Array.isArray(snapshotHistory) && snapshotHistory.length > 0) {
+              roomState.roundHistory = snapshotHistory;
+              console.log(`   ✅ Round history restored (${snapshotHistory.length} rounds)`);
+            }
+
+            // Restore currentYear from snapshot if in Phase 2
+            if (latest.current_year && latest.phase === 2) {
+              const snapshotYear = typeof latest.current_year === 'string' ? parseInt(latest.current_year) : latest.current_year;
+              if (snapshotYear > roomState.phase2.currentYear) {
+                roomState.phase2.currentYear = snapshotYear;
+                console.log(`   ✅ Phase 2 year restored from snapshot: ${snapshotYear}`);
+              }
+            }
+
+            // Restore Phase 2 yearly data from snapshot fields
+            if (latest.yearly_data && latest.phase === 2) {
+              let yearlyData = latest.yearly_data;
+              if (typeof yearlyData === 'string') {
+                try { yearlyData = JSON.parse(yearlyData); } catch(e) { yearlyData = null; }
+              }
+              if (yearlyData && typeof yearlyData === 'object' && Object.keys(yearlyData).length > 0) {
+                roomState.phase2.yearlyData = yearlyData;
+                console.log(`   ✅ Phase 2 yearlyData restored from snapshot (years: ${Object.keys(yearlyData).join(', ')})`);
+              }
+            }
+
+            // Restore policies, deployments, crises from snapshot
+            if (latest.policies && latest.phase === 2) {
+              let policies = latest.policies;
+              if (typeof policies === 'string') {
+                try { policies = JSON.parse(policies); } catch(e) { policies = null; }
+              }
+              if (policies) roomState.phase2.policies = policies;
+            }
+            if (latest.deployments && latest.phase === 2) {
+              let deployments = latest.deployments;
+              if (typeof deployments === 'string') {
+                try { deployments = JSON.parse(deployments); } catch(e) { deployments = null; }
+              }
+              if (deployments) roomState.phase2.cumulativeDeployments = deployments;
+            }
+            if (latest.crises && latest.phase === 2) {
+              let crises = latest.crises;
+              if (typeof crises === 'string') {
+                try { crises = JSON.parse(crises); } catch(e) { crises = null; }
+              }
+              if (crises) roomState.phase2.crises = crises;
+            }
+            if (latest.diplomatic_points && latest.phase === 2) {
+              let diplo = latest.diplomatic_points;
+              if (typeof diplo === 'string') {
+                try { diplo = JSON.parse(diplo); } catch(e) { diplo = null; }
+              }
+              if (diplo) roomState.phase2.diplomaticPoints = diplo;
+            }
+
+            console.log(`   📊 Fallback restore: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2.currentYear}`);
           }
 
-          // Use snapshot's round/phase info for more accurate state
-          // If we're in Phase 1 and the snapshot says the current round was completed,
-          // set phase to 'results' so the host can advance
+          // Correct phase if needed
           if (roomState.gamePhase === 'voting' && latest.snapshot_type === 'round_end') {
             const snapshotRound = latest.round_or_year;
             if (snapshotRound === roomState.currentRound) {
-              // The current round already had its vote completed - show results
               roomState.gamePhase = 'results';
               console.log(`   ✅ Phase corrected to 'results' (round ${snapshotRound} vote was already completed)`);
             }
@@ -5374,49 +5489,48 @@ async function initializeFromDatabase() {
 
       globalState.rooms[gameCode] = roomState;
 
-      // Try to load Phase 2 state from per-game JSON file
-      // The per-game file is the authoritative source for Phase 2 data because
-      // it's written synchronously and always up-to-date (unlike the async DB)
-      const needsPhase2Data = roomState.phase2 && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0);
+      // Try to load Phase 2 state from per-game JSON file (if it exists)
+      // On Render, per-game files don't survive restarts, so snapshot restoration above is primary
+      const hasPhase2FromSnapshot = roomState.phase2?.yearlyData && Object.keys(roomState.phase2.yearlyData).length > 0;
       const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
 
-      if (needsPhase2Data || wasInPhase2) {
-        console.log(`   ⚠️ Phase 2 data needed (phase=${roomState.gamePhase}, round=${roomState.currentRound}) - checking per-game file...`);
-
+      if (wasInPhase2) {
         const savedPhase2State = loadGamePhase2State(gameCode);
         if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
-          // Restore from per-game file (authoritative source)
-          if (!roomState.phase2) {
-            roomState.phase2 = {};
-          }
-          // Prefer JSON file's currentYear over DB's (JSON is always more recent)
-          roomState.phase2.currentYear = savedPhase2State.currentYear || roomState.phase2.currentYear;
-          roomState.phase2.yearlyData = savedPhase2State.yearlyData;
-          roomState.phase2.policies = savedPhase2State.policies || {};
-          roomState.phase2.achievements = savedPhase2State.achievements || {};
-          roomState.phase2.crises = savedPhase2State.crises || { active: null, history: [], responses: {} };
-          roomState.phase2.active = savedPhase2State.active !== undefined ? savedPhase2State.active : true;
-          // Restore deployment and battle state
-          roomState.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments || {};
-          roomState.phase2.deploymentHistory = savedPhase2State.deploymentHistory || [];
-          roomState.phase2.pendingConflictZones = savedPhase2State.pendingConflictZones || {};
-          roomState.phase2.activeConflicts = savedPhase2State.activeConflicts || [];
-          roomState.phase2.battleResults = savedPhase2State.battleResults || [];
-          roomState.phase2.battleDecisions = savedPhase2State.battleDecisions || {};
-          roomState.phase2.battleOptions = savedPhase2State.battleOptions || {};
-          roomState.phase2.diplomaticStances = savedPhase2State.diplomaticStances || {};
-          roomState.phase2.diplomaticPoints = savedPhase2State.diplomaticPoints || {};
-          roomState.phase2.awaitingDiplomaticResolution = savedPhase2State.awaitingDiplomaticResolution || false;
-          roomState.phase2.scoreBreakdowns = savedPhase2State.scoreBreakdowns || {};
-          console.log(`   ✅ Restored Phase 2 state from file (year: ${savedPhase2State.currentYear}, years: ${Object.keys(savedPhase2State.yearlyData).join(', ')}, saved: ${new Date(savedPhase2State.savedAt).toLocaleString()})`);
-        } else if (wasInPhase2) {
-          // No per-game file found. Only initialize fresh if we truly have no data at all.
-          if (roomState.phase2?.yearlyData && Object.keys(roomState.phase2.yearlyData).length > 0) {
-            console.log(`   ⚠️ No per-game file, but main state has yearlyData - keeping existing data (year: ${roomState.phase2.currentYear})`);
+          // Per-game file exists (local dev or non-ephemeral FS) — use it if it has more data than snapshot
+          const fileYears = Object.keys(savedPhase2State.yearlyData).length;
+          const snapshotYears = hasPhase2FromSnapshot ? Object.keys(roomState.phase2.yearlyData).length : 0;
+
+          if (fileYears >= snapshotYears) {
+            if (!roomState.phase2) roomState.phase2 = {};
+            roomState.phase2.currentYear = savedPhase2State.currentYear || roomState.phase2.currentYear;
+            roomState.phase2.yearlyData = savedPhase2State.yearlyData;
+            roomState.phase2.policies = savedPhase2State.policies || roomState.phase2.policies || {};
+            roomState.phase2.achievements = savedPhase2State.achievements || {};
+            roomState.phase2.crises = savedPhase2State.crises || roomState.phase2.crises || { active: null, history: [], responses: {} };
+            roomState.phase2.active = savedPhase2State.active !== undefined ? savedPhase2State.active : true;
+            roomState.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments || roomState.phase2.cumulativeDeployments || {};
+            roomState.phase2.deploymentHistory = savedPhase2State.deploymentHistory || roomState.phase2.deploymentHistory || [];
+            roomState.phase2.pendingConflictZones = savedPhase2State.pendingConflictZones || {};
+            roomState.phase2.activeConflicts = savedPhase2State.activeConflicts || [];
+            roomState.phase2.battleResults = savedPhase2State.battleResults || roomState.phase2.battleResults || [];
+            roomState.phase2.battleDecisions = savedPhase2State.battleDecisions || {};
+            roomState.phase2.battleOptions = savedPhase2State.battleOptions || {};
+            roomState.phase2.diplomaticStances = savedPhase2State.diplomaticStances || {};
+            roomState.phase2.diplomaticPoints = savedPhase2State.diplomaticPoints || roomState.phase2.diplomaticPoints || {};
+            roomState.phase2.awaitingDiplomaticResolution = savedPhase2State.awaitingDiplomaticResolution || false;
+            roomState.phase2.scoreBreakdowns = savedPhase2State.scoreBreakdowns || {};
+            console.log(`   ✅ Per-game file overrides snapshot (file has ${fileYears} years vs snapshot ${snapshotYears}) — year: ${roomState.phase2.currentYear}`);
           } else {
-            console.log(`   ⚠️ No saved Phase 2 state found anywhere - initializing fresh from 1946...`);
-            initializePhase2(gameCode);
+            console.log(`   ✅ Keeping snapshot data (${snapshotYears} years) over per-game file (${fileYears} years)`);
           }
+        } else if (hasPhase2FromSnapshot) {
+          // No per-game file, but snapshot already restored data — keep it
+          console.log(`   ✅ No per-game file — using snapshot-restored Phase 2 data (year: ${roomState.phase2.currentYear})`);
+        } else {
+          // No per-game file AND no snapshot data — last resort, initialize fresh
+          console.log(`   ⚠️ No saved Phase 2 state found anywhere — initializing fresh from 1946...`);
+          initializePhase2(gameCode);
         }
       }
 
