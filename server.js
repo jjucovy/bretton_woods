@@ -5209,41 +5209,55 @@ async function initializeFromDatabase() {
       console.log(`📋 Loading game: ${gameCode}`);
 
       // Check if we already have this room from the main state file (with yearlyData etc.)
-      // The main JSON state file is synchronously written, so it's always up-to-date
       const existingRoom = globalState.rooms[gameCode];
       if (existingRoom && existingRoom.phase2?.yearlyData && Object.keys(existingRoom.phase2.yearlyData).length > 0) {
-        console.log(`   ✅ Using existing state from file (has yearlyData for years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')})`);
+        console.log(`   📂 Found existing state from file (yearlyData years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')}, currentYear: ${existingRoom.phase2.currentYear})`);
 
-        // Merge in any Phase 2 data from per-game file that the main state may be missing
-        // (per-game file has deployment/battle data that main state might not fully capture)
-        const savedPhase2State = loadGamePhase2State(gameCode);
-        if (savedPhase2State && savedPhase2State.savedAt) {
-          // Use per-game file's currentYear if it's more recent than main state
-          if (savedPhase2State.currentYear && savedPhase2State.currentYear > (existingRoom.phase2.currentYear || 0)) {
-            console.log(`   📅 Per-game file has newer year (${savedPhase2State.currentYear} vs ${existingRoom.phase2.currentYear}) - using it`);
-            existingRoom.phase2.currentYear = savedPhase2State.currentYear;
+        // ALWAYS check DB snapshot for more recent state — the file might be stale
+        // (on Render, the file might be from an older deploy or process restart)
+        try {
+          const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
+          if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
+            const latestMeta = snapshots[0];
+            const snapshotYear = latestMeta.current_year ? parseInt(latestMeta.current_year) : null;
+            const snapshotRound = latestMeta.round_or_year ? parseInt(latestMeta.round_or_year) : null;
+            const fileYear = existingRoom.phase2.currentYear || 1946;
+
+            // If snapshot is newer than file, restore from snapshot
+            const snapshotIsNewer = (latestMeta.phase === 2 && snapshotYear && snapshotYear > fileYear) ||
+                                    (latestMeta.phase === 2 && snapshotRound && snapshotRound > fileYear);
+            if (snapshotIsNewer) {
+              console.log(`   ⚠️ DB snapshot is newer (year=${snapshotYear || snapshotRound}) than file (year=${fileYear}) — restoring from snapshot`);
+              if (latestMeta.id) {
+                const fullSnapshot = await queryDatabase('getGameStateSnapshot', { id: latestMeta.id });
+                if (fullSnapshot && fullSnapshot.full_state) {
+                  const fullState = typeof fullSnapshot.full_state === 'string' ? JSON.parse(fullSnapshot.full_state) : fullSnapshot.full_state;
+                  if (fullState && fullState.phase2) {
+                    existingRoom.gamePhase = fullState.gamePhase || existingRoom.gamePhase;
+                    existingRoom.currentRound = fullState.currentRound || existingRoom.currentRound;
+                    existingRoom.scores = fullState.scores || existingRoom.scores;
+                    existingRoom.roundHistory = fullState.roundHistory || existingRoom.roundHistory;
+                    existingRoom.phase2 = {
+                      ...existingRoom.phase2,
+                      ...fullState.phase2
+                    };
+                    console.log(`   ✅ Existing room updated from snapshot: year=${existingRoom.phase2.currentYear}, phase=${existingRoom.gamePhase}, round=${existingRoom.currentRound}`);
+                  }
+                } else {
+                  // Fallback: use metadata year
+                  existingRoom.phase2.currentYear = snapshotYear || snapshotRound || fileYear;
+                  console.log(`   ✅ Updated currentYear from snapshot metadata: ${existingRoom.phase2.currentYear}`);
+                }
+              }
+            } else {
+              console.log(`   ✅ File state is current (year=${fileYear}, snapshot=${snapshotYear || snapshotRound || 'N/A'})`);
+            }
           }
-          // Use per-game file's yearlyData if it has more years
-          if (savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > Object.keys(existingRoom.phase2.yearlyData).length) {
-            console.log(`   📊 Per-game file has more yearly data - merging`);
-            existingRoom.phase2.yearlyData = { ...existingRoom.phase2.yearlyData, ...savedPhase2State.yearlyData };
-          }
-          // Restore fields that might be missing from the main state file
-          if (savedPhase2State.cumulativeDeployments && !existingRoom.phase2.cumulativeDeployments) {
-            existingRoom.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments;
-          }
-          if (savedPhase2State.deploymentHistory && !existingRoom.phase2.deploymentHistory) {
-            existingRoom.phase2.deploymentHistory = savedPhase2State.deploymentHistory;
-          }
-          if (savedPhase2State.battleResults && !existingRoom.phase2.battleResults) {
-            existingRoom.phase2.battleResults = savedPhase2State.battleResults;
-          }
-          if (savedPhase2State.diplomaticPoints && !existingRoom.phase2.diplomaticPoints) {
-            existingRoom.phase2.diplomaticPoints = savedPhase2State.diplomaticPoints;
-          }
+        } catch (err) {
+          console.log(`   ⚠️ Could not check snapshot for ${gameCode}: ${err.message}`);
         }
 
-        // Just update players from database in case they changed
+        // Update players from database in case they changed
         const players = await queryDatabase('getPlayers', { game_id: game.game_id });
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
@@ -5258,7 +5272,7 @@ async function initializeFromDatabase() {
             };
           }
         }
-        continue; // Keep existing room state, don't overwrite
+        continue; // Keep existing room state (now with snapshot updates)
       }
 
       // Create room state from database game (no existing state found)
