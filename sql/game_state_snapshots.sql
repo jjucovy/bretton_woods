@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS game_state_snapshots (
 -- case 'getGameStateSnapshots':
 --     $result = query($conn, "SELECT * FROM game_state_snapshots
 --         WHERE game_code = '" . mysqli_real_escape_string($conn, $data['game_code']) . "'
---         ORDER BY created_at DESC LIMIT 5");
+--         ORDER BY round_or_year DESC, created_at DESC LIMIT 10");
 --     respond($result ?: []);
 --     break;
 --

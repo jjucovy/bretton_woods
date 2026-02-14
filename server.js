@@ -5218,14 +5218,28 @@ async function initializeFromDatabase() {
         try {
           const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
           if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
-            const latestMeta = snapshots[0];
+            // Find snapshot with highest round_or_year (most progress), not just newest by timestamp
+            let bestSnap = snapshots[0];
+            let bestProgress = parseInt(bestSnap.round_or_year) || 0;
+            for (const snap of snapshots) {
+              const progress = parseInt(snap.round_or_year) || 0;
+              if (progress > bestProgress ||
+                  (progress === bestProgress && snap.snapshot_type === 'year_end' && bestSnap.snapshot_type !== 'year_end') ||
+                  (progress === bestProgress && snap.snapshot_type === 'game_complete')) {
+                bestSnap = snap;
+                bestProgress = progress;
+              }
+            }
+            const latestMeta = bestSnap;
             const snapshotYear = latestMeta.current_year ? parseInt(latestMeta.current_year) : null;
-            const snapshotRound = latestMeta.round_or_year ? parseInt(latestMeta.round_or_year) : null;
+            const snapshotRound = parseInt(latestMeta.round_or_year) || null;
             const fileYear = existingRoom.phase2.currentYear || 1946;
 
-            // If snapshot is newer than file, restore from snapshot
-            const snapshotIsNewer = (latestMeta.phase === 2 && snapshotYear && snapshotYear > fileYear) ||
-                                    (latestMeta.phase === 2 && snapshotRound && snapshotRound > fileYear);
+            console.log(`   📸 Best snapshot: id=${latestMeta.id}, type=${latestMeta.snapshot_type}, round/year=${snapshotRound}, file year=${fileYear}`);
+
+            // If snapshot has more progress than file, restore from snapshot
+            const snapshotIsNewer = (snapshotRound && snapshotRound > fileYear) ||
+                                    (snapshotYear && snapshotYear > fileYear);
             if (snapshotIsNewer) {
               console.log(`   ⚠️ DB snapshot is newer (year=${snapshotYear || snapshotRound}) than file (year=${fileYear}) — restoring from snapshot`);
               if (latestMeta.id) {
@@ -5337,16 +5351,29 @@ async function initializeFromDatabase() {
       }
       console.log(`   📊 Scores rebuilt from player data:`, roomState.scores);
 
-      // Try to restore full state from latest game state snapshot
-      // The snapshot's full_state field contains a complete JSON dump of the room,
-      // which is the most reliable source on Render where file system is ephemeral
+      // Try to restore full state from game state snapshots in DB
+      // IMPORTANT: Don't just use the most recent snapshot by timestamp!
+      // The bug that reset games to 1946 also saved new phase_transition snapshots,
+      // burying the real year_end snapshots. Pick the snapshot with the HIGHEST year/round.
       try {
         const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
         if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
-          // getGameStateSnapshots returns lightweight data (no full_state, yearly_data, etc.)
-          // Use getGameStateSnapshot (singular) with the ID to fetch the complete record
-          const latestMeta = snapshots[0];
-          console.log(`   📸 Found ${snapshots.length} snapshot(s), latest: id=${latestMeta.id}, type=${latestMeta.snapshot_type}, phase=${latestMeta.phase}, round/year=${latestMeta.round_or_year}`);
+          // Find the snapshot with the highest round_or_year (most game progress)
+          // rather than just the most recent by timestamp
+          let bestMeta = snapshots[0];
+          let bestProgress = parseInt(bestMeta.round_or_year) || 0;
+          for (const snap of snapshots) {
+            const progress = parseInt(snap.round_or_year) || 0;
+            // Prefer higher year/round, or same year but year_end over phase_transition
+            if (progress > bestProgress ||
+                (progress === bestProgress && snap.snapshot_type === 'year_end' && bestMeta.snapshot_type !== 'year_end') ||
+                (progress === bestProgress && snap.snapshot_type === 'game_complete')) {
+              bestMeta = snap;
+              bestProgress = progress;
+            }
+          }
+          const latestMeta = bestMeta;
+          console.log(`   📸 Found ${snapshots.length} snapshot(s), best: id=${latestMeta.id}, type=${latestMeta.snapshot_type}, phase=${latestMeta.phase}, round/year=${latestMeta.round_or_year} (newest by timestamp: id=${snapshots[0].id}, round/year=${snapshots[0].round_or_year})`);
 
           let latest = latestMeta; // fallback to lightweight data
           if (latestMeta.id) {
