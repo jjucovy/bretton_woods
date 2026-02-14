@@ -2270,6 +2270,28 @@ function resolveCrisisEffects(roomId, crisisId = null) {
       if (Object.keys(effects).length > 0) {
         console.log(`    Effects:`, effects);
       }
+
+      // Apply cross-country effects (this country's choice impacts other nations)
+      const crossEffects = choice.crossEffects || {};
+      Object.entries(crossEffects).forEach(([targetCountry, targetEffects]) => {
+        const normTarget = normalizeCountryName(targetCountry) || targetCountry;
+        if (!room.phase2.yearlyData[currentYear][normTarget]) {
+          const prevYear = currentYear - 1;
+          room.phase2.yearlyData[currentYear][normTarget] = {
+            ...room.phase2.yearlyData[prevYear]?.[normTarget]
+          };
+        }
+        const targetData = room.phase2.yearlyData[currentYear][normTarget];
+        if (targetEffects.gdpGrowth) targetData.gdpGrowth = (targetData.gdpGrowth || 0) + targetEffects.gdpGrowth;
+        if (targetEffects.tradeBalance) targetData.tradeBalance = (targetData.tradeBalance || 0) + targetEffects.tradeBalance;
+        if (targetEffects.inflation) targetData.inflation = (targetData.inflation || 0) + targetEffects.inflation;
+        if (targetEffects.unemployment) targetData.unemployment = (targetData.unemployment || 0) + targetEffects.unemployment;
+        if (targetEffects.diplomaticPoints) {
+          if (!room.phase2.diplomaticPoints) room.phase2.diplomaticPoints = {};
+          room.phase2.diplomaticPoints[normTarget] = (room.phase2.diplomaticPoints[normTarget] || 0) + targetEffects.diplomaticPoints;
+        }
+        console.log(`    → Cross-effect on ${normTarget}:`, targetEffects);
+      });
     });
 
     // Move crisis to history
