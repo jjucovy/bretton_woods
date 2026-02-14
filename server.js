@@ -39,13 +39,23 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
-  // Handle unhashed passwords (legacy: stored before hashing was added)
-  if (!stored.includes(':') || stored.length < 50) {
-    return password === stored;
+  if (!stored) return false;
+
+  // Format 3: New scrypt hash (salt:hash with colon separator)
+  if (stored.includes(':') && stored.length > 100) {
+    const [salt, hash] = stored.split(':');
+    const testHash = crypto.scryptSync(password, salt, 64).toString('hex');
+    return hash === testHash;
   }
-  const [salt, hash] = stored.split(':');
-  const testHash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return hash === testHash;
+
+  // Format 2: Old SHA256 hash (64-char hex, static salt 'bretton-woods-2024')
+  if (/^[a-f0-9]{64}$/.test(stored)) {
+    const oldHash = crypto.createHash('sha256').update('bretton-woods-2024' + password).digest('hex');
+    return oldHash === stored;
+  }
+
+  // Format 1: Plaintext password (legacy)
+  return password === stored;
 }
 
 const app = express();
