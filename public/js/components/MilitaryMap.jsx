@@ -180,6 +180,11 @@ function MilitaryMap({ currentYear, gameState, playerCountry, socket, roomId, pl
     const activeConflicts = gameState?.phase2?.activeConflicts || [];
     const battleResults = gameState?.phase2?.battleResults || [];
 
+    console.log('🗺️ Map update: deployments=', Object.keys(cumulativeDeployments),
+      'conflicts=', Object.keys(pendingConflicts),
+      'active=', activeConflicts.length,
+      'battles=', battleResults.length);
+
     // --- CUMULATIVE DEPLOYMENT MARKERS ---
     Object.entries(cumulativeDeployments).forEach(([region, countries]) => {
       const regionCoords = REGION_COORDINATES[region];
