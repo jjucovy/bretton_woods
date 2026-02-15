@@ -3672,13 +3672,26 @@ const countryId = countryData?.country_id || null;
   socket.on('submitPolicy', async ({ roomId, playerid, policy }) => {
     const room = globalState.rooms[roomId];
     if (!room || !room.phase2.active) return;
-    
+
     const player = room.players[playerid];
     if (!player) return;
-    
+
     const currentYear = room.phase2.currentYear;
     if (!room.phase2.policies[currentYear]) {
       room.phase2.policies[currentYear] = {};
+    }
+
+    // Prevent resubmission if player already submitted for this year
+    const normalizedPolicyCountry = normalizeCountryName(player.country);
+    if (room.phase2.policies[currentYear][normalizedPolicyCountry] && room.readyPlayers.includes(playerid)) {
+      console.log(`⚠️ ${player.country} already submitted policy for ${currentYear}, rejecting duplicate`);
+      socket.emit('policySubmitted', {
+        success: false,
+        country: player.country,
+        year: currentYear,
+        message: `Policy already submitted for ${currentYear}. Wait for the year to advance.`
+      });
+      return;
     }
     
     room.phase2.policies[currentYear][normalizeCountryName(player.country)] = policy.isCommandEconomy ? {
@@ -3888,6 +3901,24 @@ const countryId = countryData?.country_id || null;
     const currentYear = room.phase2.currentYear;
     const normalizedCountry = normalizeCountryName(country);
 
+    // Deployment limit: max 2 deployments per country per year
+    const MAX_DEPLOYMENTS_PER_YEAR = 2;
+    if (!room.phase2.deploymentsThisYear) {
+      room.phase2.deploymentsThisYear = {};
+    }
+    const countryDeploymentsThisYear = room.phase2.deploymentsThisYear[normalizedCountry] || 0;
+    if (countryDeploymentsThisYear >= MAX_DEPLOYMENTS_PER_YEAR) {
+      console.log(`Deploy troops rejected: ${country} already deployed ${countryDeploymentsThisYear} times this year (max ${MAX_DEPLOYMENTS_PER_YEAR})`);
+      const playerSocket = io.sockets.sockets.get(player.socketId);
+      if (playerSocket) {
+        playerSocket.emit('deploymentRejected', {
+          region,
+          reason: `You have already deployed ${MAX_DEPLOYMENTS_PER_YEAR} times this year. Wait for the next year.`
+        });
+      }
+      return;
+    }
+
     // Year-gate checks
     if (region === 'Pakistan' && currentYear < 1947) {
       console.log(`Deploy troops rejected: Pakistan not available until 1947`);
@@ -3984,6 +4015,10 @@ const countryId = countryData?.country_id || null;
         });
       }
     }
+
+    // Track deployment count for this year
+    room.phase2.deploymentsThisYear[normalizedCountry] = (room.phase2.deploymentsThisYear[normalizedCountry] || 0) + 1;
+    console.log(`   📋 ${normalizedCountry} deployments this year: ${room.phase2.deploymentsThisYear[normalizedCountry]}/${MAX_DEPLOYMENTS_PER_YEAR}`);
 
     console.log(`✅ ${country} deployed ${troops} ${normalizedBranch} to ${region}`);
     console.log(`   Cumulative in ${region}: ${JSON.stringify(room.phase2.cumulativeDeployments[region][country])}`);
@@ -5027,6 +5062,7 @@ const countryId = countryData?.country_id || null;
     room.phase2.currentYear++;
     room.currentRound++; // Track Phase 2 progress in DB (11=1946, 12=1947, etc.)
     room.readyPlayers = [];
+    room.phase2.deploymentsThisYear = {}; // Reset deployment limits for new year
     
     // Check for crisis events this year
     triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
