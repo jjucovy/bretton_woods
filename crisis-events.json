@@ -276,6 +276,16 @@
               "diplomaticPoints": 5
             },
             "outcome": "Accept nationalization with payment. Railways were losing money anyway."
+          },
+          {
+            "id": "protest-nationalization",
+            "text": "📢 Protest Illegal Seizure of British Assets",
+            "cost": 100,
+            "effects": {
+              "tradeBalance": -200,
+              "diplomaticPoints": -8
+            },
+            "outcome": "Demand return of assets. Perón refuses and rallies nationalist support. Anglo-Argentine trade deteriorates. But you've set a precedent against uncompensated nationalization."
           }
         ],
         "USA": [
@@ -371,6 +381,16 @@
               "diplomaticPoints": 10
             },
             "outcome": "Nehru champions anti-colonialism. Leader of non-aligned."
+          },
+          {
+            "id": "quiet-diplomacy",
+            "text": "🤫 Quiet Diplomacy — Avoid Antagonizing France",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": -2,
+              "tradeBalance": 100
+            },
+            "outcome": "India has just gained independence and needs trade partners. Publicly neutral, privately sympathetic to Ho Chi Minh. France continues purchasing Indian goods. But the non-aligned movement loses a champion."
           }
         ],
         "USSR": [
@@ -527,6 +547,16 @@
               "diplomaticPoints": 25
             },
             "outcome": "Western Europe recovers. Win Cold War economically."
+          },
+          {
+            "id": "reduced-marshall",
+            "text": "📉 Reduced Aid Package - $5B",
+            "cost": 1250,
+            "effects": {
+              "tradeBalance": -1250,
+              "diplomaticPoints": 10
+            },
+            "outcome": "Enough to prevent European collapse but not enough for full recovery. Congress is happier. Europe recovers slowly — some nations turn to Soviet trade to fill the gap. Containment is partial."
           }
         ],
         "UK": [
@@ -539,6 +569,17 @@
               "tradeBalance": 1200
             },
             "outcome": "Receive $3.2B. Economy recovers."
+          },
+          {
+            "id": "accept-with-conditions",
+            "text": "🏛️ Accept Aid but Protect Imperial Preference",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 1.0,
+              "tradeBalance": 600,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Accept aid but insist on preserving Commonwealth trade preferences. Less American money flows in, but Britain keeps its trade bloc intact. Washington is irritated by British exceptionalism."
           }
         ],
         "France": [
@@ -552,6 +593,17 @@
               "inflation": -5.0
             },
             "outcome": "Receive $2.7B. Inflation controlled. Boom into 1960s."
+          },
+          {
+            "id": "accept-with-autonomy",
+            "text": "🇫🇷 Accept Aid but Assert French Economic Sovereignty",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 1.5,
+              "tradeBalance": 600,
+              "diplomaticPoints": 3
+            },
+            "outcome": "Accept aid on French terms — direct it toward French industrial planning (Monnet Plan) rather than American free-market prescriptions. Less total aid received but greater national control. Seeds of Gaullist independence."
           }
         ],
         "USSR": [
@@ -560,9 +612,20 @@
             "text": "🚫 Forbid Satellites from Accepting",
             "cost": 0,
             "effects": {
-              "globalTension": 15
+              "globalTension": 15,
+              "diplomaticPoints": -10
             },
-            "outcome": "Iron Curtain descends. East-West split solidifies."
+            "outcome": "Iron Curtain descends. East-West split solidifies. Eastern European nations resent being cut off from Western aid."
+          },
+          {
+            "id": "counter-offer",
+            "text": "🔴 Launch Molotov Plan — Soviet Counter-Aid",
+            "cost": 800,
+            "effects": {
+              "tradeBalance": -800,
+              "diplomaticPoints": 8
+            },
+            "outcome": "Create COMECON to rival Marshall Plan. Subsidize Eastern European economies with Soviet resources. Costly but prevents satellites from looking westward. The socialist economic bloc takes shape."
           }
         ]
       }
@@ -637,9 +700,22 @@
             "cost": 1500,
             "effects": {
               "gdpGrowth": -3.0,
-              "tradeBalance": -1500
+              "tradeBalance": -1500,
+              "diplomaticPoints": 10
             },
             "outcome": "Human wave attacks. Push USA back. Massive casualties but prove China major power."
+          },
+          {
+            "id": "border-defense",
+            "text": "🛡️ Defensive Posture — Protect Border Only",
+            "militaryRequired": { "army": 300000 },
+            "cost": 400,
+            "effects": {
+              "gdpGrowth": -0.5,
+              "tradeBalance": -400,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Mass troops at the Yalu but don't cross. If USA stays south of the 38th parallel, China stays out. Avoid catastrophic casualties but appear weak to Moscow. North Korea may fall. Mao's prestige within the Communist world suffers — but the Chinese economy is spared."
           }
         ],
         "India": [
@@ -651,6 +727,20 @@
               "diplomaticPoints": 15
             },
             "outcome": "Establish India as neutral mediator."
+          },
+          {
+            "id": "condemn-aggression",
+            "text": "📢 Condemn North Korean Aggression at UN",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": 5,
+              "tradeBalance": 200
+            },
+            "crossEffects": {
+              "USA": { "diplomaticPoints": 3 },
+              "USSR": { "diplomaticPoints": -5 }
+            },
+            "outcome": "Side with the Western position at the UN Security Council. Gain American goodwill and trade access, but alienate the Soviet bloc and damage India's non-aligned credentials. Nehru faces domestic criticism from the left."
           }
         ],
         "Argentina": [
@@ -662,6 +752,16 @@
               "diplomaticPoints": 3
             },
             "outcome": "Distant conflict. Focus on domestic issues."
+          },
+          {
+            "id": "sell-supplies",
+            "text": "🌾 Sell Food and Supplies to UN Forces",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 500,
+              "diplomaticPoints": 5
+            },
+            "outcome": "War means hungry armies. Argentine beef and grain flow to UN supply lines at premium prices. Profitable neutrality — everyone's friend, nobody's ally. Perón's Third Position in action."
           }
         ],
         "USSR": [
@@ -894,6 +994,17 @@
               "diplomaticPoints": 5
             },
             "outcome": "Wine and culture for beef and grain. Mutual respect."
+          },
+          {
+            "id": "colonial-agriculture",
+            "text": "🌍 Expand Colonial Agricultural Production",
+            "cost": 300,
+            "effects": {
+              "tradeBalance": 200,
+              "gdpGrowth": 0.5,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Intensify food production in North Africa and Indochina. Reduce dependency on Argentine imports. Colonial subjects bear the cost — forced labor quotas increase. Effective but morally costly, and fuels independence movements."
           }
         ],
         "India": [
@@ -905,6 +1016,17 @@
               "diplomaticPoints": 8
             },
             "outcome": "Developing nations should control their resources! Third World unity."
+          },
+          {
+            "id": "export-competition",
+            "text": "🌾 Compete as Alternative Grain Exporter",
+            "cost": 200,
+            "effects": {
+              "tradeBalance": 400,
+              "gdpGrowth": 0.5,
+              "diplomaticPoints": 3
+            },
+            "outcome": "India has vast farmland. Redirect some domestic production to export at prices below Argentina's. European buyers welcome the competition. Indian farmers earn more, but domestic food security tightens."
           }
         ]
       }
@@ -979,13 +1101,23 @@
         "UK": [
           {
             "id": "return-favor",
-            "text": "🍞 Return the Favor - Send Food to Argentina",
+            "text": "🍞 Return the Favor — Send Food to Argentina",
             "cost": 300,
             "effects": {
               "tradeBalance": -300,
               "diplomaticPoints": 12
             },
             "outcome": "Remember when Argentina fed us? Time to repay. Relations healed."
+          },
+          {
+            "id": "exploit-leverage",
+            "text": "📊 Use Argentine Weakness to Renegotiate Trade Terms",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 300,
+              "diplomaticPoints": -10
+            },
+            "outcome": "Argentina is desperate — demand better terms on beef and grain contracts. Short-term profits, but Perón will remember this betrayal. Future Anglo-Argentine trade suffers."
           }
         ]
       }
@@ -1041,6 +1173,16 @@
               "diplomaticPoints": 5
             },
             "outcome": "Diplomatic gesture. Maybe relations can improve now."
+          },
+          {
+            "id": "exploit-instability",
+            "text": "🕵️ Quietly Cultivate Anti-Perón Opposition",
+            "cost": 200,
+            "effects": {
+              "diplomaticPoints": -8,
+              "tradeBalance": -200
+            },
+            "outcome": "With Evita gone, Perón's coalition may fracture. CIA contacts Argentine military officers and business leaders. If discovered, relations collapse entirely. But if it works, Argentina may realign toward Washington within a few years."
           }
         ],
         "UK": [
@@ -1052,6 +1194,16 @@
               "diplomaticPoints": 5
             },
             "outcome": "Even former enemies respect grief. Relations warming."
+          },
+          {
+            "id": "trade-overture",
+            "text": "🤝 Propose New Anglo-Argentine Trade Agreement",
+            "cost": 100,
+            "effects": {
+              "tradeBalance": 300,
+              "diplomaticPoints": 3
+            },
+            "outcome": "With Evita's populist fire gone, Perón may be more pragmatic. Propose comprehensive trade deal while the political landscape shifts. Argentine beef for British manufactures — rebuild the old commercial relationship."
           }
         ]
       }
