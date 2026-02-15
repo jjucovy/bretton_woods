@@ -451,11 +451,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               alert('❌ ' + message);
             });
 
-            socket.on('policySubmitted', ({ success, country, year }) => {
+            socket.on('policySubmitted', ({ success, country, year, message }) => {
               if (success) {
                 console.log(`✅ Policy submitted for ${country} - ${year}`);
-                // Show visual confirmation
                 alert(`✅ Policy submitted successfully for ${year}!`);
+              } else {
+                console.log(`⚠️ Policy submission rejected: ${message}`);
+                alert(`⚠️ ${message || 'Policy already submitted for this year.'}`);
               }
             });
 
