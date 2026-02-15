@@ -4381,6 +4381,120 @@ const countryId = countryData?.country_id || null;
     saveState();
   });
 
+  // --- Battle Power Modifier Helpers ---
+
+  // Country home coordinates for distance calculations (capital/center of gravity)
+  const COUNTRY_HOME_COORDS = {
+    'USA': { lat: 38.9, lng: -77.0 },       // Washington DC
+    'UK': { lat: 51.5, lng: -0.1 },          // London
+    'USSR': { lat: 55.8, lng: 37.6 },        // Moscow
+    'France': { lat: 48.9, lng: 2.3 },       // Paris
+    'China': { lat: 39.9, lng: 116.4 },      // Beijing/Nanjing
+    'India': { lat: 28.6, lng: 77.2 },       // New Delhi
+    'Argentina': { lat: -34.6, lng: -58.4 }  // Buenos Aires
+  };
+
+  // Region center coordinates for distance calc
+  const BATTLE_REGION_COORDS = {
+    'Eastern Europe': { lat: 52.2, lng: 21.0 },
+    'Western Europe': { lat: 48.8, lng: 2.3 },
+    'East Asia': { lat: 35.7, lng: 127.0 },
+    'Southeast Asia': { lat: 13.8, lng: 100.5 },
+    'Middle East': { lat: 31.5, lng: 34.8 },
+    'Mediterranean': { lat: 37.0, lng: 15.0 },
+    'Central Asia': { lat: 41.3, lng: 69.3 },
+    'Latin America': { lat: -15.0, lng: -60.0 },
+    'Africa': { lat: 0.0, lng: 25.0 },
+    'Greece & Turkey': { lat: 39.0, lng: 27.0 },
+    'Iran': { lat: 32.4, lng: 53.7 },
+    'Taiwan': { lat: 23.7, lng: 121.0 },
+    'Pakistan': { lat: 30.4, lng: 69.3 },
+    'Berlin': { lat: 52.5, lng: 13.4 },
+    'Germany': { lat: 51.2, lng: 10.4 },
+    'Korea': { lat: 37.6, lng: 127.0 },
+    'Suez Canal': { lat: 30.6, lng: 32.3 },
+    'Indochina': { lat: 16.0, lng: 108.0 },
+    'India': { lat: 22.0, lng: 78.9 },
+    'Atlantic Ocean': { lat: 35.0, lng: -40.0 },
+    'Pacific Ocean': { lat: 20.0, lng: -160.0 },
+    'Indian Ocean': { lat: -10.0, lng: 70.0 }
+  };
+
+  // Haversine distance in km between two lat/lng points
+  function haversineDistance(coord1, coord2) {
+    const R = 6371; // Earth radius in km
+    const dLat = (coord2.lat - coord1.lat) * Math.PI / 180;
+    const dLng = (coord2.lng - coord1.lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(coord1.lat * Math.PI / 180) * Math.cos(coord2.lat * Math.PI / 180) *
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // Calculate power multiplier for a country fighting in a region
+  function getBattlePowerMultiplier(country, region, yearData) {
+    const normalized = normalizeCountryName(country);
+    const gdp = getBaseGDP(normalized);
+    const countryEconData = yearData?.[normalized];
+
+    // 1. GDP/Economic Power Factor (logarithmic scale to prevent total domination)
+    //    USA $228B = 1.0 baseline, others scaled relative
+    //    Using log scale: ln(gdp/14000) / ln(228000/14000) → 0.0 (Argentina) to 1.0 (USA)
+    const gdpRatio = Math.log(gdp / 14000) / Math.log(228000 / 14000);
+    const gdpMultiplier = 0.4 + (gdpRatio * 0.6); // Range: 0.4x to 1.0x
+
+    // 2. Industrial Output Factor (better factories = better weapons/supply)
+    //    Base 100 = 1.0x, higher output = better equipped
+    const industrialOutput = countryEconData?.industrialOutput || 100;
+    const industrialMultiplier = 0.6 + (Math.min(industrialOutput, 200) / 200) * 0.4; // 0.6x to 1.0x
+
+    // 3. Distance/Power Projection Penalty
+    //    Fighting far from home is harder - supply lines stretch, logistics cost more
+    const homeCoords = COUNTRY_HOME_COORDS[normalized];
+    const regionCoords = BATTLE_REGION_COORDS[region];
+    let distanceMultiplier = 1.0;
+    if (homeCoords && regionCoords) {
+      const distKm = haversineDistance(homeCoords, regionCoords);
+      // Under 2000km: no penalty (neighboring region)
+      // 2000-5000km: mild penalty
+      // 5000-10000km: moderate penalty
+      // 10000+km: severe penalty
+      if (distKm > 2000) {
+        const penaltyFactor = Math.min((distKm - 2000) / 15000, 0.4); // Max 40% penalty
+        distanceMultiplier = 1.0 - penaltyFactor;
+      }
+    }
+
+    // 4. Naval Projection Requirement
+    //    Overseas battles (ocean regions or far-flung theaters) need naval support
+    const overseasRegions = ['Pacific Ocean', 'Atlantic Ocean', 'Indian Ocean',
+      'East Asia', 'Southeast Asia', 'Taiwan', 'Korea', 'Indochina'];
+    const needsNaval = overseasRegions.includes(region);
+    let navalMultiplier = 1.0;
+    if (needsNaval) {
+      const navy = countryEconData?.military?.navy || 0;
+      // Need significant navy for overseas power projection
+      // 200k+ navy = full effectiveness, less = degraded
+      navalMultiplier = Math.min(1.0, 0.3 + (navy / 200000) * 0.7);
+    }
+
+    const totalMultiplier = gdpMultiplier * industrialMultiplier * distanceMultiplier * navalMultiplier;
+
+    return {
+      total: totalMultiplier,
+      gdp: gdpMultiplier,
+      industrial: industrialMultiplier,
+      distance: distanceMultiplier,
+      naval: navalMultiplier,
+      details: {
+        gdpBillions: Math.round(gdp / 1000),
+        industrialOutput,
+        distanceKm: homeCoords && regionCoords ? Math.round(haversineDistance(homeCoords, regionCoords)) : 0,
+        needsNaval
+      }
+    };
+  }
+
   // Resolve battle with diplomatic stances and battle options
   function resolveBattleWithStances(room, roomId, battleId, conflict) {
     const options = room.phase2.battleOptions[battleId];
@@ -4405,7 +4519,13 @@ const countryId = countryData?.country_id || null;
       // Calculate base combat power from deployed troops
       let combatPower = countryDeployment.total;
 
-      // Add allied power
+      // Apply power multipliers (GDP, industry, distance, naval)
+      const powerMod = getBattlePowerMultiplier(country, conflict.region, yearData);
+      combatPower *= powerMod.total;
+
+      console.log(`   ⚔️ ${country} power modifiers: GDP=${powerMod.gdp.toFixed(2)} Industry=${powerMod.industrial.toFixed(2)} Distance=${powerMod.distance.toFixed(2)} Naval=${powerMod.naval.toFixed(2)} → ${powerMod.total.toFixed(2)}x (${countryDeployment.total} troops → ${Math.round(combatPower)} effective)`);
+
+      // Add allied power (also modified by ally's own multiplier)
       const countryStances = stances[country]?.stances || {};
       conflict.countries.forEach(otherCountry => {
         if (country === otherCountry) return;
@@ -4413,7 +4533,8 @@ const countryId = countryData?.country_id || null;
         // Mutual alliance provides combat bonus
         if (countryStances[otherCountry] === 'ally' && otherStances[country] === 'ally') {
           const otherDeployment = deployments[otherCountry] || { total: 0 };
-          combatPower += otherDeployment.total * 0.3; // 30% of ally's power as bonus
+          const otherPowerMod = getBattlePowerMultiplier(otherCountry, conflict.region, yearData);
+          combatPower += otherDeployment.total * otherPowerMod.total * 0.3; // 30% of ally's modified power
         }
       });
 
@@ -4431,6 +4552,7 @@ const countryId = countryData?.country_id || null;
         option: countryOption,
         deployedTroops: countryDeployment.total,
         combatPower: Math.round(combatPower),
+        powerModifiers: powerMod,
         stances: countryStances
       });
     });
@@ -4448,8 +4570,9 @@ const countryId = countryData?.country_id || null;
         p.casualties = 0;
       });
     } else {
-      // Calculate battle
+      // Calculate battle with power-asymmetric casualties
       const totalAttackPower = attackers.reduce((sum, p) => sum + p.combatPower, 0);
+      const maxAttackPower = Math.max(...attackers.map(a => a.combatPower));
 
       battleResult.participants.forEach(p => {
         const isAttacker = p.option === 'attack';
@@ -4461,19 +4584,30 @@ const countryId = countryData?.country_id || null;
           p.casualties = Math.floor(p.deployedTroops * casualtyRate);
           p.outcome = 'withdrew under fire';
         } else if (isAttacker) {
-          // Check if this attacker won
-          const isTopAttacker = p.combatPower >= Math.max(...attackers.map(a => a.combatPower));
+          // Power ratio determines casualty asymmetry
+          // If you're 3x stronger, you take fewer casualties; if weaker, you take more
+          const isTopAttacker = p.combatPower >= maxAttackPower;
+          const otherMaxPower = Math.max(1, ...attackers.filter(a => a.country !== p.country).map(a => a.combatPower));
+          const powerRatio = p.combatPower / Math.max(1, otherMaxPower);
+
           if (isTopAttacker && attackers.length === 1) {
-            p.casualties = Math.floor(p.deployedTroops * 0.1);
+            // Unopposed attack — minimal casualties
+            p.casualties = Math.floor(p.deployedTroops * 0.05);
             p.outcome = 'military victory';
             battleResult.winner = p.country;
           } else if (isTopAttacker) {
-            p.casualties = Math.floor(p.deployedTroops * 0.15);
-            p.outcome = 'contested victory';
+            // Won the battle — casualties scale inversely with power advantage
+            // 1:1 power = 15% casualties, 3:1 = 8%, 5:1+ = 5%
+            const winnerCasualtyRate = Math.max(0.05, 0.15 / Math.max(1, powerRatio));
+            p.casualties = Math.floor(p.deployedTroops * winnerCasualtyRate);
+            p.outcome = powerRatio >= 3 ? 'decisive victory' : 'contested victory';
             battleResult.winner = p.country;
           } else {
-            p.casualties = Math.floor(p.deployedTroops * 0.25);
-            p.outcome = 'military defeat';
+            // Lost — casualties scale with how outmatched you are
+            // 1:1 power = 20%, 1:3 = 30%, 1:5+ = 40%
+            const loserCasualtyRate = Math.min(0.40, 0.20 + (1 / Math.max(1, powerRatio)) * 0.05);
+            p.casualties = Math.floor(p.deployedTroops * loserCasualtyRate);
+            p.outcome = powerRatio < 0.33 ? 'crushing defeat' : 'military defeat';
           }
         } else { // negotiate
           p.casualties = Math.floor(p.deployedTroops * 0.05);
