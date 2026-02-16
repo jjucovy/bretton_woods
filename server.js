@@ -414,6 +414,31 @@ function loadGamePhase2State(roomId) {
   }
 }
 
+// Save player scores (phase1_score and/or phase2_score) to the players table in DB
+async function savePlayerScoresToDB(roomId, phase) {
+  const room = globalState.rooms[roomId];
+  if (!room || !room.gameId) return;
+
+  const gameCode = roomId;
+  for (const [userId, player] of Object.entries(room.players)) {
+    const country = normalizeCountryName(player.country) || player.country;
+    const score = room.scores?.[country] || 0;
+    if (score === 0 && phase === 'phase1') continue; // Skip if no points yet
+
+    try {
+      await queryDatabase('updatePlayerPoints', {
+        gameCode,
+        userId: userId,
+        points: score,
+        phase: phase
+      });
+      console.log(`✅ ${phase}_score saved to DB: ${country} (user ${userId}) = ${score}`);
+    } catch (err) {
+      console.error(`❌ Failed to save ${phase}_score for ${country}:`, err.message);
+    }
+  }
+}
+
 // Save game state to database
 async function saveGameToDatabase(roomId) {
   try {
@@ -2174,9 +2199,31 @@ function calculatePhase2Scores(roomId) {
   room.phase2.scoreBreakdowns = scoreBreakdowns;
 
   console.log(`📊 Final scores:`, room.scores);
-  
+
   console.log(`Phase 2 final scores:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);
+
+  // Save phase2_score to players table in DB
+  // Fire async - don't block the return
+  (async () => {
+    for (const [userId, player] of Object.entries(room.players)) {
+      const country = normalizeCountryName(player.country) || player.country;
+      const p2score = phase2Scores[country] || 0;
+      if (p2score === 0) continue;
+      try {
+        await queryDatabase('updatePlayerPoints', {
+          gameCode: roomId,
+          userId: userId,
+          points: p2score,
+          phase: 'phase2'
+        });
+        console.log(`✅ phase2_score saved to DB: ${country} (user ${userId}) = ${p2score}`);
+      } catch (err) {
+        console.error(`❌ Failed to save phase2_score for ${country}:`, err.message);
+      }
+    }
+  })();
+
   return phase2Scores;
 }
 
@@ -3432,6 +3479,11 @@ const countryId = countryData?.country_id || null;
             });
             console.log(`✅ Round ${room.currentRound} tie result saved to database`);
             saveGameStateSnapshot(roomId, 'round_end');
+
+            // Save phase1_score to players table
+            savePlayerScoresToDB(roomId, 'phase1').catch(err => {
+              console.error('⚠️ Failed to save phase1 scores after tie:', err);
+            });
           } catch (err) {
             console.error('⚠️ Failed to save tie result to database:', err);
           }
@@ -3584,6 +3636,9 @@ const countryId = countryData?.country_id || null;
           await queryDatabase('saveRoundResult', roundResultData);
           console.log(`✅ Round ${room.currentRound} result saved to database`);
           saveGameStateSnapshot(roomId, 'round_end');
+
+          // Save phase1_score to players table
+          await savePlayerScoresToDB(roomId, 'phase1');
         } catch (err) {
           console.error('⚠️ Failed to save round result to database:', err);
         }
