@@ -2778,8 +2778,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 <span style={{ color: myTheme.textDark, fontWeight: '600' }}>
                                   Post-War Economic Management
                                 </span>
-                                <span style={{ color: myTheme.textMedium, fontStyle: 'italic' }}>
-                                  {myTheme.motto}
+                                <span style={{ fontWeight: 'bold', color: myTheme.textDark, fontSize: '0.95rem' }}>
+                                  {gameState.scores?.[normalizeCountryName(playerCountry)] || 0} pts
                                 </span>
                               </div>
                             </div>
@@ -3127,6 +3127,76 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
                           )}
 
+                          {/* Phase 2 Running Standings */}
+                          <div style={{
+                            background: 'white',
+                            borderRadius: '12px',
+                            padding: '24px',
+                            marginBottom: '20px',
+                            border: '1px solid #e2e8f0'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                              <h3 style={{ marginTop: 0, marginBottom: 0 }}>Current Standings</h3>
+                              {(() => {
+                                const myNorm = normalizeCountryName(playerCountry);
+                                const myYearScore = gameState.phase2?.yearlyScores?.[currentYear]?.[myNorm];
+                                return myYearScore ? (
+                                  <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                                    +{myYearScore} pts this year
+                                  </span>
+                                ) : null;
+                              })()}
+                            </div>
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                              {(() => {
+                                const normalizeC = (c) => window.CountryUtils ? window.CountryUtils.normalizeCountryName(c) : c;
+                                const activeCountries = new Set(Object.values(gameState.players || {}).map(p => normalizeC(p.country)));
+                                const merged = {};
+                                Object.entries(gameState.scores || {}).forEach(([country, score]) => {
+                                  const norm = normalizeC(country);
+                                  if (!merged[norm] || score > merged[norm]) merged[norm] = score;
+                                });
+                                return Object.entries(merged)
+                                  .filter(([country]) => activeCountries.has(country))
+                                  .sort(([,a], [,b]) => b - a)
+                                  .map(([country, score], idx) => {
+                                    const myNorm = normalizeC(playerCountry);
+                                    const isMe = country === myNorm;
+                                    const rowTheme = getCountryTheme(country);
+                                    const yearScore = gameState.phase2?.yearlyScores?.[currentYear]?.[country];
+                                    return (
+                                      <div key={country} style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '10px 14px',
+                                        background: isMe ? (rowTheme.lighter || '#eff6ff') : '#f8fafc',
+                                        borderRadius: '6px',
+                                        borderLeft: `4px solid ${isMe ? (rowTheme.borderColor || '#3b82f6') : idx === 0 ? '#f59e0b' : '#cbd5e1'}`
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <span style={{ fontSize: '1.1rem' }}>{rowTheme.flag}</span>
+                                          <span style={{ fontWeight: 'bold', minWidth: '22px' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}</span>
+                                          <span style={{ fontWeight: isMe ? 'bold' : 'normal', color: isMe ? rowTheme.textDark : undefined }}>
+                                            {countries[country]?.name || country}
+                                            {isMe && <span style={{ fontSize: '0.8rem', color: rowTheme.textMedium, marginLeft: '4px' }}>(You)</span>}
+                                          </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          {yearScore > 0 && (
+                                            <span style={{ fontSize: '0.8rem', color: '#16a34a' }}>+{yearScore}</span>
+                                          )}
+                                          <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: isMe ? rowTheme.textDark : undefined }}>
+                                            {score} pts
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                              })()}
+                            </div>
+                          </div>
+
                           {/* Historical Events */}
                           <div style={{
                             background: 'white',
@@ -3396,6 +3466,20 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         {(breakdown.brettonWoods || 0) > 0 ? '+' : ''}{breakdown.brettonWoods || 0} pts
                                       </div>
                                     </div>
+                                    {(breakdown.crisisDiplomacy || 0) !== 0 && (
+                                      <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #06b6d4' }}>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Crisis Diplomacy</div>
+                                        <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.crisisDiplomacy || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                          {(breakdown.crisisDiplomacy || 0) > 0 ? '+' : ''}{breakdown.crisisDiplomacy || 0} pts
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div style={{ padding: '12px', background: '#ecfdf5', borderRadius: '6px', borderLeft: '3px solid #059669' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#065f46', marginBottom: '4px', fontWeight: 'bold' }}>Yearly Economic Performance</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#059669' }}>
+                                        +{breakdown.yearlyTotal || 0} pts
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -3408,15 +3492,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               fontSize: '0.9rem',
                               color: '#64748b'
                             }}>
-                              <strong>Scoring Categories:</strong>
-                              <ul style={{ marginTop: '8px', marginBottom: 0, lineHeight: '1.6' }}>
-                                <li><strong>GDP Growth:</strong> 10 pts per % average growth (1947-1952)</li>
-                                <li><strong>Inflation Control:</strong> Up to 50 pts for low inflation (&lt;3%)</li>
-                                <li><strong>Employment:</strong> Up to 40 pts for low unemployment (&lt;2%)</li>
-                                <li><strong>Trade Balance:</strong> 8 pts per year with positive balance</li>
-                                <li><strong>Stability:</strong> Up to 30 pts for consistent growth (low variance)</li>
-                                <li><strong>Bretton Woods:</strong> Bonus for voting with majority on trade/loans/IMF issues</li>
-                              </ul>
+                              <strong>Scoring:</strong> Points accumulate each year from economic performance (GDP growth, inflation, employment, trade), plus end-game bonuses for overall stability, Bretton Woods cooperation, and crisis diplomacy.
                             </div>
                           </div>
                         )}

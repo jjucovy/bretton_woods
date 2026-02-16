@@ -2060,11 +2060,79 @@ function calculateYearEconomics(roomId) {
   console.log(`Calculated economics for year ${nextYear} in room ${roomId} with cross-country dynamics`);
 }
 
+// Award Phase 2 points each year based on that year's economic performance.
+// Called after calculateYearEconomics() so yearlyData[year] is populated.
+// This gives a running total players can see during Phase 2.
+function calculateYearlyPhase2Score(roomId, year) {
+  const room = globalState.rooms[roomId];
+  if (!room) return;
+
+  if (!room.phase2.yearlyScores) room.phase2.yearlyScores = {};
+  room.phase2.yearlyScores[year] = {};
+
+  console.log(`📊 Scoring year ${year} for room ${roomId}`);
+
+  Object.values(room.players).forEach(player => {
+    const rawCountry = player.country;
+    const country = normalizeCountryName(rawCountry);
+    let data = room.phase2.yearlyData[year]?.[country];
+    if (!data && rawCountry !== country) {
+      data = room.phase2.yearlyData[year]?.[rawCountry];
+    }
+    if (!data) return;
+
+    let yearScore = 0;
+
+    // GDP Growth: 15 pts per % (good growth ~3-5% = 45-75 pts)
+    yearScore += Math.round((data.gdpGrowth || 0) * 15);
+
+    // Inflation control: 0-30 pts
+    const inf = data.inflation || 0;
+    if (inf < 3) yearScore += 30;
+    else if (inf < 5) yearScore += 20;
+    else if (inf < 10) yearScore += 10;
+    else if (inf < 20) yearScore += 0;
+    else yearScore -= 15; // hyperinflation penalty
+
+    // Unemployment: 0-25 pts
+    const unemp = data.unemployment || 0;
+    if (unemp < 2) yearScore += 25;
+    else if (unemp < 4) yearScore += 18;
+    else if (unemp < 6) yearScore += 10;
+    else if (unemp < 10) yearScore += 0;
+    else yearScore -= 10; // mass unemployment penalty
+
+    // Trade balance: up to 15 pts
+    const tb = data.tradeBalance || 0;
+    if (tb > 500) yearScore += 15;
+    else if (tb > 100) yearScore += 10;
+    else if (tb > 0) yearScore += 5;
+    else if (tb < -500) yearScore -= 5;
+
+    yearScore = Math.max(0, yearScore); // Floor at 0 for any single year
+
+    room.phase2.yearlyScores[year][country] = yearScore;
+
+    // Add to running total
+    if (!room.scores) room.scores = {};
+    room.scores[country] = (room.scores[country] || 0) + yearScore;
+
+    console.log(`   ${country} year ${year}: +${yearScore} pts (total: ${room.scores[country]})`);
+  });
+
+  // Save updated phase2 running totals to DB
+  savePlayerScoresToDB(roomId, 'phase2').catch(err => {
+    console.error('⚠️ Failed to save yearly phase2 scores:', err);
+  });
+}
+
+// Final Phase 2 bonus — awarded once at game end for overall performance.
+// This is ON TOP of the yearly scores accumulated above.
 function calculatePhase2Scores(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
 
-  console.log(`\n📊 Calculating Phase 2 scores for room ${roomId}`);
+  console.log(`\n📊 Calculating Phase 2 FINAL BONUS scores for room ${roomId}`);
   console.log(`   Players:`, Object.values(room.players).map(p => `${p.country} -> ${normalizeCountryName(p.country)}`));
   console.log(`   YearlyData years:`, Object.keys(room.phase2.yearlyData || {}));
 
@@ -2074,7 +2142,6 @@ function calculatePhase2Scores(roomId) {
   Object.values(room.players).forEach(player => {
     const rawCountry = player.country;
     const country = normalizeCountryName(rawCountry);
-    console.log(`   Processing player: raw=${rawCountry}, normalized=${country}`);
 
     let score = 0;
     const breakdown = {
@@ -2083,15 +2150,23 @@ function calculatePhase2Scores(roomId) {
       unemployment: 0,
       trade: 0,
       stability: 0,
-      brettonWoods: 0
+      brettonWoods: 0,
+      crisisDiplomacy: 0,
+      yearlyTotal: 0
     };
 
-    // Calculate average performance
+    // Tally the yearly scores already awarded
+    let yearlyTotal = 0;
+    for (let y = 1947; y <= 1952; y++) {
+      yearlyTotal += room.phase2.yearlyScores?.[y]?.[country] || 0;
+    }
+    breakdown.yearlyTotal = yearlyTotal;
+
+    // Calculate averages for end-game bonus
     let totalGDP = 0, totalInflation = 0, totalUnemployment = 0, yearsCount = 0;
     let positiveTradeYears = 0;
 
     for (let year = 1947; year <= 1952; year++) {
-      // Try both normalized and raw country names
       let data = room.phase2.yearlyData[year]?.[country];
       if (!data && rawCountry !== country) {
         data = room.phase2.yearlyData[year]?.[rawCountry];
@@ -2106,49 +2181,37 @@ function calculatePhase2Scores(roomId) {
     }
 
     console.log(`   ${country}: found data for ${yearsCount} years`);
-    
+
     if (yearsCount > 0) {
       const avgGDP = totalGDP / yearsCount;
       const avgInflation = totalInflation / yearsCount;
       const avgUnemployment = totalUnemployment / yearsCount;
-      
-      // GDP Growth: 10 pts per % (increased importance)
-      breakdown.gdp = Math.round(avgGDP * 10);
+
+      // End-game GDP bonus: 8 pts per % average (e.g., 4% avg = 32 pts)
+      breakdown.gdp = Math.round(avgGDP * 8);
       score += breakdown.gdp;
-      
-      // Inflation control (inverse scoring)
-      if (avgInflation < 3) {
-        breakdown.inflation = 50; // Excellent price stability
-      } else if (avgInflation < 5) {
-        breakdown.inflation = 40;
-      } else if (avgInflation < 10) {
-        breakdown.inflation = 25;
-      } else if (avgInflation < 20) {
-        breakdown.inflation = 10;
-      } else {
-        breakdown.inflation = -10; // Hyperinflation penalty
-      }
+
+      // End-game inflation bonus
+      if (avgInflation < 3) breakdown.inflation = 40;
+      else if (avgInflation < 5) breakdown.inflation = 25;
+      else if (avgInflation < 10) breakdown.inflation = 10;
+      else if (avgInflation < 20) breakdown.inflation = 0;
+      else breakdown.inflation = -20;
       score += breakdown.inflation;
-      
-      // Unemployment (inverse scoring)
-      if (avgUnemployment < 2) {
-        breakdown.unemployment = 40; // Full employment
-      } else if (avgUnemployment < 4) {
-        breakdown.unemployment = 30;
-      } else if (avgUnemployment < 6) {
-        breakdown.unemployment = 15;
-      } else if (avgUnemployment < 10) {
-        breakdown.unemployment = 5;
-      } else {
-        breakdown.unemployment = -5; // High unemployment penalty
-      }
+
+      // End-game unemployment bonus
+      if (avgUnemployment < 2) breakdown.unemployment = 30;
+      else if (avgUnemployment < 4) breakdown.unemployment = 20;
+      else if (avgUnemployment < 6) breakdown.unemployment = 10;
+      else if (avgUnemployment < 10) breakdown.unemployment = 0;
+      else breakdown.unemployment = -10;
       score += breakdown.unemployment;
-      
-      // Trade balance consistency
-      breakdown.trade = positiveTradeYears * 8; // 8 pts per year with positive balance
+
+      // Trade consistency bonus
+      breakdown.trade = positiveTradeYears * 10;
       score += breakdown.trade;
-      
-      // Economic stability bonus (low variance)
+
+      // Stability bonus (low GDP variance)
       let gdpVariance = 0;
       for (let year = 1947; year <= 1952; year++) {
         const data = room.phase2.yearlyData[year]?.[country];
@@ -2157,67 +2220,58 @@ function calculatePhase2Scores(roomId) {
         }
       }
       const avgVariance = gdpVariance / yearsCount;
-      if (avgVariance < 1.5) {
-        breakdown.stability = 30; // Very stable growth
-      } else if (avgVariance < 3) {
-        breakdown.stability = 15;
-      } else if (avgVariance < 5) {
-        breakdown.stability = 5;
-      }
+      if (avgVariance < 1.5) breakdown.stability = 40;
+      else if (avgVariance < 3) breakdown.stability = 20;
+      else if (avgVariance < 5) breakdown.stability = 5;
       score += breakdown.stability;
-      
+
       // Bretton Woods cooperation bonus
       const agreementBonuses = calculateAgreementBonus(roomId);
       const bwBonus = agreementBonuses[country];
       if (bwBonus) {
-        // Award points for being part of Bretton Woods system
-        breakdown.brettonWoods = Math.round((bwBonus.gdpBonus + bwBonus.tradeBonus / 100) * 5);
+        breakdown.brettonWoods = Math.round((bwBonus.gdpBonus + bwBonus.tradeBonus / 100) * 8);
         score += breakdown.brettonWoods;
       }
-      
+
       // Crisis diplomatic points
       if (room.phase2.diplomaticPoints && room.phase2.diplomaticPoints[country]) {
-        breakdown.crisisDiplomacy = room.phase2.diplomaticPoints[country] * 2; // 2 pts per diplomatic point
+        breakdown.crisisDiplomacy = room.phase2.diplomaticPoints[country] * 3;
         score += breakdown.crisisDiplomacy;
       }
     }
-    
-    // Ensure score is a valid number
+
     const finalScore = isNaN(score) ? 0 : Math.round(score);
     phase2Scores[country] = finalScore;
     scoreBreakdowns[country] = breakdown;
 
-    // Initialize room.scores if needed and add Phase 2 score
+    // Add end-game bonus to running total
     if (!room.scores) room.scores = {};
-    const prevScore = typeof room.scores[country] === 'number' ? room.scores[country] : 0;
-    room.scores[country] = prevScore + finalScore;
+    room.scores[country] = (room.scores[country] || 0) + finalScore;
 
-    console.log(`   ${country}: Phase2 score=${finalScore}, Total score=${room.scores[country]}`);
+    console.log(`   ${country}: End-game bonus=${finalScore}, Yearly total=${yearlyTotal}, Grand total=${room.scores[country]}`);
   });
 
   // Store breakdowns for display
   room.phase2.scoreBreakdowns = scoreBreakdowns;
 
   console.log(`📊 Final scores:`, room.scores);
-
-  console.log(`Phase 2 final scores:`, phase2Scores);
+  console.log(`Phase 2 end-game bonuses:`, phase2Scores);
   console.log(`Score breakdowns:`, scoreBreakdowns);
 
-  // Save phase2_score to players table in DB
-  // Fire async - don't block the return
+  // Save final phase2_score to players table in DB
   (async () => {
     for (const [userId, player] of Object.entries(room.players)) {
       const country = normalizeCountryName(player.country) || player.country;
-      const p2score = phase2Scores[country] || 0;
-      if (p2score === 0) continue;
+      const totalP2 = (phase2Scores[country] || 0) +
+        Object.values(room.phase2.yearlyScores || {}).reduce((sum, ys) => sum + (ys[country] || 0), 0);
       try {
         await queryDatabase('updatePlayerPoints', {
           gameCode: roomId,
           userId: userId,
-          points: p2score,
+          points: totalP2,
           phase: 'phase2'
         });
-        console.log(`✅ phase2_score saved to DB: ${country} (user ${userId}) = ${p2score}`);
+        console.log(`✅ phase2_score saved to DB: ${country} (user ${userId}) = ${totalP2}`);
       } catch (err) {
         console.error(`❌ Failed to save phase2_score for ${country}:`, err.message);
       }
@@ -3900,6 +3954,9 @@ const countryId = countryData?.country_id || null;
           currentRoom.currentRound++; // Track Phase 2 progress in DB
           currentRoom.readyPlayers = [];
 
+          // Score this year's economic performance
+          calculateYearlyPhase2Score(roomId, currentRoom.phase2.currentYear);
+
           // Check for new crisis
           triggerCrisisIfNeeded(roomId, currentRoom.phase2.currentYear);
 
@@ -4774,6 +4831,9 @@ const countryId = countryData?.country_id || null;
           room.currentRound++;
           room.readyPlayers = [];
 
+          // Score this year's economic performance
+          calculateYearlyPhase2Score(roomId, room.phase2.currentYear);
+
           // Check for new crisis
           triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
 
@@ -5125,7 +5185,10 @@ const countryId = countryData?.country_id || null;
     room.currentRound++; // Track Phase 2 progress in DB (11=1946, 12=1947, etc.)
     room.readyPlayers = [];
     room.phase2.deploymentsThisYear = {}; // Reset deployment limits for new year
-    
+
+    // Score this year's economic performance
+    calculateYearlyPhase2Score(roomId, room.phase2.currentYear);
+
     // Check for crisis events this year
     triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
     
