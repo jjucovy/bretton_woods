@@ -4839,6 +4839,28 @@ const countryId = countryData?.country_id || null;
 
     console.log(`${country} (${normalizedCountry}) submitted response to "${crisis.title}": ${choice.text}`);
 
+    // Save crisis choice to database
+    try {
+      await queryDatabase('saveCrisisChoice', {
+        game_id: room.gameId || 0,
+        game_code: roomId,
+        crisis_id: crisis.id,
+        crisis_title: crisis.title,
+        crisis_year: currentYear,
+        player_id: playerid,
+        country: normalizedCountry,
+        choice_id: choiceId,
+        choice_text: choice.text,
+        choice_effects: choice.effects || null,
+        cross_effects: choice.crossEffects || null,
+        outcome_text: choice.outcome || '',
+        cost: choice.cost || 0
+      });
+      console.log(`✅ Crisis choice saved to database: ${normalizedCountry} → ${choiceId}`);
+    } catch (err) {
+      console.error(`⚠️ Failed to save crisis choice to database:`, err.message);
+    }
+
     // Check if all affected countries with active players have responded to THIS crisis
     const affectedCountriesWithPlayers = crisis.affectedCountries.filter(c => {
       const normalizedC = normalizeCountryName(c);
