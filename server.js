@@ -356,7 +356,11 @@ async function saveGameStateSnapshot(roomId, snapshotType) {
       phase,
       round_or_year: roundOrYear,
       players: Object.fromEntries(
-        Object.entries(room.players).map(([id, p]) => [id, { country: p.country, score: p.score || 0 }])
+        Object.entries(room.players).map(([id, p]) => {
+          const normCountry = normalizeCountryName(p.country) || p.country;
+          const score = p.score || room.scores?.[normCountry] || room.scores?.[p.country] || 0;
+          return [id, { country: p.country, score }];
+        })
       ),
       scores: room.scores || {},
       round_history: room.roundHistory || [],
