@@ -2604,10 +2604,10 @@ io.on('connection', (socket) => {
       const role = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1) ? 'superadmin' : 'player';
       console.log('Login successful, role:', role);
       
-      // Check for active game for this user
-      let activeGame = null;
+      // Get ALL active games for this player (multi-game support)
+      let myActiveGames = [];
       if (role === 'player') {
-        // Use getPlayerActiveGame action (matches PHP API)
+        // Use getPlayerActiveGame action - may return one or more games
         const gameResult = await queryDatabase('getPlayerActiveGame', {
           userId: dbUser.user_id
         });
@@ -2615,34 +2615,38 @@ io.on('connection', (socket) => {
         console.log('getPlayerActiveGame result:', JSON.stringify(gameResult));
 
         // Handle both array and single object responses
-        const game = Array.isArray(gameResult) ? gameResult[0] : gameResult;
+        const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
 
-        if (game && game.game_code) {
-          // Check if the game is actually still active (not completed)
-          const roomState = globalState.rooms[game.game_code];
-          const isCompleted = game.status === 'completed' ||
-            game.game_status === 'completed' ||
-            (roomState && roomState.gamePhase === 'complete');
+        for (const game of games) {
+          if (game && game.game_code) {
+            const roomState = globalState.rooms[game.game_code];
+            const isCompleted = game.status === 'completed' ||
+              game.game_status === 'completed' ||
+              (roomState && roomState.gamePhase === 'complete');
 
-          if (isCompleted) {
-            console.log(`⏭️ User's game ${game.game_code} is completed - releasing player to lobby`);
-          } else {
-            activeGame = {
-              game_id: game.game_id,
-              gameCode: game.game_code,
-              country_id: game.country_id,
-              country_code: game.country_code,
-              status: game.status
-            };
-            console.log(`✓ User has active game: ${activeGame.gameCode}`);
-            console.log(`  Country: ${activeGame.country_code} (ID: ${activeGame.country_id})`);
+            if (isCompleted) {
+              console.log(`⏭️ User's game ${game.game_code} is completed - skipping`);
+            } else {
+              myActiveGames.push({
+                game_id: game.game_id,
+                gameCode: game.game_code,
+                country_id: game.country_id,
+                country_code: game.country_code,
+                status: game.status,
+                playerCount: roomState ? Object.keys(roomState.players).length : 0,
+                gamePhase: roomState ? roomState.gamePhase : (game.status || 'unknown'),
+                currentRound: roomState ? roomState.currentRound : (game.current_round || 0),
+                currentYear: roomState?.phase2?.currentYear || null
+              });
+              console.log(`✓ User has active game: ${game.game_code} as ${game.country_code}`);
+            }
           }
         }
       }
-      
-      // Get available lobby games if user is a player and doesn't have active game
+
+      // Always get available lobby games for players (regardless of active games)
       let availableGames = [];
-      if (role === 'player' && !activeGame) {
+      if (role === 'player') {
         // Filter games that are in lobby phase and have room for new players
         const lobbyGames = Object.values(globalState.rooms).filter(room => {
           // Must be in lobby phase (not started)
@@ -2663,19 +2667,21 @@ io.on('connection', (socket) => {
         }));
         console.log(`   Found ${availableGames.length} available lobby games for player`);
       }
-      
-      socket.emit('loginResult', { 
-        success: true, 
+
+      // Always send player to lobby - never auto-join
+      socket.emit('loginResult', {
+        success: true,
         username: username,
         role: role,
         userId: dbUser.user_id,
-        activeGame: activeGame,
+        activeGame: null,
+        myActiveGames: myActiveGames,
         availableGames: availableGames
       });
-      
+
       console.log(`User logged in: ${username} (${role})`);
-      if (activeGame) console.log(`  Active game: ${activeGame.gameCode}`);
-      if (availableGames.length > 0) console.log(`  Available games: ${availableGames.length}`);
+      if (myActiveGames.length > 0) console.log(`  Active games: ${myActiveGames.length}`);
+      if (availableGames.length > 0) console.log(`  Available lobby games: ${availableGames.length}`);
       console.log('====================');
     } catch (error) {
       console.error('Login error:', error);
@@ -5374,7 +5380,46 @@ const countryId = countryData?.country_id || null;
   
   // Disconnect
   
-  // NEW: Get available games (for regular users without active game)
+  // Get all active games for a specific player (multi-game support)
+  socket.on('getPlayerActiveGames', async ({ playerId }) => {
+    console.log('getPlayerActiveGames request from playerId:', playerId);
+    const myActiveGames = [];
+
+    try {
+      const gameResult = await queryDatabase('getPlayerActiveGame', { userId: playerId });
+      const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
+
+      for (const game of games) {
+        if (game && game.game_code) {
+          const roomState = globalState.rooms[game.game_code];
+          const isCompleted = game.status === 'completed' ||
+            game.game_status === 'completed' ||
+            (roomState && roomState.gamePhase === 'complete');
+
+          if (!isCompleted) {
+            myActiveGames.push({
+              game_id: game.game_id,
+              gameCode: game.game_code,
+              country_id: game.country_id,
+              country_code: game.country_code,
+              status: game.status,
+              playerCount: roomState ? Object.keys(roomState.players).length : 0,
+              gamePhase: roomState ? roomState.gamePhase : (game.status || 'unknown'),
+              currentRound: roomState ? roomState.currentRound : (game.current_round || 0),
+              currentYear: roomState?.phase2?.currentYear || null
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching player active games:', err);
+    }
+
+    console.log(`Returning ${myActiveGames.length} active games for player ${playerId}`);
+    socket.emit('playerActiveGamesResult', { success: true, games: myActiveGames });
+  });
+
+  // Get available games (for regular users - lobby games they can join)
   socket.on('getAvailableGames', async ({ playerId }) => {
     console.log('getAvailableGames request from playerId:', playerId);
 
