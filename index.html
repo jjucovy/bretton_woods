@@ -283,9 +283,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
               const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
               const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
+              const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
 
-              if (savedPlayerId) {
-                // Always go to game lobby on reconnect
+              // Only fetch lobby on reconnect if user has a saved session
+              // (page refresh scenario - fresh login is handled by handleLogin)
+              if (savedPlayerId && savedUsername) {
                 console.log('User reconnected - showing game lobby');
                 setShowGameSelection(true);
                 setLoadingGames(true);
@@ -294,25 +296,23 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   socket.emit('getActiveGames', { playerId: savedPlayerId });
                   socket.once('activeGamesResult', ({ success, games }) => {
                     setLoadingGames(false);
-                    if (success) {
-                      setAvailableGames(games || []);
-                    }
+                    if (success) setAvailableGames(games || []);
                   });
                 } else {
-                  // Fetch both active games and available lobby games
-                  let gotAvailable = false, gotActive = false;
+                  // Fetch both active games and available lobby games in parallel
+                  let responses = 0;
+                  const checkDone = () => { if (++responses >= 2) setLoadingGames(false); };
+
                   socket.emit('getAvailableGames', { playerId: savedPlayerId });
                   socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
 
                   socket.once('availableGamesResult', ({ success, games }) => {
-                    gotAvailable = true;
                     if (success) setAvailableGames(games || []);
-                    if (gotActive) setLoadingGames(false);
+                    checkDone();
                   });
                   socket.once('playerActiveGamesResult', ({ success, games }) => {
-                    gotActive = true;
                     if (success) setMyActiveGames(games || []);
-                    if (gotAvailable) setLoadingGames(false);
+                    checkDone();
                   });
                 }
               }
@@ -575,29 +575,21 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
                 // Always go to game lobby
                 setShowGameSelection(true);
-                setLoadingGames(true);
 
                 if (role === 'superadmin') {
+                  setLoadingGames(true);
                   socket.emit('getActiveGames', { playerId: newUserId });
                   socket.once('activeGamesResult', ({ success, games }) => {
                     setLoadingGames(false);
                     if (success) setAvailableGames(games || []);
                   });
                 } else {
-                  // Fetch both available and player's active games
-                  let gotAvailable = false, gotActive = false;
+                  // New player - fetch available lobby games
+                  setLoadingGames(true);
                   socket.emit('getAvailableGames', { playerId: newUserId });
-                  socket.emit('getPlayerActiveGames', { playerId: newUserId });
-
                   socket.once('availableGamesResult', ({ success, games }) => {
-                    gotAvailable = true;
+                    setLoadingGames(false);
                     if (success) setAvailableGames(games || []);
-                    if (gotActive) setLoadingGames(false);
-                  });
-                  socket.once('playerActiveGamesResult', ({ success, games }) => {
-                    gotActive = true;
-                    if (success) setMyActiveGames(games || []);
-                    if (gotAvailable) setLoadingGames(false);
                   });
                 }
 
@@ -628,6 +620,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
 
                 console.log('Login successful. Role:', role);
+                console.log('Active games from login:', loginActiveGames?.length || 0);
+                console.log('Available games from login:', loginAvailableGames?.length || 0);
 
                 // Always go to game lobby
                 setShowGameSelection(true);
@@ -642,41 +636,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   return;
                 }
 
-                // REGULAR PLAYER: Show lobby with active games + available games
-                // Use data from login result if available, otherwise fetch
-                if (loginActiveGames) {
-                  setMyActiveGames(loginActiveGames);
-                }
-                if (loginAvailableGames && loginAvailableGames.length > 0) {
-                  setAvailableGames(loginAvailableGames);
-                  if (loginActiveGames) {
-                    setLoadingGames(false);
-                  } else {
-                    // Still need to fetch active games
-                    socket.emit('getPlayerActiveGames', { playerId: userId });
-                    socket.once('playerActiveGamesResult', ({ success, games }) => {
-                      setLoadingGames(false);
-                      if (success) setMyActiveGames(games || []);
-                    });
-                  }
-                } else {
-                  // Fetch both from server
-                  setLoadingGames(true);
-                  let gotAvailable = false, gotActive = false;
-                  socket.emit('getAvailableGames', { playerId: userId });
-                  socket.emit('getPlayerActiveGames', { playerId: userId });
-
-                  socket.once('availableGamesResult', ({ success, games }) => {
-                    gotAvailable = true;
-                    if (success) setAvailableGames(games || []);
-                    if (gotActive) setLoadingGames(false);
-                  });
-                  socket.once('playerActiveGamesResult', ({ success, games }) => {
-                    gotActive = true;
-                    if (success) setMyActiveGames(games || []);
-                    if (gotAvailable) setLoadingGames(false);
-                  });
-                }
+                // REGULAR PLAYER: Use data from login response directly
+                // Server already returns both myActiveGames and availableGames
+                setMyActiveGames(loginActiveGames || []);
+                setAvailableGames(loginAvailableGames || []);
+                setLoadingGames(false);
 
               } else {
                 console.log('Login failed:', message);
