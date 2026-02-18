@@ -2616,9 +2616,10 @@ io.on('connection', (socket) => {
 
         // Handle both array and single object responses
         const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
-        console.log(Object.values(games))
         for (const game of games) {
           if (game && game.game_code) {
+            console.log(Object.values(games))
+        
             const roomState = globalState.rooms[game.game_code];
             const isCompleted = game.status === 'completed' ||
               game.game_status === 'completed' ||
