@@ -2618,7 +2618,7 @@ io.on('connection', (socket) => {
         const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
         for (const game of games) {
           if (game && game.game_code) {
-            console.log(Object.values(games))
+            console.log('Object.values(games)')
         
             const roomState = globalState.rooms[game.game_code];
             const isCompleted = game.status === 'completed' ||
