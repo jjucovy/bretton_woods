@@ -5389,7 +5389,7 @@ const countryId = countryData?.country_id || null;
     try {
       const gameResult = await queryDatabase('getPlayerActiveGame', { userId: playerId });
       const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
-            console.log(Object.values(games))
+      
 
       for (const game of games) {
         if (game && game.game_code) {
@@ -5399,6 +5399,7 @@ const countryId = countryData?.country_id || null;
             (roomState && roomState.gamePhase === 'complete');
 
           if (!isCompleted) {
+            console.log(game.game_id)
             myActiveGames.push({
               game_id: game.game_id,
               gameCode: game.game_code,
