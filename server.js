@@ -2618,7 +2618,6 @@ io.on('connection', (socket) => {
         const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
         for (const game of games) {
           if (game && game.game_code) {
-            console.log('Object.values(games)')
         
             const roomState = globalState.rooms[game.game_code];
             const isCompleted = game.status === 'completed' ||
@@ -2628,6 +2627,8 @@ io.on('connection', (socket) => {
             if (isCompleted) {
               console.log(`⏭️ User's game ${game.game_code} is completed - skipping`);
             } else {
+              
+            console.log(Object.values(games))
               myActiveGames.push({
                 game_id: game.game_id,
                 gameCode: game.game_code,
