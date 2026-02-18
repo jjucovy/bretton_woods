@@ -2628,7 +2628,7 @@ io.on('connection', (socket) => {
               console.log(`⏭️ User's game ${game.game_code} is completed - skipping`);
             } else {
               
-            console.log(Object.values(games))
+            console.log(Object.values(game))
               myActiveGames.push({
                 game_id: game.game_id,
                 gameCode: game.game_code,
