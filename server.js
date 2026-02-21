@@ -5399,6 +5399,7 @@ const countryId = countryData?.country_id || null;
             (roomState && roomState.gamePhase === 'complete');
 
           if (!isCompleted) {
+            debugger
             console.log("game.game_id")
             myActiveGames.push({
               game_id: game.game_id,
