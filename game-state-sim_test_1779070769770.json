@@ -117,12 +117,12 @@
     },
     "1947": {
       "USA": {
-        "gdpGrowth": -54.2,
+        "gdpGrowth": 43.2,
         "goldReserves": 19963,
-        "unemployment": 15,
+        "unemployment": 0,
         "tradeBalance": 11235,
-        "inflation": 17.2,
-        "industrialOutput": 46,
+        "inflation": 18.9,
+        "industrialOutput": 143,
         "exchangeRate": 1,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -135,12 +135,12 @@
         }
       },
       "UK": {
-        "gdpGrowth": 12.6,
+        "gdpGrowth": 36.5,
         "goldReserves": 2229,
         "unemployment": 0,
         "tradeBalance": 396,
-        "inflation": 6.8,
-        "industrialOutput": 34,
+        "inflation": 6.4,
+        "industrialOutput": 41,
         "exchangeRate": 4.42,
         "exchangeRateChange": 7.8,
         "militarySpending": 5,
@@ -153,12 +153,12 @@
         }
       },
       "USSR": {
-        "gdpGrowth": 18,
+        "gdpGrowth": 42.1,
         "goldReserves": 1600,
-        "unemployment": 0.5,
+        "unemployment": 0,
         "tradeBalance": 1391,
-        "inflation": 20.5,
-        "industrialOutput": 45,
+        "inflation": 18.7,
+        "industrialOutput": 54,
         "exchangeRate": 0,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -171,12 +171,12 @@
         }
       },
       "France": {
-        "gdpGrowth": 14.6,
+        "gdpGrowth": -202.7,
         "goldReserves": 735,
-        "unemployment": 1.8,
+        "unemployment": 15,
         "tradeBalance": -183,
-        "inflation": 53.7,
-        "industrialOutput": 14,
+        "inflation": 54.7,
+        "industrialOutput": -12,
         "exchangeRate": 149.55,
         "exchangeRateChange": 20.4,
         "militarySpending": 5,
@@ -189,12 +189,12 @@
         }
       },
       "China": {
-        "gdpGrowth": 19.9,
+        "gdpGrowth": 45,
         "goldReserves": 256,
-        "unemployment": 4.5,
+        "unemployment": 0,
         "tradeBalance": 989,
-        "inflation": 240.7,
-        "industrialOutput": 6,
+        "inflation": 240.2,
+        "industrialOutput": 7,
         "exchangeRate": 6524.46,
         "exchangeRateChange": 74.8,
         "militarySpending": 5,
@@ -207,12 +207,12 @@
         }
       },
       "India": {
-        "gdpGrowth": 11.6,
+        "gdpGrowth": 36.6,
         "goldReserves": 1207,
-        "unemployment": 4.9,
+        "unemployment": 0,
         "tradeBalance": 730,
-        "inflation": 11,
-        "industrialOutput": 7,
+        "inflation": 13.6,
+        "industrialOutput": 8,
         "exchangeRate": 3.24,
         "exchangeRateChange": -1.8,
         "militarySpending": 5,
@@ -225,12 +225,12 @@
         }
       },
       "Argentina": {
-        "gdpGrowth": 13.3,
+        "gdpGrowth": 36.3,
         "goldReserves": 1631,
-        "unemployment": 0.7,
+        "unemployment": 0,
         "tradeBalance": 3130,
-        "inflation": 17.3,
-        "industrialOutput": 9,
+        "inflation": 20,
+        "industrialOutput": 11,
         "exchangeRate": 3.97,
         "exchangeRateChange": -4.9,
         "militarySpending": 5,
@@ -245,12 +245,12 @@
     },
     "1948": {
       "USA": {
-        "gdpGrowth": -52.7,
+        "gdpGrowth": 42.5,
         "goldReserves": 19960,
-        "unemployment": 15,
+        "unemployment": 0,
         "tradeBalance": 14670,
-        "inflation": 16.4,
-        "industrialOutput": 22,
+        "inflation": 18.3,
+        "industrialOutput": 204,
         "exchangeRate": 1,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -263,14 +263,14 @@
         }
       },
       "UK": {
-        "gdpGrowth": 11,
+        "gdpGrowth": 36.7,
         "goldReserves": 2176,
         "unemployment": 0,
-        "tradeBalance": 2154,
-        "inflation": 6.3,
-        "industrialOutput": 38,
-        "exchangeRate": 4.15,
-        "exchangeRateChange": -4.9,
+        "tradeBalance": 2126,
+        "inflation": 5.3,
+        "industrialOutput": 56,
+        "exchangeRate": 4.11,
+        "exchangeRateChange": -5.6,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 75,
         "military": {
@@ -281,12 +281,12 @@
         }
       },
       "USSR": {
-        "gdpGrowth": 17.5,
+        "gdpGrowth": 42.6,
         "goldReserves": 1219,
         "unemployment": 0,
         "tradeBalance": 3282,
-        "inflation": 19.9,
-        "industrialOutput": 53,
+        "inflation": 19.3,
+        "industrialOutput": 77,
         "exchangeRate": 0,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -299,14 +299,14 @@
         }
       },
       "France": {
-        "gdpGrowth": 14.7,
+        "gdpGrowth": -203.5,
         "goldReserves": 692,
-        "unemployment": 0,
-        "tradeBalance": 790,
-        "inflation": 56,
-        "industrialOutput": 16,
-        "exchangeRate": 171.38,
-        "exchangeRateChange": 11.7,
+        "unemployment": 15,
+        "tradeBalance": 789,
+        "inflation": 55,
+        "industrialOutput": 12,
+        "exchangeRate": 170.97,
+        "exchangeRateChange": 11.5,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 50,
         "military": {
@@ -317,14 +317,14 @@
         }
       },
       "China": {
-        "gdpGrowth": 20.1,
+        "gdpGrowth": 43.9,
         "goldReserves": 277,
-        "unemployment": 1.4,
-        "tradeBalance": 2453,
-        "inflation": 252,
-        "industrialOutput": 7,
-        "exchangeRate": 12295.67,
-        "exchangeRateChange": 69.8,
+        "unemployment": 0,
+        "tradeBalance": 2449,
+        "inflation": 250.7,
+        "industrialOutput": 10,
+        "exchangeRate": 12238.26,
+        "exchangeRateChange": 69.1,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -335,14 +335,14 @@
         }
       },
       "India": {
-        "gdpGrowth": 12.6,
+        "gdpGrowth": 39.3,
         "goldReserves": 1224,
-        "unemployment": 2,
+        "unemployment": 0,
         "tradeBalance": 1660,
         "inflation": 12.1,
-        "industrialOutput": 8,
-        "exchangeRate": 3.04,
-        "exchangeRateChange": -4.9,
+        "industrialOutput": 11,
+        "exchangeRate": 3.05,
+        "exchangeRateChange": -4.6,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -353,14 +353,14 @@
         }
       },
       "Argentina": {
-        "gdpGrowth": 13.4,
+        "gdpGrowth": 36.2,
         "goldReserves": 1682,
         "unemployment": 0,
-        "tradeBalance": 4998,
-        "inflation": 16.4,
-        "industrialOutput": 10,
-        "exchangeRate": 3.35,
-        "exchangeRateChange": -12.5,
+        "tradeBalance": 4999,
+        "inflation": 19.5,
+        "industrialOutput": 15,
+        "exchangeRate": 3.37,
+        "exchangeRateChange": -12.2,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -373,12 +373,12 @@
     },
     "1949": {
       "USA": {
-        "gdpGrowth": -53.2,
+        "gdpGrowth": 42.6,
         "goldReserves": 19992,
-        "unemployment": 15,
+        "unemployment": 0,
         "tradeBalance": 18105,
-        "inflation": 16.6,
-        "industrialOutput": 10,
+        "inflation": 17.3,
+        "industrialOutput": 291,
         "exchangeRate": 1,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -391,14 +391,14 @@
         }
       },
       "UK": {
-        "gdpGrowth": 12.3,
+        "gdpGrowth": 36.7,
         "goldReserves": 2143,
         "unemployment": 0,
-        "tradeBalance": 4102,
-        "inflation": 6.5,
-        "industrialOutput": 43,
-        "exchangeRate": 3.54,
-        "exchangeRateChange": -11.8,
+        "tradeBalance": 4070,
+        "inflation": 5.2,
+        "industrialOutput": 77,
+        "exchangeRate": 3.46,
+        "exchangeRateChange": -12.7,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 75,
         "military": {
@@ -409,12 +409,12 @@
         }
       },
       "USSR": {
-        "gdpGrowth": 16.6,
+        "gdpGrowth": 40.6,
         "goldReserves": 855,
         "unemployment": 0,
         "tradeBalance": 4973,
-        "inflation": 21.2,
-        "industrialOutput": 62,
+        "inflation": 20.2,
+        "industrialOutput": 108,
         "exchangeRate": 0,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -427,14 +427,14 @@
         }
       },
       "France": {
-        "gdpGrowth": 19,
+        "gdpGrowth": -199.3,
         "goldReserves": 663,
-        "unemployment": 0,
-        "tradeBalance": 2472,
-        "inflation": 67.9,
-        "industrialOutput": 18,
-        "exchangeRate": 328.69,
-        "exchangeRateChange": 73.4,
+        "unemployment": 15,
+        "tradeBalance": 2467,
+        "inflation": 65.4,
+        "industrialOutput": -12,
+        "exchangeRate": 325.93,
+        "exchangeRateChange": 72.5,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 50,
         "military": {
@@ -445,14 +445,14 @@
         }
       },
       "China": {
-        "gdpGrowth": 20,
+        "gdpGrowth": 43.6,
         "goldReserves": 312,
         "unemployment": 0,
-        "tradeBalance": 3807,
-        "inflation": 266.4,
-        "industrialOutput": 8,
-        "exchangeRate": 22866.87,
-        "exchangeRateChange": 67.8,
+        "tradeBalance": 3798,
+        "inflation": 262.9,
+        "industrialOutput": 14,
+        "exchangeRate": 22605.9,
+        "exchangeRateChange": 66.8,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -463,14 +463,14 @@
         }
       },
       "India": {
-        "gdpGrowth": 13.1,
+        "gdpGrowth": 39.4,
         "goldReserves": 1250,
         "unemployment": 0,
-        "tradeBalance": 2550,
-        "inflation": 11.6,
-        "industrialOutput": 9,
-        "exchangeRate": 2.74,
-        "exchangeRateChange": -8,
+        "tradeBalance": 2547,
+        "inflation": 12.7,
+        "industrialOutput": 15,
+        "exchangeRate": 2.72,
+        "exchangeRateChange": -8.6,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -481,14 +481,14 @@
         }
       },
       "Argentina": {
-        "gdpGrowth": 13,
+        "gdpGrowth": 36,
         "goldReserves": 1751,
         "unemployment": 0,
-        "tradeBalance": 6828,
-        "inflation": 14.7,
-        "industrialOutput": 12,
-        "exchangeRate": 2.51,
-        "exchangeRateChange": -20,
+        "tradeBalance": 6831,
+        "inflation": 19.2,
+        "industrialOutput": 21,
+        "exchangeRate": 2.54,
+        "exchangeRateChange": -19.6,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -501,12 +501,12 @@
     },
     "1950": {
       "USA": {
-        "gdpGrowth": -52.8,
+        "gdpGrowth": 43,
         "goldReserves": 20058,
-        "unemployment": 15,
+        "unemployment": 0,
         "tradeBalance": 21540,
-        "inflation": 16,
-        "industrialOutput": 5,
+        "inflation": 17.4,
+        "industrialOutput": 416,
         "exchangeRate": 1,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -519,14 +519,14 @@
         }
       },
       "UK": {
-        "gdpGrowth": 13.2,
+        "gdpGrowth": 37,
         "goldReserves": 2129,
         "unemployment": 0,
-        "tradeBalance": 5889,
-        "inflation": 2.5,
-        "industrialOutput": 49,
-        "exchangeRate": 1.59,
-        "exchangeRateChange": -44,
+        "tradeBalance": 5855,
+        "inflation": 1.9,
+        "industrialOutput": 106,
+        "exchangeRate": 1.53,
+        "exchangeRateChange": -44.6,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 75,
         "military": {
@@ -537,12 +537,12 @@
         }
       },
       "USSR": {
-        "gdpGrowth": 16.2,
+        "gdpGrowth": 41.7,
         "goldReserves": 508,
         "unemployment": 0,
         "tradeBalance": 6664,
-        "inflation": 21.5,
-        "industrialOutput": 72,
+        "inflation": 19,
+        "industrialOutput": 153,
         "exchangeRate": 0,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -555,14 +555,14 @@
         }
       },
       "France": {
-        "gdpGrowth": 18,
+        "gdpGrowth": -200.2,
         "goldReserves": 651,
-        "unemployment": 0,
-        "tradeBalance": 4073,
-        "inflation": 75.5,
-        "industrialOutput": 21,
-        "exchangeRate": 563.57,
-        "exchangeRateChange": 57.2,
+        "unemployment": 15,
+        "tradeBalance": 4063,
+        "inflation": 73.8,
+        "industrialOutput": 12,
+        "exchangeRate": 554.75,
+        "exchangeRateChange": 56.2,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 50,
         "military": {
@@ -573,14 +573,14 @@
         }
       },
       "China": {
-        "gdpGrowth": 18.7,
+        "gdpGrowth": 44.7,
         "goldReserves": 360,
         "unemployment": 0,
-        "tradeBalance": 5157,
-        "inflation": 280.5,
-        "industrialOutput": 9,
-        "exchangeRate": 42277.41,
-        "exchangeRateChange": 66.9,
+        "tradeBalance": 5141,
+        "inflation": 276.3,
+        "industrialOutput": 20,
+        "exchangeRate": 41425.31,
+        "exchangeRateChange": 65.6,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -591,14 +591,14 @@
         }
       },
       "India": {
-        "gdpGrowth": 13.6,
+        "gdpGrowth": 39.1,
         "goldReserves": 1285,
         "unemployment": 0,
-        "tradeBalance": 3480,
-        "inflation": 12.5,
-        "industrialOutput": 10,
-        "exchangeRate": 2.83,
-        "exchangeRateChange": 2.6,
+        "tradeBalance": 3477,
+        "inflation": 11.9,
+        "industrialOutput": 21,
+        "exchangeRate": 2.81,
+        "exchangeRateChange": 2.7,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -609,14 +609,14 @@
         }
       },
       "Argentina": {
-        "gdpGrowth": 14.4,
+        "gdpGrowth": 37.5,
         "goldReserves": 1837,
         "unemployment": 0,
-        "tradeBalance": 8418,
-        "inflation": 14,
-        "industrialOutput": 14,
-        "exchangeRate": 1.63,
-        "exchangeRateChange": -27.9,
+        "tradeBalance": 8427,
+        "inflation": 17,
+        "industrialOutput": 29,
+        "exchangeRate": 1.69,
+        "exchangeRateChange": -26.7,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -629,12 +629,12 @@
     },
     "1951": {
       "USA": {
-        "gdpGrowth": -53.8,
+        "gdpGrowth": 41.7,
         "goldReserves": 20158,
-        "unemployment": 15,
+        "unemployment": 0,
         "tradeBalance": 24975,
-        "inflation": 16.7,
-        "industrialOutput": 2,
+        "inflation": 17.7,
+        "industrialOutput": 590,
         "exchangeRate": 1,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -647,14 +647,14 @@
         }
       },
       "UK": {
-        "gdpGrowth": 12.2,
+        "gdpGrowth": 37,
         "goldReserves": 2133,
         "unemployment": 0,
-        "tradeBalance": 7757,
-        "inflation": 0.6,
-        "industrialOutput": 55,
-        "exchangeRate": 1.04,
-        "exchangeRateChange": -27.9,
+        "tradeBalance": 7721,
+        "inflation": -2.2,
+        "industrialOutput": 145,
+        "exchangeRate": 0.99,
+        "exchangeRateChange": -28.4,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 75,
         "military": {
@@ -665,12 +665,12 @@
         }
       },
       "USSR": {
-        "gdpGrowth": 16.7,
+        "gdpGrowth": 41.6,
         "goldReserves": 178,
         "unemployment": 0,
         "tradeBalance": 8355,
-        "inflation": 21,
-        "industrialOutput": 84,
+        "inflation": 19.3,
+        "industrialOutput": 217,
         "exchangeRate": 0,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -683,14 +683,14 @@
         }
       },
       "France": {
-        "gdpGrowth": 15.8,
+        "gdpGrowth": -204.2,
         "goldReserves": 655,
-        "unemployment": 0,
-        "tradeBalance": 5388,
-        "inflation": 75.2,
-        "industrialOutput": 24,
-        "exchangeRate": 582.93,
-        "exchangeRateChange": 2.7,
+        "unemployment": 15,
+        "tradeBalance": 5378,
+        "inflation": 74.1,
+        "industrialOutput": -13,
+        "exchangeRate": 567.2,
+        "exchangeRateChange": 1.8,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 50,
         "military": {
@@ -701,14 +701,14 @@
         }
       },
       "China": {
-        "gdpGrowth": 21.4,
+        "gdpGrowth": 44.8,
         "goldReserves": 426,
         "unemployment": 0,
-        "tradeBalance": 6903,
-        "inflation": 291.9,
-        "industrialOutput": 11,
-        "exchangeRate": 77796.78,
-        "exchangeRateChange": 66.2,
+        "tradeBalance": 6878,
+        "inflation": 286,
+        "industrialOutput": 28,
+        "exchangeRate": 75334,
+        "exchangeRateChange": 64.5,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -719,14 +719,14 @@
         }
       },
       "India": {
-        "gdpGrowth": 13.4,
+        "gdpGrowth": 37.8,
         "goldReserves": 1329,
         "unemployment": 0,
-        "tradeBalance": 4335,
-        "inflation": 11.1,
-        "industrialOutput": 11,
-        "exchangeRate": 2.3,
-        "exchangeRateChange": -15,
+        "tradeBalance": 4329,
+        "inflation": 11.7,
+        "industrialOutput": 29,
+        "exchangeRate": 2.26,
+        "exchangeRateChange": -15.7,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -737,14 +737,14 @@
         }
       },
       "Argentina": {
-        "gdpGrowth": 12.9,
-        "goldReserves": 1938,
+        "gdpGrowth": 37.6,
+        "goldReserves": 1939,
         "unemployment": 0,
-        "tradeBalance": 9976,
-        "inflation": 10.3,
-        "industrialOutput": 16,
-        "exchangeRate": 0.93,
-        "exchangeRateChange": -34.3,
+        "tradeBalance": 9988,
+        "inflation": 13.8,
+        "industrialOutput": 41,
+        "exchangeRate": 0.98,
+        "exchangeRateChange": -33.8,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -757,12 +757,12 @@
     },
     "1952": {
       "USA": {
-        "gdpGrowth": -53.3,
+        "gdpGrowth": 42.5,
         "goldReserves": 20293,
-        "unemployment": 15,
+        "unemployment": 0,
         "tradeBalance": 28410,
-        "inflation": 16.3,
-        "industrialOutput": 1,
+        "inflation": 19,
+        "industrialOutput": 841,
         "exchangeRate": 1,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -775,14 +775,14 @@
         }
       },
       "UK": {
-        "gdpGrowth": 12.8,
+        "gdpGrowth": 36.9,
         "goldReserves": 2156,
         "unemployment": 0,
-        "tradeBalance": 9584,
-        "inflation": -3.3,
-        "industrialOutput": 62,
-        "exchangeRate": 0.57,
-        "exchangeRateChange": -36.2,
+        "tradeBalance": 9542,
+        "inflation": -3.7,
+        "industrialOutput": 199,
+        "exchangeRate": 0.53,
+        "exchangeRateChange": -37.3,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 75,
         "military": {
@@ -793,12 +793,12 @@
         }
       },
       "USSR": {
-        "gdpGrowth": 17.1,
+        "gdpGrowth": 41.6,
         "goldReserves": 0,
         "unemployment": 0,
         "tradeBalance": 10046,
-        "inflation": 20.4,
-        "industrialOutput": 98,
+        "inflation": 19.2,
+        "industrialOutput": 307,
         "exchangeRate": 0,
         "exchangeRateChange": 0,
         "militarySpending": 5,
@@ -811,14 +811,14 @@
         }
       },
       "France": {
-        "gdpGrowth": 14.1,
+        "gdpGrowth": -203.1,
         "goldReserves": 672,
-        "unemployment": 0,
-        "tradeBalance": 6703,
-        "inflation": 76.6,
-        "industrialOutput": 27,
-        "exchangeRate": 562.29,
-        "exchangeRateChange": -2.8,
+        "unemployment": 15,
+        "tradeBalance": 6693,
+        "inflation": 73.7,
+        "industrialOutput": 13,
+        "exchangeRate": 542.64,
+        "exchangeRateChange": -3.5,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 50,
         "military": {
@@ -829,14 +829,14 @@
         }
       },
       "China": {
-        "gdpGrowth": 20.4,
+        "gdpGrowth": 45.8,
         "goldReserves": 509,
         "unemployment": 0,
-        "tradeBalance": 8631,
-        "inflation": 300.5,
-        "industrialOutput": 13,
-        "exchangeRate": 139695.79,
-        "exchangeRateChange": 62.7,
+        "tradeBalance": 8596,
+        "inflation": 293.8,
+        "industrialOutput": 40,
+        "exchangeRate": 133288.45,
+        "exchangeRateChange": 60.5,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -847,14 +847,14 @@
         }
       },
       "India": {
-        "gdpGrowth": 13.2,
+        "gdpGrowth": 39,
         "goldReserves": 1382,
         "unemployment": 0,
-        "tradeBalance": 5169,
-        "inflation": 8.1,
-        "industrialOutput": 12,
-        "exchangeRate": 1.75,
-        "exchangeRateChange": -19.1,
+        "tradeBalance": 5163,
+        "inflation": 9.1,
+        "industrialOutput": 40,
+        "exchangeRate": 1.72,
+        "exchangeRateChange": -19.2,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -865,14 +865,14 @@
         }
       },
       "Argentina": {
-        "gdpGrowth": 13.3,
-        "goldReserves": 2050,
+        "gdpGrowth": 35.6,
+        "goldReserves": 2051,
         "unemployment": 0,
-        "tradeBalance": 10996,
-        "inflation": 8.9,
-        "industrialOutput": 18,
-        "exchangeRate": 0.44,
-        "exchangeRateChange": -42,
+        "tradeBalance": 11012,
+        "inflation": 12.4,
+        "industrialOutput": 57,
+        "exchangeRate": 0.48,
+        "exchangeRateChange": -41.2,
         "militarySpending": 5,
         "deploymentMaintenanceCost": 0,
         "military": {
@@ -888,21 +888,21 @@
     "1946": {
       "USA": {
         "centralBankRate": 3,
-        "exchangeRate": 35,
+        "exchangeRate": 1,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069621465
+        "submittedAt": 1779071599923
       },
       "UK": {
         "centralBankRate": 3,
-        "exchangeRate": 4,
+        "exchangeRate": 4.03,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069621515
+        "submittedAt": 1779071599975
       },
       "USSR": {
         "centralBankRate": 3,
@@ -911,16 +911,16 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069621565
+        "submittedAt": 1779071600027
       },
       "France": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 119.11,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069621615
+        "submittedAt": 1779071600075
       },
       "China": {
         "centralBankRate": 3,
@@ -929,45 +929,45 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069621665
+        "submittedAt": 1779071600126
       },
       "India": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 3.31,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069621715
+        "submittedAt": 1779071600177
       },
       "Argentina": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 4.23,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069621766
+        "submittedAt": 1779071600228
       }
     },
     "1947": {
       "USA": {
         "centralBankRate": 3,
-        "exchangeRate": 35,
+        "exchangeRate": 1,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069623022
+        "submittedAt": 1779071601484
       },
       "UK": {
         "centralBankRate": 3,
-        "exchangeRate": 4,
+        "exchangeRate": 4.03,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069623071
+        "submittedAt": 1779071601535
       },
       "USSR": {
         "centralBankRate": 3,
@@ -976,16 +976,16 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069623122
+        "submittedAt": 1779071601585
       },
       "France": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 119.11,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069623172
+        "submittedAt": 1779071601636
       },
       "China": {
         "centralBankRate": 3,
@@ -994,45 +994,45 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069623222
+        "submittedAt": 1779071601686
       },
       "India": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 3.31,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069623272
+        "submittedAt": 1779071601739
       },
       "Argentina": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 4.23,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069623323
+        "submittedAt": 1779071601786
       }
     },
     "1948": {
       "USA": {
         "centralBankRate": 3,
-        "exchangeRate": 35,
+        "exchangeRate": 1,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069624577
+        "submittedAt": 1779071603140
       },
       "UK": {
         "centralBankRate": 3,
-        "exchangeRate": 4,
+        "exchangeRate": 4.03,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069624627
+        "submittedAt": 1779071603191
       },
       "USSR": {
         "centralBankRate": 3,
@@ -1041,16 +1041,16 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069624678
+        "submittedAt": 1779071603241
       },
       "France": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 119.11,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069624729
+        "submittedAt": 1779071603292
       },
       "China": {
         "centralBankRate": 3,
@@ -1059,45 +1059,45 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069624780
+        "submittedAt": 1779071603343
       },
       "India": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 3.31,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069624831
+        "submittedAt": 1779071603394
       },
       "Argentina": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 4.23,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069624881
+        "submittedAt": 1779071603444
       }
     },
     "1949": {
       "USA": {
         "centralBankRate": 3,
-        "exchangeRate": 35,
+        "exchangeRate": 1,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069626336
+        "submittedAt": 1779071604798
       },
       "UK": {
         "centralBankRate": 3,
-        "exchangeRate": 4,
+        "exchangeRate": 4.03,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069626387
+        "submittedAt": 1779071604858
       },
       "USSR": {
         "centralBankRate": 3,
@@ -1106,16 +1106,16 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069626437
+        "submittedAt": 1779071604909
       },
       "France": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 119.11,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069626487
+        "submittedAt": 1779071604954
       },
       "China": {
         "centralBankRate": 3,
@@ -1124,45 +1124,45 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069626537
+        "submittedAt": 1779071605004
       },
       "India": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 3.31,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069626587
+        "submittedAt": 1779071605059
       },
       "Argentina": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 4.23,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069626637
+        "submittedAt": 1779071605105
       }
     },
     "1950": {
       "USA": {
         "centralBankRate": 3,
-        "exchangeRate": 35,
+        "exchangeRate": 1,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069627589
+        "submittedAt": 1779071606055
       },
       "UK": {
         "centralBankRate": 3,
-        "exchangeRate": 4,
+        "exchangeRate": 4.03,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069627639
+        "submittedAt": 1779071606103
       },
       "USSR": {
         "centralBankRate": 3,
@@ -1171,16 +1171,16 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069627689
+        "submittedAt": 1779071606154
       },
       "France": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 119.11,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069627739
+        "submittedAt": 1779071606204
       },
       "China": {
         "centralBankRate": 3,
@@ -1189,45 +1189,45 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069627789
+        "submittedAt": 1779071606254
       },
       "India": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 3.31,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069627840
+        "submittedAt": 1779071606310
       },
       "Argentina": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 4.23,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069627890
+        "submittedAt": 1779071606362
       }
     },
     "1951": {
       "USA": {
         "centralBankRate": 3,
-        "exchangeRate": 35,
+        "exchangeRate": 1,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069629145
+        "submittedAt": 1779071607608
       },
       "UK": {
         "centralBankRate": 3,
-        "exchangeRate": 4,
+        "exchangeRate": 4.03,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069629195
+        "submittedAt": 1779071607658
       },
       "USSR": {
         "centralBankRate": 3,
@@ -1236,16 +1236,16 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069629246
+        "submittedAt": 1779071607708
       },
       "France": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 119.11,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069629296
+        "submittedAt": 1779071607758
       },
       "China": {
         "centralBankRate": 3,
@@ -1254,45 +1254,45 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069629347
+        "submittedAt": 1779071607817
       },
       "India": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 3.31,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069629396
+        "submittedAt": 1779071607858
       },
       "Argentina": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 4.23,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069629446
+        "submittedAt": 1779071607908
       }
     },
     "1952": {
       "USA": {
         "centralBankRate": 3,
-        "exchangeRate": 35,
+        "exchangeRate": 1,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069630701
+        "submittedAt": 1779071608861
       },
       "UK": {
         "centralBankRate": 3,
-        "exchangeRate": 4,
+        "exchangeRate": 4.03,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069630751
+        "submittedAt": 1779071608911
       },
       "USSR": {
         "centralBankRate": 3,
@@ -1301,16 +1301,16 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069630801
+        "submittedAt": 1779071608969
       },
       "France": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 119.11,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069630852
+        "submittedAt": 1779071609012
       },
       "China": {
         "centralBankRate": 3,
@@ -1319,25 +1319,25 @@
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069630903
+        "submittedAt": 1779071609063
       },
       "India": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 3.31,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069630953
+        "submittedAt": 1779071609113
       },
       "Argentina": {
         "centralBankRate": 3,
-        "exchangeRate": 3.5,
+        "exchangeRate": 4.23,
         "tariffRate": 15,
         "militarySpending": 5,
         "militarySize": 500000,
         "isCommandEconomy": false,
-        "submittedAt": 1779069631003
+        "submittedAt": 1779071609164
       }
     }
   },
@@ -1463,10 +1463,10 @@
         },
         "triggeredByDeployment": false,
         "triggerReason": null,
-        "triggeredAt": 1779069621261,
+        "triggeredAt": 1779071599716,
         "resolved": false,
         "responses": {},
-        "resolvedAt": 1779069622319,
+        "resolvedAt": 1779071600781,
         "autoResolved": true
       },
       {
@@ -1544,10 +1544,110 @@
         },
         "triggeredByDeployment": false,
         "triggerReason": null,
-        "triggeredAt": 1779069622621,
+        "triggeredAt": 1779071601085,
         "resolved": false,
         "responses": {},
-        "resolvedAt": 1779069623875,
+        "resolvedAt": 1779071602337,
+        "autoResolved": true
+      },
+      {
+        "id": "argentina-british-debt",
+        "year": 1947,
+        "title": "🇦🇷 British Debt to Argentina",
+        "description": "Britain owes Argentina £150M for wartime food exports. Argentina demands payment or nationalization of British assets.",
+        "affectedCountries": [
+          "Argentina",
+          "UK",
+          "USA"
+        ],
+        "primaryActors": [
+          "Argentina",
+          "UK"
+        ],
+        "historicalContext": "Argentina supplied food to Britain throughout WWII on credit. Now demands payment as Britain faces bankruptcy.",
+        "options": {
+          "Argentina": [
+            {
+              "id": "demand-full-payment",
+              "text": "💰 Demand Full Payment Immediately",
+              "cost": 0,
+              "effects": {
+                "tradeBalance": 1500,
+                "diplomaticPoints": -8
+              },
+              "outcome": "Britain cannot pay. Seize British railway assets instead. Relations severely damaged."
+            },
+            {
+              "id": "negotiate-railways",
+              "text": "🚂 Accept Railway Nationalization as Payment",
+              "cost": 800,
+              "effects": {
+                "gdpGrowth": 1.5,
+                "tradeBalance": -800,
+                "diplomaticPoints": 5
+              },
+              "outcome": "Take control of British-owned railways. Fair deal - maintain relations."
+            },
+            {
+              "id": "extend-credit",
+              "text": "🤝 Extend Credit Terms to Britain",
+              "cost": 0,
+              "effects": {
+                "tradeBalance": -500,
+                "diplomaticPoints": 15
+              },
+              "outcome": "Generous gesture. Britain grateful. Strengthens Argentine influence in Europe."
+            }
+          ],
+          "UK": [
+            {
+              "id": "offer-railways",
+              "text": "🚂 Offer Railway Assets as Payment",
+              "cost": 0,
+              "effects": {
+                "tradeBalance": 400,
+                "diplomaticPoints": 3
+              },
+              "outcome": "Railways were losing money anyway. Fair settlement."
+            },
+            {
+              "id": "request-us-loan",
+              "text": "💵 Request US Loan to Pay Argentina",
+              "cost": 200,
+              "effects": {
+                "tradeBalance": -200,
+                "diplomaticPoints": -5
+              },
+              "outcome": "More dependence on USA. Argentina gets paid but British prestige suffers."
+            }
+          ],
+          "USA": [
+            {
+              "id": "pressure-argentina",
+              "text": "⚠️ Pressure Argentina to Forgive Debt",
+              "cost": 100,
+              "effects": {
+                "diplomaticPoints": -10
+              },
+              "outcome": "Perón refuses. 'Yankees go home!' Latin American solidarity against US."
+            },
+            {
+              "id": "stay-out",
+              "text": "🤷 Stay Out of Bilateral Dispute",
+              "cost": 0,
+              "effects": {
+                "diplomaticPoints": 3
+              },
+              "outcome": "Not your problem. Let them sort it out."
+            }
+          ]
+        },
+        "triggeredByDeployment": false,
+        "triggerReason": null,
+        "triggeredAt": 1779071601085,
+        "resolved": false,
+        "responses": {},
+        "resolvedAt": 1779071602438,
         "autoResolved": true
       },
       {
@@ -1673,136 +1773,10 @@
         },
         "triggeredByDeployment": true,
         "triggerReason": "Massive Soviet deployment to Eastern Europe triggers the Berlin Blockade",
-        "triggeredAt": 1779069624177,
+        "triggeredAt": 1779071602741,
         "resolved": false,
         "responses": {},
-        "resolvedAt": 1779069625433,
-        "autoResolved": true
-      },
-      {
-        "id": "marshall-plan",
-        "year": 1948,
-        "title": "💰 Marshall Plan Announced",
-        "description": "USA offers $13 billion to rebuild Western Europe.",
-        "affectedCountries": [
-          "USA",
-          "UK",
-          "France",
-          "USSR"
-        ],
-        "primaryActors": [
-          "USA",
-          "USSR"
-        ],
-        "historicalContext": "Marshall proposes massive aid. Designed to counter Soviet influence.",
-        "deploymentTrigger": {
-          "region": "Western Europe",
-          "requiredCountries": [
-            "USA"
-          ],
-          "minTroops": 100000,
-          "triggerChance": 0.9,
-          "description": "American military presence in Western Europe prompts Marshall Plan to secure economic stability"
-        },
-        "options": {
-          "USA": [
-            {
-              "id": "full-marshall",
-              "text": "💵 Full Marshall Plan - $13B",
-              "cost": 3250,
-              "effects": {
-                "tradeBalance": -3250,
-                "diplomaticPoints": 25
-              },
-              "outcome": "Western Europe recovers. Win Cold War economically."
-            },
-            {
-              "id": "reduced-marshall",
-              "text": "📉 Reduced Aid Package - $5B",
-              "cost": 1250,
-              "effects": {
-                "tradeBalance": -1250,
-                "diplomaticPoints": 10
-              },
-              "outcome": "Enough to prevent European collapse but not enough for full recovery. Congress is happier. Europe recovers slowly — some nations turn to Soviet trade to fill the gap. Containment is partial."
-            }
-          ],
-          "UK": [
-            {
-              "id": "accept-aid",
-              "text": "✅ Accept Marshall Aid",
-              "cost": 0,
-              "effects": {
-                "gdpGrowth": 2,
-                "tradeBalance": 1200
-              },
-              "outcome": "Receive $3.2B. Economy recovers."
-            },
-            {
-              "id": "accept-with-conditions",
-              "text": "🏛️ Accept Aid but Protect Imperial Preference",
-              "cost": 0,
-              "effects": {
-                "gdpGrowth": 1,
-                "tradeBalance": 600,
-                "diplomaticPoints": -5
-              },
-              "outcome": "Accept aid but insist on preserving Commonwealth trade preferences. Less American money flows in, but Britain keeps its trade bloc intact. Washington is irritated by British exceptionalism."
-            }
-          ],
-          "France": [
-            {
-              "id": "accept-aid",
-              "text": "✅ Accept Marshall Aid",
-              "cost": 0,
-              "effects": {
-                "gdpGrowth": 2.5,
-                "tradeBalance": 1100,
-                "inflation": -5
-              },
-              "outcome": "Receive $2.7B. Inflation controlled. Boom into 1960s."
-            },
-            {
-              "id": "accept-with-autonomy",
-              "text": "🇫🇷 Accept Aid but Assert French Economic Sovereignty",
-              "cost": 0,
-              "effects": {
-                "gdpGrowth": 1.5,
-                "tradeBalance": 600,
-                "diplomaticPoints": 3
-              },
-              "outcome": "Accept aid on French terms — direct it toward French industrial planning (Monnet Plan) rather than American free-market prescriptions. Less total aid received but greater national control. Seeds of Gaullist independence."
-            }
-          ],
-          "USSR": [
-            {
-              "id": "forbid-satellites",
-              "text": "🚫 Forbid Satellites from Accepting",
-              "cost": 0,
-              "effects": {
-                "globalTension": 15,
-                "diplomaticPoints": -10
-              },
-              "outcome": "Iron Curtain descends. East-West split solidifies. Eastern European nations resent being cut off from Western aid."
-            },
-            {
-              "id": "counter-offer",
-              "text": "🔴 Launch Molotov Plan — Soviet Counter-Aid",
-              "cost": 800,
-              "effects": {
-                "tradeBalance": -800,
-                "diplomaticPoints": 8
-              },
-              "outcome": "Create COMECON to rival Marshall Plan. Subsidize Eastern European economies with Soviet resources. Costly but prevents satellites from looking westward. The socialist economic bloc takes shape."
-            }
-          ]
-        },
-        "triggeredByDeployment": false,
-        "triggerReason": null,
-        "triggeredAt": 1779069624177,
-        "resolved": false,
-        "responses": {},
-        "resolvedAt": 1779069625533,
+        "resolvedAt": 1779071604001,
         "autoResolved": true
       },
       {
@@ -1949,10 +1923,10 @@
         },
         "triggeredByDeployment": false,
         "triggerReason": null,
-        "triggeredAt": 1779069624177,
+        "triggeredAt": 1779071602741,
         "resolved": false,
         "responses": {},
-        "resolvedAt": 1779069625634,
+        "resolvedAt": 1779071604096,
         "autoResolved": true
       },
       {
@@ -2170,114 +2144,10 @@
         },
         "triggeredByDeployment": false,
         "triggerReason": null,
-        "triggeredAt": 1779069627188,
+        "triggeredAt": 1779071605651,
         "resolved": false,
         "responses": {},
-        "resolvedAt": 1779069628442,
-        "autoResolved": true
-      },
-      {
-        "id": "argentina-drought-1951",
-        "year": 1951,
-        "title": "🌵 Argentine Drought Crisis",
-        "description": "Severe drought devastates Argentine grain production. The economic miracle falters.",
-        "affectedCountries": [
-          "Argentina",
-          "UK",
-          "USA"
-        ],
-        "primaryActors": [
-          "Argentina"
-        ],
-        "historicalContext": "After years of abundance, nature strikes back. Grain exports plummet. Government reserves depleted.",
-        "options": {
-          "Argentina": [
-            {
-              "id": "austerity",
-              "text": "📉 Implement Austerity Measures",
-              "cost": 0,
-              "effects": {
-                "gdpGrowth": -2,
-                "inflation": -3,
-                "unemployment": 2,
-                "diplomaticPoints": -5
-              },
-              "outcome": "Cut spending. Unions furious. Peronist base cracks."
-            },
-            {
-              "id": "borrow-abroad",
-              "text": "💵 Seek Foreign Loans",
-              "cost": 0,
-              "effects": {
-                "gdpGrowth": 0.5,
-                "tradeBalance": -800,
-                "diplomaticPoints": -8
-              },
-              "outcome": "Compromise Third Position principles. IMF conditions hurt sovereignty."
-            },
-            {
-              "id": "maintain-spending",
-              "text": "💪 Maintain Social Spending Despite Crisis",
-              "cost": 1200,
-              "effects": {
-                "gdpGrowth": -1,
-                "inflation": 8,
-                "unemployment": -1,
-                "diplomaticPoints": 5
-              },
-              "outcome": "Print money to fund programs. Workers love you. Inflation soars."
-            }
-          ],
-          "USA": [
-            {
-              "id": "offer-aid",
-              "text": "🤝 Offer Emergency Food Aid",
-              "cost": 400,
-              "effects": {
-                "tradeBalance": -400,
-                "diplomaticPoints": 15
-              },
-              "outcome": "Extend olive branch. Perón reluctantly accepts. Relations improve."
-            },
-            {
-              "id": "exploit-weakness",
-              "text": "📉 Demand Political Concessions for Aid",
-              "cost": 0,
-              "effects": {
-                "diplomaticPoints": -10
-              },
-              "outcome": "Perón refuses. 'We would rather starve!' Latin America rallies to Argentina."
-            }
-          ],
-          "UK": [
-            {
-              "id": "return-favor",
-              "text": "🍞 Return the Favor — Send Food to Argentina",
-              "cost": 300,
-              "effects": {
-                "tradeBalance": -300,
-                "diplomaticPoints": 12
-              },
-              "outcome": "Remember when Argentina fed us? Time to repay. Relations healed."
-            },
-            {
-              "id": "exploit-leverage",
-              "text": "📊 Use Argentine Weakness to Renegotiate Trade Terms",
-              "cost": 0,
-              "effects": {
-                "tradeBalance": 300,
-                "diplomaticPoints": -10
-              },
-              "outcome": "Argentina is desperate — demand better terms on beef and grain contracts. Short-term profits, but Perón will remember this betrayal. Future Anglo-Argentine trade suffers."
-            }
-          ]
-        },
-        "triggeredByDeployment": false,
-        "triggerReason": null,
-        "triggeredAt": 1779069628743,
-        "resolved": false,
-        "responses": {},
-        "resolvedAt": 1779069629999,
+        "resolvedAt": 1779071606907,
         "autoResolved": true
       }
     ],
@@ -2327,7 +2197,7 @@
       "branch": "Army",
       "troops": 200000,
       "year": 1946,
-      "timestamp": 1779069621261,
+      "timestamp": 1779071599716,
       "occupationZone": true
     },
     {
@@ -2336,7 +2206,7 @@
       "branch": "Army",
       "troops": 150000,
       "year": 1946,
-      "timestamp": 1779069621261,
+      "timestamp": 1779071599716,
       "occupationZone": true
     },
     {
@@ -2345,7 +2215,7 @@
       "branch": "Army",
       "troops": 300000,
       "year": 1946,
-      "timestamp": 1779069621261,
+      "timestamp": 1779071599716,
       "occupationZone": true
     },
     {
@@ -2354,7 +2224,7 @@
       "branch": "Army",
       "troops": 500000,
       "year": 1946,
-      "timestamp": 1779069621261,
+      "timestamp": 1779071599716,
       "occupationZone": true
     },
     {
@@ -2363,7 +2233,7 @@
       "branch": "Army",
       "troops": 100000,
       "year": 1946,
-      "timestamp": 1779069621261,
+      "timestamp": 1779071599716,
       "occupationZone": true
     }
   ],
@@ -2377,75 +2247,75 @@
   "awaitingDiplomaticResolution": false,
   "scoreBreakdowns": {
     "USA": {
-      "gdp": -427,
+      "gdp": 341,
       "inflation": 0,
-      "unemployment": -10,
+      "unemployment": 30,
       "trade": 60,
       "stability": 40,
       "brettonWoods": 63,
       "crisisDiplomacy": 0,
-      "yearlyTotal": 0
+      "yearlyTotal": 4074
     },
     "UK": {
-      "gdp": 99,
-      "inflation": 25,
+      "gdp": 294,
+      "inflation": 40,
       "unemployment": 30,
       "trade": 60,
       "stability": 40,
       "brettonWoods": 11,
       "crisisDiplomacy": 0,
-      "yearlyTotal": 1467
+      "yearlyTotal": 3669
     },
     "USSR": {
-      "gdp": 136,
-      "inflation": -20,
+      "gdp": 334,
+      "inflation": 0,
       "unemployment": 30,
       "trade": 60,
       "stability": 40,
       "brettonWoods": -7,
       "crisisDiplomacy": 0,
-      "yearlyTotal": 1698
+      "yearlyTotal": 3979
     },
     "France": {
-      "gdp": 128,
+      "gdp": -1617,
       "inflation": -20,
-      "unemployment": 30,
+      "unemployment": -10,
       "trade": 50,
       "stability": 20,
       "brettonWoods": -5,
       "crisisDiplomacy": 0,
-      "yearlyTotal": 1579
+      "yearlyTotal": 0
     },
     "China": {
-      "gdp": 161,
+      "gdp": 357,
       "inflation": -20,
       "unemployment": 30,
       "trade": 60,
       "stability": 40,
       "brettonWoods": -7,
       "crisisDiplomacy": 0,
-      "yearlyTotal": 1944
+      "yearlyTotal": 4168
     },
     "India": {
-      "gdp": 103,
+      "gdp": 308,
       "inflation": 0,
       "unemployment": 30,
       "trade": 60,
       "stability": 40,
       "brettonWoods": -7,
       "crisisDiplomacy": 0,
-      "yearlyTotal": 1391
+      "yearlyTotal": 3719
     },
     "Argentina": {
-      "gdp": 107,
+      "gdp": 292,
       "inflation": 0,
       "unemployment": 30,
       "trade": 60,
       "stability": 40,
       "brettonWoods": -7,
       "crisisDiplomacy": 0,
-      "yearlyTotal": 1456
+      "yearlyTotal": 3514
     }
   },
-  "savedAt": 1779069979457
+  "savedAt": 1779071609732
 }

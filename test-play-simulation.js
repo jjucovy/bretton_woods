@@ -264,6 +264,9 @@ async function run() {
 
     for (const c of COUNTRIES) {
       const isCE = (c === 'USSR' || c === 'China');
+      // Exchange rates: local currency per USD (from country-utils INITIAL_EXCHANGE_RATES)
+      // USA=1.00, UK=4.03, France=119.11, India=3.31, Argentina=4.23
+      const exchangeRates = { USA: 1.00, UK: 4.03, France: 119.11, India: 3.31, Argentina: 4.23 };
       const policy = isCE
         ? {
             productionTargets: { agriculture: 25, industry: 50, military: 15, consumer: 10 },
@@ -272,8 +275,8 @@ async function run() {
             foreignTrade: 'minimal'
           }
         : {
-            interestRate: 2.5 + (yi * 0.2),
-            exchangeRate: c === 'USA' ? 35 : c === 'UK' ? 4.0 : 3.5,
+            centralBankRate: 3.0,
+            exchangeRate: exchangeRates[c] || 1.0,
             tariffRate: 15,
             governmentSpending: 20
           };
