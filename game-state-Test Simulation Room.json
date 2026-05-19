@@ -1,0 +1,24 @@
+{
+  "currentYear": 1946,
+  "yearlyData": {},
+  "policies": {},
+  "achievements": {},
+  "crises": {
+    "active": null,
+    "history": [],
+    "responses": {}
+  },
+  "active": false,
+  "cumulativeDeployments": {},
+  "deploymentHistory": [],
+  "pendingConflictZones": {},
+  "activeConflicts": [],
+  "battleResults": [],
+  "battleDecisions": {},
+  "battleOptions": {},
+  "diplomaticStances": {},
+  "diplomaticPoints": {},
+  "awaitingDiplomaticResolution": false,
+  "scoreBreakdowns": {},
+  "savedAt": 1779071947741
+}

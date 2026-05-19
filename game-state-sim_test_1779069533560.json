@@ -1,0 +1,784 @@
+{
+  "currentYear": 1947,
+  "yearlyData": {
+    "1946": {
+      "USA": {
+        "gdpGrowth": -11.6,
+        "goldReserves": 20000,
+        "unemployment": 3.9,
+        "tradeBalance": 7800,
+        "inflation": 18.1,
+        "industrialOutput": 100,
+        "exchangeRate": 1,
+        "exchangeRateChange": 0,
+        "military": {
+          "army": 1600000,
+          "navy": 900000,
+          "airForce": 450000,
+          "total": 2950000
+        }
+      },
+      "UK": {
+        "gdpGrowth": -2.5,
+        "goldReserves": 2300,
+        "unemployment": 2.5,
+        "tradeBalance": -1400,
+        "inflation": 7.4,
+        "industrialOutput": 30,
+        "exchangeRate": 4.03,
+        "exchangeRateChange": 0,
+        "military": {
+          "army": 1100000,
+          "navy": 300000,
+          "airForce": 300000,
+          "total": 1700000
+        }
+      },
+      "USSR": {
+        "gdpGrowth": -2,
+        "goldReserves": 2000,
+        "unemployment": 5,
+        "tradeBalance": -500,
+        "inflation": 20,
+        "industrialOutput": 38,
+        "exchangeRate": null,
+        "exchangeRateChange": 0,
+        "military": {
+          "army": 4500000,
+          "navy": 400000,
+          "airForce": 500000,
+          "total": 5400000
+        }
+      },
+      "France": {
+        "gdpGrowth": 16.5,
+        "goldReserves": 790,
+        "unemployment": 5,
+        "tradeBalance": -1200,
+        "inflation": 52,
+        "industrialOutput": 12,
+        "exchangeRate": 119.11,
+        "exchangeRateChange": 0,
+        "military": {
+          "army": 600000,
+          "navy": 60000,
+          "airForce": 100000,
+          "total": 760000
+        }
+      },
+      "China": {
+        "gdpGrowth": -3.5,
+        "goldReserves": 250,
+        "unemployment": 8,
+        "tradeBalance": -600,
+        "inflation": 230,
+        "industrialOutput": 5,
+        "exchangeRate": 3350,
+        "exchangeRateChange": 0,
+        "military": {
+          "army": 2800000,
+          "navy": 30000,
+          "airForce": 60000,
+          "total": 2890000
+        }
+      },
+      "India": {
+        "gdpGrowth": 1.2,
+        "goldReserves": 1200,
+        "unemployment": 7.5,
+        "tradeBalance": -200,
+        "inflation": 12.5,
+        "industrialOutput": 6,
+        "exchangeRate": 3.31,
+        "exchangeRateChange": 0,
+        "military": {
+          "army": 1000000,
+          "navy": 20000,
+          "airForce": 14000,
+          "total": 1034000
+        }
+      },
+      "Argentina": {
+        "gdpGrowth": 8.3,
+        "goldReserves": 1600,
+        "unemployment": 3.8,
+        "tradeBalance": 1200,
+        "inflation": 17.7,
+        "industrialOutput": 8,
+        "exchangeRate": 4.23,
+        "exchangeRateChange": 0,
+        "military": {
+          "army": 90000,
+          "navy": 20000,
+          "airForce": 15000,
+          "total": 125000
+        }
+      }
+    },
+    "1947": {
+      "USA": {
+        "gdpGrowth": -53.3,
+        "goldReserves": 19963,
+        "unemployment": 15,
+        "tradeBalance": 11235,
+        "inflation": 18.6,
+        "industrialOutput": 47,
+        "exchangeRate": 1,
+        "exchangeRateChange": 0,
+        "militarySpending": 5,
+        "deploymentMaintenanceCost": 150,
+        "military": {
+          "army": 1600000,
+          "navy": 900000,
+          "airForce": 450000,
+          "total": 2950000
+        }
+      },
+      "UK": {
+        "gdpGrowth": 12.7,
+        "goldReserves": 2229,
+        "unemployment": 0,
+        "tradeBalance": 396,
+        "inflation": 7.3,
+        "industrialOutput": 34,
+        "exchangeRate": 4.42,
+        "exchangeRateChange": 7.8,
+        "militarySpending": 5,
+        "deploymentMaintenanceCost": 75,
+        "military": {
+          "army": 1100000,
+          "navy": 300000,
+          "airForce": 300000,
+          "total": 1700000
+        }
+      },
+      "USSR": {
+        "gdpGrowth": 17.2,
+        "goldReserves": 1600,
+        "unemployment": 0.7,
+        "tradeBalance": 1391,
+        "inflation": 19.7,
+        "industrialOutput": 45,
+        "exchangeRate": 0,
+        "exchangeRateChange": 0,
+        "militarySpending": 5,
+        "deploymentMaintenanceCost": 415,
+        "military": {
+          "army": 4500000,
+          "navy": 400000,
+          "airForce": 500000,
+          "total": 5400000
+        }
+      },
+      "France": {
+        "gdpGrowth": 14.9,
+        "goldReserves": 735,
+        "unemployment": 1.7,
+        "tradeBalance": -183,
+        "inflation": 56,
+        "industrialOutput": 14,
+        "exchangeRate": 149.55,
+        "exchangeRateChange": 20.4,
+        "militarySpending": 5,
+        "deploymentMaintenanceCost": 50,
+        "military": {
+          "army": 600000,
+          "navy": 60000,
+          "airForce": 100000,
+          "total": 760000
+        }
+      },
+      "China": {
+        "gdpGrowth": 19.6,
+        "goldReserves": 256,
+        "unemployment": 4.7,
+        "tradeBalance": 989,
+        "inflation": 241.1,
+        "industrialOutput": 6,
+        "exchangeRate": 6524.46,
+        "exchangeRateChange": 74.8,
+        "militarySpending": 5,
+        "deploymentMaintenanceCost": 0,
+        "military": {
+          "army": 2800000,
+          "navy": 30000,
+          "airForce": 60000,
+          "total": 2890000
+        }
+      },
+      "India": {
+        "gdpGrowth": 12.7,
+        "goldReserves": 1207,
+        "unemployment": 4.6,
+        "tradeBalance": 730,
+        "inflation": 12.4,
+        "industrialOutput": 7,
+        "exchangeRate": 3.24,
+        "exchangeRateChange": -1.8,
+        "militarySpending": 5,
+        "deploymentMaintenanceCost": 0,
+        "military": {
+          "army": 1000000,
+          "navy": 20000,
+          "airForce": 14000,
+          "total": 1034000
+        }
+      },
+      "Argentina": {
+        "gdpGrowth": 13.4,
+        "goldReserves": 1631,
+        "unemployment": 0.7,
+        "tradeBalance": 3130,
+        "inflation": 18.1,
+        "industrialOutput": 9,
+        "exchangeRate": 3.97,
+        "exchangeRateChange": -4.9,
+        "militarySpending": 5,
+        "deploymentMaintenanceCost": 0,
+        "military": {
+          "army": 90000,
+          "navy": 20000,
+          "airForce": 15000,
+          "total": 125000
+        }
+      }
+    }
+  },
+  "policies": {
+    "1946": {
+      "USA": {
+        "centralBankRate": 3,
+        "exchangeRate": 35,
+        "tariffRate": 15,
+        "militarySpending": 5,
+        "militarySize": 500000,
+        "isCommandEconomy": false,
+        "submittedAt": 1779069544150
+      },
+      "UK": {
+        "centralBankRate": 3,
+        "exchangeRate": 4,
+        "tariffRate": 15,
+        "militarySpending": 5,
+        "militarySize": 500000,
+        "isCommandEconomy": false,
+        "submittedAt": 1779069544201
+      },
+      "USSR": {
+        "centralBankRate": 3,
+        "exchangeRate": 1,
+        "tariffRate": 10,
+        "militarySpending": 5,
+        "militarySize": 500000,
+        "isCommandEconomy": false,
+        "submittedAt": 1779069544251
+      },
+      "France": {
+        "centralBankRate": 3,
+        "exchangeRate": 3.5,
+        "tariffRate": 15,
+        "militarySpending": 5,
+        "militarySize": 500000,
+        "isCommandEconomy": false,
+        "submittedAt": 1779069544302
+      },
+      "China": {
+        "centralBankRate": 3,
+        "exchangeRate": 1,
+        "tariffRate": 10,
+        "militarySpending": 5,
+        "militarySize": 500000,
+        "isCommandEconomy": false,
+        "submittedAt": 1779069544353
+      },
+      "India": {
+        "centralBankRate": 3,
+        "exchangeRate": 3.5,
+        "tariffRate": 15,
+        "militarySpending": 5,
+        "militarySize": 500000,
+        "isCommandEconomy": false,
+        "submittedAt": 1779069544404
+      },
+      "Argentina": {
+        "centralBankRate": 3,
+        "exchangeRate": 3.5,
+        "tariffRate": 15,
+        "militarySpending": 5,
+        "militarySize": 500000,
+        "isCommandEconomy": false,
+        "submittedAt": 1779069544455
+      }
+    }
+  },
+  "achievements": {},
+  "crises": {
+    "active": [],
+    "history": [
+      {
+        "id": "china-civil-war",
+        "year": 1946,
+        "title": "🇨🇳 Chinese Civil War Intensifies",
+        "description": "Full-scale war erupts between Nationalist (KMT) and Communist (CCP) forces. The world's most populous nation hangs in the balance. Every major power must choose a side — or pay the price of inaction.",
+        "affectedCountries": [
+          "China",
+          "USA",
+          "USSR",
+          "UK",
+          "India"
+        ],
+        "primaryActors": [
+          "China",
+          "USA",
+          "USSR"
+        ],
+        "historicalContext": "After WWII, the Chinese Civil War resumes. Nationalists control cities but are riddled with corruption. Communists control the countryside and have peasant support. US backs KMT, USSR aids CCP. The outcome will reshape Asia for decades.",
+        "deploymentTrigger": {
+          "region": "East Asia",
+          "requiredCountries": [
+            "USSR",
+            "USA"
+          ],
+          "minTroops": 100000,
+          "triggerChance": 0.85,
+          "description": "Foreign military buildup in East Asia intensifies the civil war"
+        },
+        "options": {
+          "China": [
+            {
+              "id": "kmt-offensive",
+              "text": "🪖 Launch Major Offensive Against Communists",
+              "militaryRequired": {
+                "army": 1500000
+              },
+              "cost": 800,
+              "effects": {
+                "gdpGrowth": -3,
+                "inflation": 50,
+                "unemployment": 2
+              },
+              "crossEffects": {
+                "USA": {
+                  "diplomaticPoints": -3,
+                  "tradeBalance": -400
+                },
+                "USSR": {
+                  "tradeBalance": -200
+                }
+              },
+              "outcome": "All-out war devastates the economy. Cities change hands repeatedly. Foreign backers are drawn deeper — USA pressured to increase aid shipments, USSR forced to counter-supply CCP. Delays communist victory but destruction is catastrophic."
+            },
+            {
+              "id": "negotiate-coalition",
+              "text": "🤝 Negotiate Coalition Government",
+              "cost": 0,
+              "effects": {
+                "gdpGrowth": -0.5,
+                "diplomaticPoints": 8
+              },
+              "crossEffects": {
+                "USA": {
+                  "diplomaticPoints": 3
+                },
+                "India": {
+                  "diplomaticPoints": 5
+                },
+                "UK": {
+                  "diplomaticPoints": 3
+                }
+              },
+              "outcome": "Mao uses ceasefire to consolidate rural bases. But the breathing room lets civilians evacuate cities and foreign observers praise the attempt. India and UK welcome the diplomacy. Communists still prepare their final offensive, but the world sees China tried peace first."
+            }
+          ],
+          "USA": [
+            {
+              "id": "massive-aid",
+              "text": "💰 Massive Military Aid to Nationalists ($2B)",
+              "cost": 2000,
+              "effects": {
+                "tradeBalance": -2000,
+                "diplomaticPoints": 10
+              },
+              "crossEffects": {
+                "USSR": {
+                  "diplomaticPoints": -8,
+                  "tradeBalance": -300
+                },
+                "UK": {
+                  "diplomaticPoints": 5
+                },
+                "India": {
+                  "diplomaticPoints": 5
+                },
+                "China": {
+                  "gdpGrowth": -1.5,
+                  "inflation": 10
+                }
+              },
+              "outcome": "Nationalist corruption wastes much of the aid, but the sheer scale forces Stalin to match it or look weak. Soviet Politburo hawks demand counter-escalation — draining USSR resources. Allied nations are reassured by American resolve. India gains leverage as a non-aligned mediator. The war grinds on longer, devastating China's economy further, but containment credibility is preserved."
+            },
+            {
+              "id": "disengage",
+              "text": "🏳️ Withdraw Support — Accept the Inevitable",
+              "cost": 0,
+              "effects": {
+                "diplomaticPoints": -15,
+                "gdpGrowth": -1
+              },
+              "crossEffects": {
+                "USSR": {
+                  "diplomaticPoints": 10
+                },
+                "UK": {
+                  "diplomaticPoints": -5
+                },
+                "India": {
+                  "diplomaticPoints": 3
+                },
+                "China": {
+                  "gdpGrowth": 1
+                },
+                "France": {
+                  "diplomaticPoints": -3
+                }
+              },
+              "outcome": "Communists sweep to victory. Washington erupts — 'Who Lost China?' becomes a weapon. McCarthyism accelerates. Every American ally questions US reliability. Britain and France fear they'll be next to be abandoned. The USSR celebrates its greatest ideological victory since 1917. But you saved $2 billion and kept your troops home."
+            }
+          ],
+          "USSR": [
+            {
+              "id": "aid-ccp",
+              "text": "🚩 Major Arms Shipments to Communist Forces",
+              "cost": 600,
+              "militaryRequired": {
+                "army": 500000
+              },
+              "effects": {
+                "tradeBalance": -600,
+                "diplomaticPoints": 12
+              },
+              "crossEffects": {
+                "USA": {
+                  "diplomaticPoints": -5
+                },
+                "China": {
+                  "gdpGrowth": -2,
+                  "inflation": 15
+                },
+                "UK": {
+                  "diplomaticPoints": -3
+                },
+                "France": {
+                  "diplomaticPoints": -3
+                }
+              },
+              "outcome": "Soviet weapons flood Manchuria. Mao's armies gain decisive firepower advantage. The West watches in alarm — containment is failing. Britain and France worry about communist expansion reaching their colonies. But within the Communist world, Moscow's prestige soars. A grateful Mao signs the Sino-Soviet Treaty."
+            },
+            {
+              "id": "diplomatic-support",
+              "text": "📢 Cautious Diplomatic Support Only",
+              "cost": 100,
+              "effects": {
+                "diplomaticPoints": 3,
+                "tradeBalance": -100
+              },
+              "crossEffects": {
+                "China": {
+                  "diplomaticPoints": -5
+                }
+              },
+              "outcome": "Moscow offers speeches but not guns. Mao wins anyway through sheer numbers and peasant support — but he remembers who actually helped. The seeds of the Sino-Soviet split are planted early. China's future communism will be more independent, more unpredictable, and less grateful to Moscow."
+            }
+          ],
+          "UK": [
+            {
+              "id": "protect-hong-kong",
+              "text": "🏰 Reinforce Hong Kong Garrison",
+              "cost": 300,
+              "militaryRequired": {
+                "army": 30000
+              },
+              "effects": {
+                "tradeBalance": -300,
+                "diplomaticPoints": 5
+              },
+              "crossEffects": {
+                "China": {
+                  "diplomaticPoints": -3
+                }
+              },
+              "outcome": "Station troops in Hong Kong as civil war rages nearby. The colony becomes a refuge for Nationalist elites and their gold. Whoever wins China will remember British gunboats at their doorstep — but Hong Kong's trade position is secured for decades."
+            },
+            {
+              "id": "commercial-neutrality",
+              "text": "🏪 Maintain Commercial Ties with Both Sides",
+              "cost": 0,
+              "effects": {
+                "tradeBalance": 200,
+                "diplomaticPoints": -3
+              },
+              "outcome": "Pragmatic British merchants trade with whoever controls the ports. Profits flow but both sides view Britain as unprincipled. Americans are annoyed at the fence-sitting."
+            }
+          ],
+          "India": [
+            {
+              "id": "non-aligned-mediation",
+              "text": "🕊️ Offer Non-Aligned Mediation",
+              "cost": 50,
+              "effects": {
+                "diplomaticPoints": 12
+              },
+              "crossEffects": {
+                "China": {
+                  "diplomaticPoints": 3
+                },
+                "USA": {
+                  "diplomaticPoints": 2
+                },
+                "USSR": {
+                  "diplomaticPoints": 2
+                }
+              },
+              "outcome": "Nehru positions India as the voice of reason between superpowers. Both sides publicly welcome mediation (privately ignoring it). India's prestige as leader of the non-aligned world soars. Everyone owes you a favor."
+            },
+            {
+              "id": "focus-domestic",
+              "text": "🏠 Focus on Domestic Challenges",
+              "cost": 0,
+              "effects": {
+                "gdpGrowth": 0.5
+              },
+              "outcome": "India has its own problems — partition looms. Stay out of China's civil war and focus scarce resources on building the new nation. A pragmatic choice, but a missed opportunity for diplomatic influence."
+            }
+          ]
+        },
+        "triggeredByDeployment": false,
+        "triggerReason": null,
+        "triggeredAt": 1779069543946,
+        "resolved": false,
+        "responses": {},
+        "resolvedAt": 1779069545008,
+        "autoResolved": true
+      },
+      {
+        "id": "first-indochina-war",
+        "year": 1946,
+        "title": "🇻🇳 First Indochina War",
+        "description": "France attempts to reestablish colonial control. Ho Chi Minh's Viet Minh wage guerrilla war.",
+        "affectedCountries": [
+          "France",
+          "USA",
+          "USSR",
+          "India"
+        ],
+        "primaryActors": [
+          "France",
+          "USA"
+        ],
+        "historicalContext": "Eight-year war drains French treasury. Ends at Dien Bien Phu 1954.",
+        "deploymentTrigger": {
+          "region": "Southeast Asia",
+          "requiredCountries": [
+            "France"
+          ],
+          "minTroops": 50000,
+          "triggerChance": 0.9,
+          "description": "French military deployment to Southeast Asia triggers colonial war"
+        },
+        "options": {
+          "France": [
+            {
+              "id": "full-war",
+              "text": "🪖 Full Colonial War",
+              "militaryRequired": {
+                "army": 150000
+              },
+              "cost": 600,
+              "effects": {
+                "gdpGrowth": -1.5,
+                "tradeBalance": -600,
+                "inflation": 5
+              },
+              "outcome": "Fight for 8 years. Massive costs. Defeated at Dien Bien Phu."
+            },
+            {
+              "id": "negotiate-independence",
+              "text": "🤝 Negotiate Vietnamese Independence",
+              "cost": 100,
+              "effects": {
+                "gdpGrowth": 0.5,
+                "diplomaticPoints": 5,
+                "tradeBalance": 400
+              },
+              "outcome": "Accept decolonization. Save resources. Focus on Europe."
+            }
+          ],
+          "USA": [
+            {
+              "id": "fund-french",
+              "text": "💰 Fund French War Effort",
+              "cost": 800,
+              "effects": {
+                "tradeBalance": -800
+              },
+              "outcome": "Pay 80% of costs! They still lose. Sets you up to inherit war."
+            },
+            {
+              "id": "pressure-decolonization",
+              "text": "🗽 Pressure France to Decolonize",
+              "cost": 0,
+              "effects": {
+                "diplomaticPoints": 8
+              },
+              "outcome": "Position yourself as anti-colonial. Helps in Asia."
+            }
+          ],
+          "India": [
+            {
+              "id": "support-independence",
+              "text": "🗣️ Support Vietnamese Independence",
+              "cost": 50,
+              "effects": {
+                "diplomaticPoints": 10
+              },
+              "outcome": "Nehru champions anti-colonialism. Leader of non-aligned."
+            },
+            {
+              "id": "quiet-diplomacy",
+              "text": "🤫 Quiet Diplomacy — Avoid Antagonizing France",
+              "cost": 0,
+              "effects": {
+                "diplomaticPoints": -2,
+                "tradeBalance": 100
+              },
+              "outcome": "India has just gained independence and needs trade partners. Publicly neutral, privately sympathetic to Ho Chi Minh. France continues purchasing Indian goods. But the non-aligned movement loses a champion."
+            }
+          ],
+          "USSR": [
+            {
+              "id": "aid-viet-minh",
+              "text": "🚩 Provide Aid to Viet Minh",
+              "cost": 400,
+              "effects": {
+                "tradeBalance": -400,
+                "diplomaticPoints": 5
+              },
+              "outcome": "Soviet weapons help Ho Chi Minh. Another communist victory in Asia."
+            },
+            {
+              "id": "cautious-support",
+              "text": "📢 Cautious Diplomatic Support",
+              "cost": 50,
+              "effects": {
+                "diplomaticPoints": 3
+              },
+              "outcome": "Support decolonization publicly without major commitment. Focus resources on Europe."
+            }
+          ]
+        },
+        "triggeredByDeployment": false,
+        "triggerReason": null,
+        "triggeredAt": 1779069543946,
+        "resolved": false,
+        "responses": {},
+        "resolvedAt": 1779069545508,
+        "autoResolved": true
+      }
+    ],
+    "responses": {}
+  },
+  "active": true,
+  "cumulativeDeployments": {
+    "Germany": {
+      "USA": {
+        "army": 200000,
+        "navy": 0,
+        "airForce": 0,
+        "total": 200000
+      },
+      "UK": {
+        "army": 150000,
+        "navy": 0,
+        "airForce": 0,
+        "total": 150000
+      },
+      "USSR": {
+        "army": 300000,
+        "navy": 0,
+        "airForce": 0,
+        "total": 300000
+      },
+      "France": {
+        "army": 100000,
+        "navy": 0,
+        "airForce": 0,
+        "total": 100000
+      }
+    },
+    "Eastern Europe": {
+      "USSR": {
+        "army": 500000,
+        "navy": 0,
+        "airForce": 0,
+        "total": 500000
+      }
+    }
+  },
+  "deploymentHistory": [
+    {
+      "country": "USA",
+      "region": "Germany",
+      "branch": "Army",
+      "troops": 200000,
+      "year": 1946,
+      "timestamp": 1779069543945,
+      "occupationZone": true
+    },
+    {
+      "country": "UK",
+      "region": "Germany",
+      "branch": "Army",
+      "troops": 150000,
+      "year": 1946,
+      "timestamp": 1779069543945,
+      "occupationZone": true
+    },
+    {
+      "country": "USSR",
+      "region": "Germany",
+      "branch": "Army",
+      "troops": 300000,
+      "year": 1946,
+      "timestamp": 1779069543945,
+      "occupationZone": true
+    },
+    {
+      "country": "USSR",
+      "region": "Eastern Europe",
+      "branch": "Army",
+      "troops": 500000,
+      "year": 1946,
+      "timestamp": 1779069543945,
+      "occupationZone": true
+    },
+    {
+      "country": "France",
+      "region": "Germany",
+      "branch": "Army",
+      "troops": 100000,
+      "year": 1946,
+      "timestamp": 1779069543945,
+      "occupationZone": true
+    }
+  ],
+  "pendingConflictZones": {},
+  "activeConflicts": [],
+  "battleResults": [],
+  "battleDecisions": {},
+  "battleOptions": {},
+  "diplomaticStances": {},
+  "diplomaticPoints": {},
+  "awaitingDiplomaticResolution": false,
+  "scoreBreakdowns": {},
+  "savedAt": 1779071947742
+}
