@@ -7,6 +7,7 @@
 
 const { io } = require('socket.io-client');
 const gameDataFile = require('./game-data.json');
+const { crisisEvents } = require('./crisis-events.json');
 
 const SERVER_URL = 'http://localhost:65002';
 const COUNTRIES = ['USA', 'UK', 'USSR', 'France', 'China', 'India', 'Argentina'];
@@ -50,13 +51,58 @@ function connect(label) {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// Attempt to advance a year; if crises block it, force-resolve then retry.
-// Uses stateUpdate sequence counting to avoid race conditions.
-async function advanceYearWithCrisisHandling(hostClient, roomId, hostId) {
+// Submit crisis responses for all affected countries, then host force-resolves.
+async function handleCrises(crisisList, clients, ids, roomId) {
+  for (const crisis of crisisList) {
+    if (!crisis?.id) continue;
+
+    // Look up full crisis definition for option IDs
+    const def = crisisEvents.find(e => e.id === crisis.id);
+    const optionsDef = def?.options || crisis.options || {};
+
+    console.log(`\n    ⚡ Crisis: "${crisis.title}"`);
+    console.log(`       Affected: ${crisis.affectedCountries?.join(', ')}`);
+
+    let responseCount = 0;
+    for (const country of (crisis.affectedCountries || [])) {
+      const playerId = ids[country];
+      if (!playerId || !clients[country]) continue;
+
+      // Find options for this country (try canonical name and any alias)
+      const countryOpts = optionsDef[country]
+        || optionsDef[Object.keys(optionsDef).find(k => k.toLowerCase() === country.toLowerCase())]
+        || [];
+
+      if (countryOpts.length === 0) {
+        console.log(`       ${country}: no options defined, skipping`);
+        continue;
+      }
+
+      // Pick first available option
+      const choice = countryOpts[0];
+      clients[country].emit('submitCrisisResponse', {
+        roomId,
+        playerid: playerId,
+        crisisId: crisis.id,
+        choiceId: choice.id
+      });
+      console.log(`       ${country} → "${choice.text?.substring(0, 50)}"`);
+      responseCount++;
+      await delay(80);
+    }
+
+    assert(responseCount > 0, `Crisis "${crisis.title}": ${responseCount} player response(s) submitted`);
+    await delay(400); // let server process responses
+  }
+}
+
+// Attempt to advance a year; if crises block it, collect player responses
+// then host force-resolves. Uses stateUpdate sequence counting.
+async function advanceYearWithCrisisHandling(hostClient, clients, ids, roomId, hostId) {
   for (let attempt = 0; attempt < 8; attempt++) {
     const beforeCount = hostClient._stateUpdates.length;
 
-    // Race: either a stateUpdate (new state arrives) or advanceYearError
+    // Race: either a stateUpdate (year advanced) or advanceYearError (crisis)
     const outcome = await new Promise(resolve => {
       let done = false;
       const finish = val => { if (!done) { done = true; resolve(val); } };
@@ -66,7 +112,6 @@ async function advanceYearWithCrisisHandling(hostClient, roomId, hostId) {
       const errHandler = e => { clearTimeout(timeout); finish({ error: e }); };
       hostClient.once('advanceYearError', errHandler);
 
-      // Poll for new stateUpdate (arrival after beforeCount)
       const poll = setInterval(() => {
         if (hostClient._stateUpdates.length > beforeCount) {
           clearInterval(poll);
@@ -85,31 +130,34 @@ async function advanceYearWithCrisisHandling(hostClient, roomId, hostId) {
     const err = outcome.error;
     if (!err.message?.includes('Crisis')) throw new Error(`advanceYear error: ${err.message}`);
 
-    // Crisis is blocking — force-resolve
-    console.log(`\n    ⚡ Crisis detected — force-resolving (attempt ${attempt + 1})`);
+    // Collect crisis list from latest state
     const lastState = hostClient._stateUpdates[hostClient._stateUpdates.length - 1];
     const activeCrises = lastState?.phase2?.crises?.active;
     const crisisList = Array.isArray(activeCrises)
       ? activeCrises : (activeCrises ? [activeCrises] : []);
 
-    if (crisisList.length > 0) {
-      for (const crisis of crisisList) {
-        if (!crisis?.id) continue;
-        const beforeResolve = hostClient._stateUpdates.length;
-        hostClient.emit('resolveCrisis', {
-          roomId, playerId: hostId, playerid: hostId, userId: hostId, crisisId: crisis.id
-        });
-        // Wait for the resolve stateUpdate
-        await new Promise(r => {
-          const t = setTimeout(r, 3000);
-          const poll = setInterval(() => {
-            if (hostClient._stateUpdates.length > beforeResolve) {
-              clearInterval(poll); clearTimeout(t); r();
-            }
-          }, 100);
-        });
-      }
-    } else {
+    // Have affected players submit responses
+    await handleCrises(crisisList, clients, ids, roomId);
+
+    // Host force-resolves each crisis
+    for (const crisis of crisisList) {
+      if (!crisis?.id) continue;
+      const beforeResolve = hostClient._stateUpdates.length;
+      hostClient.emit('resolveCrisis', {
+        roomId, playerId: hostId, playerid: hostId, userId: hostId, crisisId: crisis.id
+      });
+      await new Promise(r => {
+        const t = setTimeout(r, 3000);
+        const poll = setInterval(() => {
+          if (hostClient._stateUpdates.length > beforeResolve) {
+            clearInterval(poll); clearTimeout(t); r();
+          }
+        }, 100);
+      });
+    }
+
+    if (crisisList.length === 0) {
+      // Blanket resolve
       const beforeResolve = hostClient._stateUpdates.length;
       hostClient.emit('resolveCrisis', { roomId, playerId: hostId, playerid: hostId, userId: hostId });
       await new Promise(r => {
@@ -122,7 +170,7 @@ async function advanceYearWithCrisisHandling(hostClient, roomId, hostId) {
       });
     }
 
-    await delay(200); // brief pause before retry
+    await delay(200);
   }
   throw new Error('advanceYear: too many crisis retries');
 }
@@ -288,7 +336,7 @@ async function run() {
 
     // Advance year — if a crisis blocks it, force-resolve then retry
     process.stdout.write(`  Year ${year}: advancing … `);
-    const yearState = await advanceYearWithCrisisHandling(clients['USA'], roomId, hostId);
+    const yearState = await advanceYearWithCrisisHandling(clients['USA'], clients, ids, roomId, hostId);
     assert(
       yearState.phase2?.currentYear === year + 1 || yearState.gamePhase === 'complete',
       `Year ${year} resolved (now year=${yearState.phase2?.currentYear}, phase=${yearState.gamePhase})`
