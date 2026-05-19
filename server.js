@@ -1352,6 +1352,17 @@ function triggerCrisisIfNeeded(roomId, year, options = {}) {
   console.log(`✋ ${triggeredCrises.length} crisis(es) active - waiting for player responses`);
 }
 
+// Convert a submitted exchange rate to USD-per-local-currency for comparisons.
+// UK rates are quoted as USD/GBP (already correct).
+// All other non-USD currencies are quoted as local/USD and must be inverted.
+function toUSDEquivalent(country, rate) {
+  if (!rate || rate <= 0) return 1.0;
+  const nc = normalizeCountryName(country);
+  if (nc === 'USA' || nc === 'USSR') return rate;
+  if (nc === 'UK') return rate; // already USD/GBP
+  return 1 / rate; // local/USD → USD/local
+}
+
 function calculateYearEconomics(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
@@ -1436,6 +1447,10 @@ function calculateYearEconomics(roomId) {
       exchangeRate = policy.exchangeRate || 1.0;
       tariffRate = policy.tariffRate || 10;
     }
+    // Normalize to USD-per-local-currency for all cross-country comparisons.
+    // Rates submitted as local/USD (France: 119 FRF/$, India: 3.31 INR/$, etc.)
+    // must be inverted; UK's rate is already USD/GBP and stays as-is.
+    const usdRate = toUSDEquivalent(country, exchangeRate);
     
     const militarySpending = policy.militarySpending || 5;
     
@@ -1509,9 +1524,10 @@ function calculateYearEconomics(roomId) {
       const otherPolicy = policies[otherCountry];
       if (!otherPolicy) return;
       
-      // Exchange rate competitiveness
-      // If your currency is weaker (lower exchangeRate), you export more
-      const exchangeRateDiff = otherPolicy.exchangeRate - exchangeRate;
+      // Exchange rate competitiveness (compare on a common USD-per-local basis)
+      // If your currency is weaker (lower usdRate), you export more
+      const otherUSDRate = toUSDEquivalent(otherCountry, otherPolicy.exchangeRate || 1.0);
+      const exchangeRateDiff = otherUSDRate - usdRate;
       tradeCompetitiveness += exchangeRateDiff * 0.3; // Boosts GDP if you're more competitive
       
       // Tariff barriers hurt trade
@@ -1527,7 +1543,7 @@ function calculateYearEconomics(roomId) {
       }
       
       // Currency wars: if you devalue aggressively while others don't, they retaliate
-      if (exchangeRate < 0.8 && otherPolicy.exchangeRate > 1.1) {
+      if (usdRate < 0.8 && otherUSDRate > 1.1) {
         gdpGrowth -= 0.5; // Backlash from competitive devaluation
       }
       
@@ -1945,8 +1961,8 @@ function calculateYearEconomics(roomId) {
     }
     
     // Competitive devaluation causes import inflation
-    if (exchangeRate < 0.9) {
-      inflation += (0.9 - exchangeRate) * 5; // Weak currency = expensive imports
+    if (usdRate < 0.9) {
+      inflation += (0.9 - usdRate) * 5; // Weak currency = expensive imports
     }
     
     inflation = Math.max(0, inflation + (Math.random() - 0.5) * 3);
