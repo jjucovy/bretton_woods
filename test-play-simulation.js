@@ -8,6 +8,7 @@
 const { io } = require('socket.io-client');
 const gameDataFile = require('./game-data.json');
 const { crisisEvents } = require('./crisis-events.json');
+const { getVote, getPolicy, getCrisisResponse } = require('./virtual-players');
 
 const SERVER_URL = 'http://localhost:65002';
 const COUNTRIES = ['USA', 'UK', 'USSR', 'France', 'China', 'India', 'Argentina'];
@@ -52,7 +53,7 @@ function connect(label) {
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // Submit crisis responses for all affected countries, then host force-resolves.
-async function handleCrises(crisisList, clients, ids, roomId) {
+async function handleCrises(crisisList, clients, ids, roomId, lastEconState) {
   for (const crisis of crisisList) {
     if (!crisis?.id) continue;
 
@@ -78,8 +79,10 @@ async function handleCrises(crisisList, clients, ids, roomId) {
         continue;
       }
 
-      // Pick first available option
-      const choice = countryOpts[0];
+      // Use virtual player strategy; fall back to first option
+      const econ = lastEconState?.[country] || {};
+      const chosenId = getCrisisResponse(country, crisis, econ);
+      const choice = countryOpts.find(o => o.id === chosenId) || countryOpts[0];
       clients[country].emit('submitCrisisResponse', {
         roomId,
         playerid: playerId,
@@ -137,7 +140,8 @@ async function advanceYearWithCrisisHandling(hostClient, clients, ids, roomId, h
       ? activeCrises : (activeCrises ? [activeCrises] : []);
 
     // Have affected players submit responses
-    await handleCrises(crisisList, clients, ids, roomId);
+    const econByCountry = lastState?.phase2?.countries || {};
+    await handleCrises(crisisList, clients, ids, roomId, econByCountry);
 
     // Host force-resolves each crisis
     for (const crisis of crisisList) {
@@ -268,10 +272,9 @@ async function run() {
     const title = issues[round]?.title || `Issue ${round + 1}`;
     process.stdout.write(`  Round ${round + 1}/10: ${title.substring(0, 45)} … `);
 
-    // All 7 players vote
+    // All 7 players vote using country-specific historical strategies
     for (const c of COUNTRIES) {
-      // Create some variety: USA+UK vote A, others vote B (or A if round is even)
-      const choice = (c === 'USA' || c === 'UK' || round % 2 === 0) ? 'A' : 'B';
+      const choice = getVote(c, round + 1);
       clients[c].emit('vote', {
         roomId,
         playerId: ids[c], playerid: ids[c], userId: ids[c],
@@ -306,28 +309,23 @@ async function run() {
   }
   assert(p2state?.gamePhase === 'phase2', `Phase 2 active (phase=${p2state?.gamePhase})`);
 
+  // Track latest econ state per country for reactive policy decisions
+  let lastEcon = {};
+
   for (let yi = 0; yi < 7; yi++) {
     const year = 1946 + yi;
     process.stdout.write(`  Year ${year} (${yi + 1}/7): submitting policies … `);
 
+    // Pull latest econ snapshot from most recent stateUpdate
+    const latestState = clients['USA']._stateUpdates.slice(-1)[0];
+    if (latestState?.phase2?.countries) {
+      for (const [c, data] of Object.entries(latestState.phase2.countries)) {
+        lastEcon[c] = data;
+      }
+    }
+
     for (const c of COUNTRIES) {
-      const isCE = (c === 'USSR' || c === 'China');
-      // Exchange rates: local currency per USD (from country-utils INITIAL_EXCHANGE_RATES)
-      // USA=1.00, UK=4.03, France=119.11, India=3.31, Argentina=4.23
-      const exchangeRates = { USA: 1.00, UK: 4.03, France: 119.11, India: 3.31, Argentina: 4.23 };
-      const policy = isCE
-        ? {
-            productionTargets: { agriculture: 25, industry: 50, military: 15, consumer: 10 },
-            laborMobilization: 70,
-            priceControls: true,
-            foreignTrade: 'minimal'
-          }
-        : {
-            centralBankRate: 3.0,
-            exchangeRate: exchangeRates[c] || 1.0,
-            tariffRate: 15,
-            governmentSpending: 20
-          };
+      const policy = getPolicy(c, year, lastEcon[c]);
       clients[c].emit('submitPolicy', { roomId, playerid: ids[c], policy });
       await delay(50);
     }
