@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optics Lab: Telescopes & Microscopes</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-orange: #f0883e;
+    --accent-purple: #bc8cff;
+    --lens-color: rgba(100, 180, 255, 0.35);
+    --lens-border: rgba(100, 200, 255, 0.8);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+  }
+
+  header span {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .tab-bar {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+  }
+
+  .tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    user-select: none;
+  }
+
+  .tab:hover { color: var(--text); }
+
+  .tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+  }
+
+  .page { display: none; padding: 24px 32px; }
+  .page.active { display: block; }
+
+  /* ---- Layout ---- */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .card h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--accent-blue);
+  }
+
+  /* ---- Canvas ---- */
+  canvas {
+    display: block;
+    border-radius: 6px;
+    background: #000814;
+    width: 100%;
+  }
+
+  /* ---- Controls ---- */
+  .control-row {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .control-group label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  .control-group label span {
+    color: var(--accent-orange);
+    font-weight: 600;
+  }
+
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--accent-blue);
+    cursor: pointer;
+  }
+
+  /* ---- Info panel ---- */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .stat-box {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-box .label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .stat-box .value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent-green);
+    margin-top: 2px;
+  }
+
+  /* ---- Explainer ---- */
+  .explainer {
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: rgba(88, 166, 255, 0.07);
+    border-left: 3px solid var(--accent-blue);
+    border-radius: 0 6px 6px 0;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  .explainer strong { color: var(--text); }
+
+  /* ---- Viewport toggle ---- */
+  .view-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .view-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .view-btn.active {
+    background: var(--accent-blue);
+    color: #000;
+    border-color: var(--accent-blue);
+    font-weight: 600;
+  }
+
+  /* ---- Theory section ---- */
+  .theory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 8px;
+  }
+
+  .theory-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .theory-card h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--accent-purple);
+    margin-bottom: 10px;
+  }
+
+  .theory-card p {
+    font-size: 0.85rem;
+    line-height: 1.65;
+    color: var(--muted);
+  }
+
+  .formula {
+    font-family: 'Courier New', monospace;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    font-size: 0.9rem;
+    color: var(--accent-orange);
+    text-align: center;
+  }
+
+  /* ---- Quiz ---- */
+  .quiz-question {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .quiz-question p { font-size: 0.95rem; margin-bottom: 14px; }
+
+  .quiz-options { display: flex; flex-direction: column; gap: 8px; }
+
+  .quiz-opt {
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 0.88rem;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+  }
+
+  .quiz-opt:hover { border-color: var(--accent-blue); background: rgba(88,166,255,0.07); }
+  .quiz-opt.correct { border-color: var(--accent-green); background: rgba(63,185,80,0.15); color: var(--accent-green); }
+  .quiz-opt.wrong { border-color: #f85149; background: rgba(248,81,73,0.1); color: #f85149; }
+
+  .quiz-feedback {
+    margin-top: 10px;
+    font-size: 0.83rem;
+    color: var(--muted);
+    display: none;
+    line-height: 1.5;
+  }
+
+  .quiz-feedback.show { display: block; }
+
+  /* ---- Eyepiece preview ---- */
+  #eyepiece-canvas {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    display: block;
+    margin: 12px auto 0;
+  }
+
+  .section-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+    <circle cx="14" cy="14" r="13" stroke="#58a6ff" stroke-width="1.5"/>
+    <circle cx="14" cy="14" r="6" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="3 2"/>
+    <line x1="14" y1="1" x2="14" y2="5" stroke="#58a6ff" stroke-width="1.5"/>
+    <line x1="14" y1="23" x2="14" y2="27" stroke="#58a6ff" stroke-width="1.5"/>
+    <line x1="1" y1="14" x2="5" y2="14" stroke="#58a6ff" stroke-width="1.5"/>
+    <line x1="23" y1="14" x2="27" y2="14" stroke="#58a6ff" stroke-width="1.5"/>
+  </svg>
+  <h1>Optics Lab</h1>
+  <span>Interactive Telescope &amp; Microscope Simulator</span>
+</header>
+
+<div class="tab-bar">
+  <div class="tab active" onclick="showPage('telescope')">🔭 Telescope</div>
+  <div class="tab" onclick="showPage('microscope')">🔬 Microscope</div>
+  <div class="tab" onclick="showPage('theory')">📐 Theory</div>
+  <div class="tab" onclick="showPage('quiz')">🧠 Quiz</div>
+</div>
+
+<!-- ===================== TELESCOPE PAGE ===================== -->
+<div class="page active" id="page-telescope">
+  <div class="two-col">
+    <div>
+      <div class="card">
+        <h2>Ray Diagram</h2>
+        <div class="view-toggle">
+          <button class="view-btn active" onclick="setTelescopeView('ray')">Ray Diagram</button>
+          <button class="view-btn" onclick="setTelescopeView('eyepiece')">Eyepiece View</button>
+          <button class="view-btn" onclick="setTelescopeView('compare')">Unaided vs. Telescope</button>
+        </div>
+        <canvas id="telescope-canvas" height="320"></canvas>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Controls</h2>
+        <div class="control-row">
+          <div class="control-group">
+            <label>Objective Focal Length (f<sub>obj</sub>) <span id="t-fobj-val">800</span> mm</label>
+            <input type="range" id="t-fobj" min="200" max="2000" value="800" oninput="updateTelescope()">
+          </div>
+          <div class="control-group">
+            <label>Eyepiece Focal Length (f<sub>eye</sub>) <span id="t-feye-val">25</span> mm</label>
+            <input type="range" id="t-feye" min="5" max="60" value="25" oninput="updateTelescope()">
+          </div>
+          <div class="control-group">
+            <label>Aperture (D) <span id="t-aperture-val">100</span> mm</label>
+            <input type="range" id="t-aperture" min="30" max="300" value="100" oninput="updateTelescope()">
+          </div>
+          <div class="control-group">
+            <label>Object Distance <span id="t-objdist-val">∞</span></label>
+            <input type="range" id="t-objdist" min="0" max="100" value="100" oninput="updateTelescope()">
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="stat-box">
+            <div class="label">Magnification</div>
+            <div class="value" id="t-mag">32×</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">f/ratio</div>
+            <div class="value" id="t-fratio">f/8</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">Resolving Power</div>
+            <div class="value" id="t-resolve">1.16″</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">Light Gathering</div>
+            <div class="value" id="t-light">204×</div>
+          </div>
+        </div>
+
+        <div class="explainer" id="t-explainer">
+          A <strong>refracting telescope</strong> uses two converging lenses. The large <strong>objective lens</strong>
+          collects light and forms a real, inverted intermediate image. The <strong>eyepiece</strong> acts as a magnifier
+          for that image, producing a virtual image your eye can focus on.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MICROSCOPE PAGE ===================== -->
+<div class="page" id="page-microscope">
+  <div class="two-col">
+    <div>
+      <div class="card">
+        <h2>Ray Diagram</h2>
+        <div class="view-toggle">
+          <button class="view-btn active" onclick="setMicroscopeView('ray')">Ray Diagram</button>
+          <button class="view-btn" onclick="setMicroscopeView('specimen')">Specimen View</button>
+          <button class="view-btn" onclick="setMicroscopeView('compare')">Real vs. Magnified</button>
+        </div>
+        <canvas id="microscope-canvas" height="320"></canvas>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Controls</h2>
+        <div class="control-row">
+          <div class="control-group">
+            <label>Objective Focal Length (f<sub>obj</sub>) <span id="m-fobj-val">4</span> mm</label>
+            <input type="range" id="m-fobj" min="1" max="20" value="4" oninput="updateMicroscope()">
+          </div>
+          <div class="control-group">
+            <label>Eyepiece Focal Length (f<sub>eye</sub>) <span id="m-feye-val">25</span> mm</label>
+            <input type="range" id="m-feye" min="5" max="60" value="25" oninput="updateMicroscope()">
+          </div>
+          <div class="control-group">
+            <label>Tube Length (L) <span id="m-tube-val">160</span> mm</label>
+            <input type="range" id="m-tube" min="80" max="250" value="160" oninput="updateMicroscope()">
+          </div>
+          <div class="control-group">
+            <label>Object Distance (u) <span id="m-objdist-val">4.5</span> mm</label>
+            <input type="range" id="m-objdist" min="100" max="999" value="450" oninput="updateMicroscope()">
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="stat-box">
+            <div class="label">Total Magnification</div>
+            <div class="value" id="m-mag">400×</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">Objective Mag</div>
+            <div class="value" id="m-obj-mag">40×</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">Eyepiece Mag</div>
+            <div class="value" id="m-eye-mag">10×</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">Resolution (Abbe)</div>
+            <div class="value" id="m-resolve">0.27 μm</div>
+          </div>
+        </div>
+
+        <div class="explainer" id="m-explainer">
+          A <strong>compound microscope</strong> uses two lens systems. The <strong>objective</strong> (short focal length)
+          is placed just beyond its focal point to create a <strong>highly magnified real image</strong> inside the tube.
+          The <strong>eyepiece</strong> then magnifies that intermediate image a second time.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== THEORY PAGE ===================== -->
+<div class="page" id="page-theory">
+  <p class="section-title">Core Optics Principles</p>
+  <div class="theory-grid">
+
+    <div class="theory-card">
+      <h3>The Thin Lens Equation</h3>
+      <p>All image formation by a single lens obeys:</p>
+      <div class="formula">1/f = 1/d<sub>o</sub> + 1/d<sub>i</sub></div>
+      <p>Where <em>f</em> is focal length, <em>d<sub>o</sub></em> is object distance, and <em>d<sub>i</sub></em> is image distance.
+      A <strong>positive</strong> image distance means a real image forms on the far side; negative means virtual.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Lateral Magnification</h3>
+      <p>The size ratio of image to object:</p>
+      <div class="formula">m = −d<sub>i</sub> / d<sub>o</sub> = h<sub>i</sub> / h<sub>o</sub></div>
+      <p>A negative <em>m</em> means the image is <strong>inverted</strong>. For a telescope objective aimed at a distant
+      object, d<sub>o</sub> ≈ ∞, so the intermediate image forms at exactly the focal point.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Telescope Magnification</h3>
+      <p>For parallel light from infinity, total angular magnification is simply:</p>
+      <div class="formula">M<sub>tel</sub> = f<sub>obj</sub> / f<sub>eye</sub></div>
+      <p>Longer objective focal lengths and shorter eyepiece focal lengths both increase power.
+      The image is inverted — astronomers often accept this, but terrestrial scopes add an erecting lens system.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Compound Microscope Magnification</h3>
+      <p>Total power is the product of both stages:</p>
+      <div class="formula">M<sub>mic</sub> = m<sub>obj</sub> × M<sub>eye</sub> = (L / f<sub>obj</sub>) × (250 / f<sub>eye</sub>)</div>
+      <p><em>L</em> is the optical tube length (≈ 160 mm standard). The <strong>250 mm</strong> is the conventional near-point
+      distance of the human eye used to define eyepiece magnification.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Resolving Power (Telescopes)</h3>
+      <p>The Rayleigh criterion for angular resolution:</p>
+      <div class="formula">θ = 1.22 λ / D (radians)</div>
+      <p>In arcseconds: θ″ ≈ 116 / D<sub>mm</sub>. A larger aperture <em>D</em> resolves finer detail.
+      This is why professional telescopes have enormous mirrors — not just for light gathering but for resolution.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Resolving Power (Microscopes)</h3>
+      <p>Abbe's diffraction limit:</p>
+      <div class="formula">d = λ / (2 · NA) = λ / (2 · n · sin α)</div>
+      <p>NA is numerical aperture. Higher NA (oil immersion, n ≈ 1.515) and shorter wavelengths push resolution below 200 nm.
+      This is why electron microscopes use electrons (λ ≈ pm) for atomic-scale imaging.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Light Gathering Power</h3>
+      <p>A telescope collects light proportional to its area:</p>
+      <div class="formula">LGP = (D / D<sub>eye</sub>)² ≈ (D / 7mm)²</div>
+      <p>A 100 mm scope collects ~200× more light than a dark-adapted eye (7 mm pupil), revealing objects
+      far too faint to see unaided. This is the primary driver for large observatory apertures.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Real vs. Virtual Images</h3>
+      <p>A <strong>real image</strong> forms where light rays actually converge — it can be projected onto a screen.
+      A <strong>virtual image</strong> appears where rays <em>seem to diverge from</em> — it cannot be screened but
+      your eye can focus on it as if it were a real object. Eyepieces always produce virtual final images.</p>
+    </div>
+
+    <div class="theory-card">
+      <h3>Numerical Aperture &amp; f/ratio</h3>
+      <p>Telescope focal ratio:</p>
+      <div class="formula">f/# = f<sub>obj</sub> / D</div>
+      <p>Slow scopes (f/10+) give wider exit pupils and better eye relief. Fast scopes (f/4–f/6) are physically
+      shorter and suit wide-field viewing, but demand better-quality eyepieces to control aberrations.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== QUIZ PAGE ===================== -->
+<div class="page" id="page-quiz">
+  <p class="section-title">Self-Check Quiz</p>
+  <div id="quiz-container"></div>
+  <button onclick="resetQuiz()" style="margin-top:8px;padding:10px 24px;background:var(--accent-blue);color:#000;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem;font-weight:600;">Reset Quiz</button>
+</div>
+
+<!-- ===================== EYEPIECE CANVAS (shared) ===================== -->
+<canvas id="eyepiece-canvas" style="display:none"></canvas>
+
+<script>
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+let telescopeView = 'ray';
+let microscopeView = 'ray';
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'telescope') updateTelescope();
+  if (name === 'microscope') updateMicroscope();
+}
+
+function setTelescopeView(v) {
+  telescopeView = v;
+  document.querySelectorAll('#page-telescope .view-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  updateTelescope();
+}
+
+function setMicroscopeView(v) {
+  microscopeView = v;
+  document.querySelectorAll('#page-microscope .view-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  updateMicroscope();
+}
+
+// ============================================================
+// DRAWING HELPERS
+// ============================================================
+function drawLens(ctx, x, cy, h, color = 'rgba(100,180,255,0.35)', borderColor = 'rgba(100,200,255,0.8)') {
+  ctx.save();
+  ctx.beginPath();
+  // biconvex lens shape
+  const r = h * 0.9;
+  ctx.moveTo(x, cy - h);
+  ctx.bezierCurveTo(x + r * 0.5, cy - h, x + r * 0.5, cy + h, x, cy + h);
+  ctx.bezierCurveTo(x - r * 0.5, cy + h, x - r * 0.5, cy - h, x, cy - h);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawArrow(ctx, x, y, h, color, label) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - h);
+  ctx.stroke();
+  // arrowhead
+  ctx.beginPath();
+  ctx.moveTo(x, y - h);
+  ctx.lineTo(x - 5, y - h + 10);
+  ctx.lineTo(x + 5, y - h + 10);
+  ctx.closePath();
+  ctx.fill();
+  if (label) {
+    ctx.font = '11px monospace';
+    ctx.fillStyle = color;
+    ctx.fillText(label, x + 8, y - h + 4);
+  }
+  ctx.restore();
+}
+
+function drawRay(ctx, pts, color, alpha = 0.7, dashed = false) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 1.3;
+  if (dashed) ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function labelAxis(ctx, text, x, y, color = '#8b949e') {
+  ctx.save();
+  ctx.font = '11px monospace';
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+// ============================================================
+// TELESCOPE SIMULATION
+// ============================================================
+function updateTelescope() {
+  const fobj = parseInt(document.getElementById('t-fobj').value);
+  const feye = parseInt(document.getElementById('t-feye').value);
+  const aperture = parseInt(document.getElementById('t-aperture').value);
+  const objDistPct = parseInt(document.getElementById('t-objdist').value); // 0=close, 100=infinity
+
+  document.getElementById('t-fobj-val').textContent = fobj;
+  document.getElementById('t-feye-val').textContent = feye;
+  document.getElementById('t-aperture-val').textContent = aperture;
+  document.getElementById('t-objdist-val').textContent = objDistPct === 100 ? '∞' : (objDistPct * 50 + ' m');
+
+  const mag = (fobj / feye).toFixed(1);
+  const fratio = (fobj / aperture).toFixed(1);
+  const resolve = (116 / aperture).toFixed(2);
+  const lightGather = Math.round(Math.pow(aperture / 7, 2));
+
+  document.getElementById('t-mag').textContent = mag + '×';
+  document.getElementById('t-fratio').textContent = 'f/' + fratio;
+  document.getElementById('t-resolve').textContent = resolve + '″';
+  document.getElementById('t-light').textContent = lightGather + '×';
+
+  const canvas = document.getElementById('telescope-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 700;
+  const H = 320;
+  canvas.width = W;
+  canvas.height = H;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#000814';
+  ctx.fillRect(0, 0, W, H);
+
+  if (telescopeView === 'ray') drawTelescopeRay(ctx, W, H, fobj, feye, aperture, objDistPct);
+  else if (telescopeView === 'eyepiece') drawTelescopeEyepiece(ctx, W, H, fobj, feye, aperture);
+  else drawTelescopeCompare(ctx, W, H, fobj, feye, aperture);
+}
+
+function drawTelescopeRay(ctx, W, H, fobj, feye, aperture, objDistPct) {
+  const cy = H / 2;
+  const margin = 30;
+
+  // Normalize focal lengths to canvas space
+  // We have: objective, intermediate image, eyepiece, eye
+  // Layout: [object arrow] [obj lens] [focal/image point] [eye lens] [virtual image arrow / eye]
+  const totalOpticalLen = fobj + feye; // in mm
+  const scale = (W - margin * 2) / (totalOpticalLen * 1.3);
+
+  const objLensX = margin + fobj * 0.25 * scale;
+  const intermImageX = objLensX + fobj * scale;
+  const eyeLensX = intermImageX + feye * scale;
+  const eyeX = Math.min(eyeLensX + feye * scale * 0.6, W - margin);
+
+  const lensH = Math.min(60, aperture * 0.3);
+
+  // Optical axis
+  ctx.save();
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, cy);
+  ctx.lineTo(W, cy);
+  ctx.stroke();
+  ctx.restore();
+
+  // Object arrow (star / distant object)
+  const objX = margin;
+  const objH = 30;
+  if (objDistPct === 100) {
+    // Stars at infinity: draw incoming parallel rays
+    const colors = ['#ff6b6b', '#58a6ff', '#3fb950'];
+    for (let i = 0; i < 3; i++) {
+      const yOff = (i - 1) * (lensH * 0.55);
+      drawRay(ctx, [[objX, cy + yOff], [objLensX, cy + yOff]], colors[i]);
+      // Through objective -> focal point
+      drawRay(ctx, [[objLensX, cy + yOff], [intermImageX, cy + yOff * 0.02]], colors[i]);
+    }
+  } else {
+    drawArrow(ctx, objX, cy + 5, objH, '#f0883e', 'obj');
+    // Non-parallel rays from object tip
+    drawRay(ctx, [[objX, cy - objH], [objLensX, cy - lensH * 0.5]], '#f0883e');
+    drawRay(ctx, [[objX, cy - objH], [objLensX, cy]], '#f0883e');
+    drawRay(ctx, [[objX, cy - objH], [objLensX, cy + lensH * 0.5]], '#f0883e');
+  }
+
+  // Objective lens
+  drawLens(ctx, objLensX, cy, lensH);
+  labelAxis(ctx, 'Objective\nf=' + fobj + 'mm', objLensX - 24, cy + lensH + 18, '#58a6ff');
+
+  // Rays converging to intermediate image
+  const imgH = 20;
+  drawRay(ctx, [[objLensX, cy - lensH * 0.5], [intermImageX, cy - imgH]], '#ff6b6b');
+  drawRay(ctx, [[objLensX, cy], [intermImageX, cy - imgH]], '#58a6ff');
+  drawRay(ctx, [[objLensX, cy + lensH * 0.5], [intermImageX, cy - imgH]], '#3fb950');
+
+  // Intermediate real image
+  ctx.save();
+  ctx.strokeStyle = '#f0883e';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(intermImageX, cy);
+  ctx.lineTo(intermImageX, cy - imgH);
+  ctx.stroke();
+  ctx.fillStyle = '#f0883e';
+  ctx.beginPath();
+  ctx.arc(intermImageX, cy - imgH, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  labelAxis(ctx, 'Real\nImage', intermImageX - 14, cy + 18, '#f0883e');
+
+  // Eyepiece lens
+  drawLens(ctx, eyeLensX, cy, lensH * 0.65);
+  labelAxis(ctx, 'Eyepiece\nf=' + feye + 'mm', eyeLensX - 22, cy + lensH * 0.65 + 18, '#bc8cff');
+
+  // Diverging rays from eyepiece to eye (virtual image)
+  const spread = lensH * 0.4;
+  drawRay(ctx, [[intermImageX, cy - imgH], [eyeLensX, cy - spread * 0.6]], '#ff6b6b');
+  drawRay(ctx, [[intermImageX, cy - imgH], [eyeLensX, cy]], '#58a6ff');
+  drawRay(ctx, [[intermImageX, cy - imgH], [eyeLensX, cy + spread * 0.6]], '#3fb950');
+
+  // After eyepiece: parallel (or diverging) beams to eye
+  drawRay(ctx, [[eyeLensX, cy - spread * 0.6], [eyeX, cy - spread * 1.0]], '#ff6b6b');
+  drawRay(ctx, [[eyeLensX, cy], [eyeX, cy]], '#58a6ff');
+  drawRay(ctx, [[eyeLensX, cy + spread * 0.6], [eyeX, cy + spread * 1.0]], '#3fb950');
+
+  // Eye symbol
+  drawEyeSymbol(ctx, eyeX, cy);
+  labelAxis(ctx, 'Eye', eyeX - 8, cy + 28, '#8b949e');
+
+  // Virtual image arrow (left of scope, large)
+  const virtImgX = margin;
+  const virtImgH = imgH * (fobj / feye);
+  const clampH = Math.min(virtImgH, cy - 10);
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  drawArrow(ctx, eyeX + 20, cy + 5, clampH, '#bc8cff', '');
+  ctx.restore();
+  labelAxis(ctx, '← virtual image at ∞', eyeLensX + 8, cy - lensH * 0.65 - 8, '#bc8cff');
+}
+
+function drawEyeSymbol(ctx, x, cy) {
+  ctx.save();
+  ctx.strokeStyle = '#8b949e';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(x + 10, cy, 12, 8, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x + 10, cy, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#58a6ff';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTelescopeEyepiece(ctx, W, H, fobj, feye, aperture) {
+  // Simulate what a star field looks like
+  const cx = W / 2, cy = H / 2;
+  const r = Math.min(cx, cy) - 20;
+
+  // Clip to circle (eyepiece field of view)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+
+  // Background
+  ctx.fillStyle = '#000005';
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  const mag = fobj / feye;
+  const starCount = 80;
+  const rng = mulberry32(42);
+  for (let i = 0; i < starCount; i++) {
+    const sx = cx + (rng() - 0.5) * r * 2;
+    const sy = cy + (rng() - 0.5) * r * 2;
+    const brightness = rng();
+    const starR = Math.max(0.5, brightness * 2.5);
+    ctx.beginPath();
+    ctx.arc(sx, sy, starR, 0, Math.PI * 2);
+    const v = Math.floor(brightness * 255);
+    ctx.fillStyle = `rgb(${v},${v},${Math.min(255, v + 40)})`;
+    ctx.fill();
+  }
+
+  // A planet / object
+  ctx.beginPath();
+  ctx.arc(cx + r * 0.15, cy - r * 0.1, Math.max(3, 8 * (mag / 32)), 0, Math.PI * 2);
+  ctx.fillStyle = '#c8a96e';
+  ctx.fill();
+
+  ctx.restore();
+
+  // Eyepiece ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  // Crosshairs
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+  ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+  ctx.stroke();
+  ctx.restore();
+
+  labelAxis(ctx, `Magnification: ${(fobj / feye).toFixed(0)}×   Aperture: ${aperture}mm`, 10, H - 10, '#8b949e');
+}
+
+function drawTelescopeCompare(ctx, W, H, fobj, feye, aperture) {
+  const half = W / 2;
+  const cy = H / 2;
+  const r = Math.min(half * 0.85, cy - 20);
+
+  function drawStarView(cx, magFactor, label) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#000005';
+    ctx.fillRect(cx - r, 0, r * 2, H);
+
+    const rng = mulberry32(99);
+    const count = Math.round(80 * magFactor);
+    for (let i = 0; i < Math.min(count, 200); i++) {
+      const sx = cx + (rng() - 0.5) * r * 2;
+      const sy = cy + (rng() - 0.5) * r * 2;
+      const b = rng();
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(0.4, b * 2 * magFactor), 0, Math.PI * 2);
+      const v = Math.floor(b * 255);
+      ctx.fillStyle = `rgb(${v},${v},${v + 20})`;
+      ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    labelAxis(ctx, label, cx - r * 0.3, cy + r + 16, '#8b949e');
+  }
+
+  drawStarView(half * 0.5, 1, 'Unaided Eye');
+  drawStarView(half * 1.5, fobj / feye / 10, `Telescope ${(fobj / feye).toFixed(0)}×`);
+
+  // Divider
+  ctx.save();
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(half, 0);
+  ctx.lineTo(half, H);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
+// MICROSCOPE SIMULATION
+// ============================================================
+function updateMicroscope() {
+  const fobj = parseInt(document.getElementById('m-fobj').value) / 10; // convert to cm
+  const feye = parseInt(document.getElementById('m-feye').value);
+  const tube = parseInt(document.getElementById('m-tube').value);
+  const objDistVal = parseInt(document.getElementById('m-objdist').value);
+  const objDist = objDistVal / 100; // in mm (slider: 100-999 -> 1.0-9.99 mm)
+
+  document.getElementById('m-fobj-val').textContent = (fobj * 10).toFixed(0);
+  document.getElementById('m-feye-val').textContent = feye;
+  document.getElementById('m-tube-val').textContent = tube;
+  document.getElementById('m-objdist-val').textContent = objDist.toFixed(1);
+
+  // Objective magnification: m_obj = L / f_obj (L in mm, f_obj in mm)
+  const fobjMm = fobj * 10;
+  const mObj = tube / fobjMm;
+  const mEye = 250 / feye;
+  const mTotal = mObj * mEye;
+
+  // Abbe resolution (assume λ=550nm, NA ≈ 0.12 * fobj_mm^{-0.5} rough estimate)
+  const NA = Math.min(1.4, 0.5 + (20 - fobjMm) * 0.04);
+  const resolution = (0.55 / (2 * NA)).toFixed(2);
+
+  document.getElementById('m-mag').textContent = mTotal.toFixed(0) + '×';
+  document.getElementById('m-obj-mag').textContent = mObj.toFixed(0) + '×';
+  document.getElementById('m-eye-mag').textContent = mEye.toFixed(0) + '×';
+  document.getElementById('m-resolve').textContent = resolution + ' μm';
+
+  const canvas = document.getElementById('microscope-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 700;
+  const H = 320;
+  canvas.width = W;
+  canvas.height = H;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#000814';
+  ctx.fillRect(0, 0, W, H);
+
+  if (microscopeView === 'ray') drawMicroscopeRay(ctx, W, H, fobjMm, feye, tube, objDist);
+  else if (microscopeView === 'specimen') drawSpecimenView(ctx, W, H, mTotal);
+  else drawMicroscopeCompare(ctx, W, H, mTotal);
+}
+
+function drawMicroscopeRay(ctx, W, H, fobjMm, feye, tube, objDist) {
+  const cy = H / 2;
+  const margin = 28;
+
+  // Layout (left to right): specimen -> objective -> intermediate image -> eyepiece -> eye
+  const scale = (W - margin * 2) / (tube + feye * 2.5 + fobjMm * 3);
+  const specX = margin;
+  const objLensX = specX + fobjMm * 2.5 * scale;
+  const intermX = objLensX + tube * scale;
+  const eyeLensX = intermX + feye * scale;
+  const eyeX = Math.min(eyeLensX + feye * 1.2 * scale, W - margin);
+
+  const objLensH = 25;
+  const eyeLensH = 20;
+
+  // Axis
+  ctx.save();
+  ctx.strokeStyle = '#1e2a38';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, cy); ctx.lineTo(W, cy);
+  ctx.stroke();
+  ctx.restore();
+
+  // Specimen
+  const specH = 12;
+  drawArrow(ctx, specX + 10, cy + 2, specH, '#f0883e', '');
+  labelAxis(ctx, 'Specimen', specX, cy + 18, '#f0883e');
+
+  // Rays from specimen tip through objective
+  const tipY = cy - specH;
+  drawRay(ctx, [[specX + 10, tipY], [objLensX, cy - objLensH * 0.6]], '#ff6b6b');
+  drawRay(ctx, [[specX + 10, tipY], [objLensX, cy]], '#58a6ff');
+  drawRay(ctx, [[specX + 10, tipY], [objLensX, cy + objLensH * 0.6]], '#3fb950');
+
+  // Objective lens
+  drawLens(ctx, objLensX, cy, objLensH);
+  labelAxis(ctx, 'Obj\nf=' + fobjMm + 'mm', objLensX - 16, cy + objLensH + 16, '#58a6ff');
+
+  // Real intermediate image (inverted, magnified)
+  const imgH = Math.min(50, specH * tube / fobjMm);
+  drawRay(ctx, [[objLensX, cy - objLensH * 0.6], [intermX, cy + imgH]], '#ff6b6b');
+  drawRay(ctx, [[objLensX, cy], [intermX, cy + imgH]], '#58a6ff');
+  drawRay(ctx, [[objLensX, cy + objLensH * 0.6], [intermX, cy + imgH]], '#3fb950');
+
+  // Intermediate image arrow
+  ctx.save();
+  ctx.strokeStyle = '#f0883e';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(intermX, cy);
+  ctx.lineTo(intermX, cy + imgH);
+  ctx.stroke();
+  ctx.fillStyle = '#f0883e';
+  ctx.beginPath();
+  ctx.arc(intermX, cy + imgH, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  labelAxis(ctx, 'Real\nimage', intermX - 14, cy - 18, '#f0883e');
+
+  // Rays from intermediate image through eyepiece
+  const spread2 = eyeLensH * 0.5;
+  drawRay(ctx, [[intermX, cy + imgH], [eyeLensX, cy - spread2 * 0.5]], '#ff6b6b');
+  drawRay(ctx, [[intermX, cy + imgH], [eyeLensX, cy]], '#58a6ff');
+  drawRay(ctx, [[intermX, cy + imgH], [eyeLensX, cy + spread2 * 0.5]], '#3fb950');
+
+  // Eyepiece lens
+  drawLens(ctx, eyeLensX, cy, eyeLensH, 'rgba(188,140,255,0.3)', 'rgba(188,140,255,0.8)');
+  labelAxis(ctx, 'Eye\nf=' + feye + 'mm', eyeLensX - 14, cy + eyeLensH + 16, '#bc8cff');
+
+  // Diverging beams to eye
+  drawRay(ctx, [[eyeLensX, cy - spread2 * 0.5], [eyeX, cy - spread2 * 1.2]], '#ff6b6b');
+  drawRay(ctx, [[eyeLensX, cy], [eyeX, cy]], '#58a6ff');
+  drawRay(ctx, [[eyeLensX, cy + spread2 * 0.5], [eyeX, cy + spread2 * 1.2]], '#3fb950');
+
+  // Eye
+  drawEyeSymbol(ctx, eyeX, cy);
+  labelAxis(ctx, 'Eye', eyeX - 6, cy + 28, '#8b949e');
+}
+
+function drawSpecimenView(ctx, W, H, mTotal) {
+  const cx = W / 2, cy = H / 2;
+  const r = Math.min(cx, cy) - 20;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+
+  ctx.fillStyle = '#f5f0e8';
+  ctx.fillRect(cx - r, 0, r * 2, H);
+
+  // Draw cells scaled by magnification
+  const cellScale = mTotal / 400;
+  const cellR = Math.max(3, 18 * cellScale);
+  const rng = mulberry32(77);
+
+  for (let i = 0; i < 25; i++) {
+    const sx = cx + (rng() - 0.5) * r * 1.7;
+    const sy = cy + (rng() - 0.5) * r * 1.7;
+    const cr = cellR * (0.7 + rng() * 0.6);
+
+    // Cell wall
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, cr, cr * 0.85, rng() * Math.PI, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${100 + Math.floor(rng() * 40)},${160 + Math.floor(rng() * 40)},${100 + Math.floor(rng() * 40)},0.55)`;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60,100,60,0.8)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Nucleus (if magnification high enough)
+    if (mTotal > 80 && cr > 5) {
+      ctx.beginPath();
+      ctx.arc(sx + (rng() - 0.5) * cr * 0.5, sy + (rng() - 0.5) * cr * 0.5, cr * 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(80, 60, 160, 0.6)';
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  labelAxis(ctx, `Total magnification: ${mTotal.toFixed(0)}×`, 10, H - 10, '#8b949e');
+}
+
+function drawMicroscopeCompare(ctx, W, H, mTotal) {
+  const half = W / 2;
+  const cy = H / 2;
+  const r = Math.min(half * 0.85, cy - 20);
+
+  function drawSample(cx, scale, label) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#f5f0e8';
+    ctx.fillRect(cx - r, 0, r * 2, H);
+
+    const rng = mulberry32(55);
+    for (let i = 0; i < 18; i++) {
+      const sx = cx + (rng() - 0.5) * r * 1.6;
+      const sy = cy + (rng() - 0.5) * r * 1.6;
+      const cr = Math.max(2, 6 * scale);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, cr, cr * 0.85, rng() * Math.PI, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(120,170,110,0.5)`;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(60,100,60,0.7)';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    labelAxis(ctx, label, cx - r * 0.35, cy + r + 16, '#8b949e');
+  }
+
+  drawSample(half * 0.5, 1, 'Unaided Eye');
+  drawSample(half * 1.5, mTotal / 40, `Microscope ${mTotal.toFixed(0)}×`);
+
+  ctx.save();
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(half, 0);
+  ctx.lineTo(half, H);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
+// SEEDED RNG (for deterministic star / cell placement)
+// ============================================================
+function mulberry32(a) {
+  let seed = a;
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// ============================================================
+// QUIZ
+// ============================================================
+const QUESTIONS = [
+  {
+    q: "A telescope has an objective focal length of 1000 mm and an eyepiece of 10 mm. What is its magnification?",
+    opts: ["10×", "100×", "1000×", "10000×"],
+    correct: 1,
+    feedback: "Magnification = f_obj / f_eye = 1000 / 10 = 100×. Longer objective and shorter eyepiece both increase power."
+  },
+  {
+    q: "In a compound microscope, what type of image does the objective lens produce?",
+    opts: ["Virtual and upright", "Virtual and inverted", "Real and inverted", "Real and upright"],
+    correct: 2,
+    feedback: "The objective forms a real, inverted, magnified image inside the microscope tube. The eyepiece then re-magnifies this real image as a magnifying glass would."
+  },
+  {
+    q: "Which property of a telescope aperture directly determines its ability to resolve two closely spaced stars?",
+    opts: ["Focal length", "Aperture diameter", "Eyepiece focal length", "Tube length"],
+    correct: 1,
+    feedback: "By the Rayleigh criterion, θ = 1.22λ/D. A larger aperture D gives smaller θ (finer resolution). Focal length affects magnification but NOT fundamental resolving power."
+  },
+  {
+    q: "Doubling the aperture of a telescope changes its light-gathering power by a factor of:",
+    opts: ["2×", "4×", "√2 ×", "8×"],
+    correct: 1,
+    feedback: "Light gathering scales with area ∝ D². Doubling D → D² quadruples the area → 4× more light. This is why even a modest 200mm aperture collects ~800× more light than a 7mm dark-adapted pupil."
+  },
+  {
+    q: "The numerical aperture (NA) of a microscope objective is important because it determines:",
+    opts: [
+      "The magnification of the eyepiece",
+      "How much light the objective collects and its resolution limit",
+      "The length of the microscope tube",
+      "Whether the image is real or virtual"
+    ],
+    correct: 1,
+    feedback: "NA = n·sin(α) determines both light-gathering cone angle and Abbe resolution d = λ/(2NA). Oil-immersion objectives (NA ~1.4) achieve the highest resolution in optical microscopy."
+  },
+  {
+    q: "If you want to see very fine detail in a microscope specimen, you should use an objective with:",
+    opts: [
+      "Long focal length and low NA",
+      "Short focal length and high NA",
+      "Short focal length and low NA",
+      "Long focal length and high NA"
+    ],
+    correct: 1,
+    feedback: "Short focal length → high objective magnification. High NA → high resolving power. These go together: a 100× oil-immersion objective has f ≈ 2mm and NA ≈ 1.25–1.4."
+  },
+  {
+    q: "What is the principal difference between how a telescope and a microscope use their objective lens?",
+    opts: [
+      "A telescope objective focuses parallel rays from infinity; a microscope objective focuses diverging rays from a nearby specimen",
+      "A telescope uses a mirror; a microscope uses a lens",
+      "A telescope magnifies more than a microscope",
+      "A microscope objective always produces a virtual image"
+    ],
+    correct: 0,
+    feedback: "Telescope objects are effectively at infinity → parallel incident rays → image forms at the focal point. Microscope specimens are just beyond the objective's focal point → diverging rays → real inverted magnified image forms at the other end of the tube."
+  },
+  {
+    q: "The standard 'near point' distance of 250 mm is used in the eyepiece magnification formula because:",
+    opts: [
+      "It is the minimum focal length of any eyepiece",
+      "It is the closest comfortable viewing distance for a normal human eye, defining the reference for angular magnification",
+      "It is the standard tube length of all microscopes",
+      "It represents the wavelength of green light"
+    ],
+    correct: 1,
+    feedback: "Magnification is defined as the ratio of the angle subtended through the lens vs. holding the object at the near point (~250 mm). M_eye = 250/f_eye. This is a convention, not a physical limit."
+  }
+];
+
+function buildQuiz() {
+  const container = document.getElementById('quiz-container');
+  container.innerHTML = '';
+  QUESTIONS.forEach((q, i) => {
+    const div = document.createElement('div');
+    div.className = 'quiz-question';
+    div.innerHTML = `
+      <p><strong>Q${i + 1}.</strong> ${q.q}</p>
+      <div class="quiz-options">
+        ${q.opts.map((o, j) => `<button class="quiz-opt" onclick="answerQuiz(this,${i},${j})">${String.fromCharCode(65 + j)}. ${o}</button>`).join('')}
+      </div>
+      <div class="quiz-feedback" id="qf-${i}">${q.feedback}</div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function answerQuiz(btn, qIdx, optIdx) {
+  const q = QUESTIONS[qIdx];
+  const opts = btn.parentElement.querySelectorAll('.quiz-opt');
+  opts.forEach(o => o.disabled = true);
+  if (optIdx === q.correct) {
+    btn.classList.add('correct');
+  } else {
+    btn.classList.add('wrong');
+    opts[q.correct].classList.add('correct');
+  }
+  const fb = document.getElementById('qf-' + qIdx);
+  fb.classList.add('show');
+}
+
+function resetQuiz() {
+  buildQuiz();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('load', () => {
+  updateTelescope();
+  buildQuiz();
+  window.addEventListener('resize', () => {
+    updateTelescope();
+    updateMicroscope();
+  });
+});
+</script>
+</body>
+</html>
