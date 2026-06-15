@@ -788,103 +788,238 @@ function drawEyeSymbol(ctx, x, cy) {
   ctx.restore();
 }
 
+// Spectral-type star colors (O B A F G K M)
+const STAR_COLORS = [
+  [155,176,255], [170,191,255], [202,215,255],
+  [255,244,234], [255,229,207], [255,217,178],
+  [255,199,142], [255,166,81],  [255,100,60]
+];
+
+function drawStar(ctx, sx, sy, brightness, size) {
+  const typeIdx = Math.floor(brightness * STAR_COLORS.length);
+  const [r, g, b] = STAR_COLORS[Math.min(typeIdx, STAR_COLORS.length - 1)];
+  const coreR = Math.max(0.4, size * brightness);
+  const glowR = coreR * (3 + brightness * 5);
+  // Outer glow
+  const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+  glow.addColorStop(0, `rgba(${r},${g},${b},${0.18 * brightness})`);
+  glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.beginPath();
+  ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+  ctx.fillStyle = glow;
+  ctx.fill();
+  // Core
+  const core = ctx.createRadialGradient(sx, sy, 0, sx, sy, coreR * 1.5);
+  core.addColorStop(0, `rgba(255,255,255,${0.9 + brightness * 0.1})`);
+  core.addColorStop(0.3, `rgba(${r},${g},${b},0.9)`);
+  core.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.beginPath();
+  ctx.arc(sx, sy, coreR * 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = core;
+  ctx.fill();
+}
+
+function drawPlanet(ctx, px, py, planetR) {
+  // Saturn-like planet with rings
+  ctx.save();
+  // Ring shadow behind planet (back ring)
+  ctx.beginPath();
+  ctx.ellipse(px, py, planetR * 2.4, planetR * 0.55, -0.18, Math.PI * 0.05, Math.PI * 0.95);
+  ctx.strokeStyle = 'rgba(180,150,100,0.45)';
+  ctx.lineWidth = planetR * 0.5;
+  ctx.stroke();
+
+  // Planet body gradient
+  const bodyGrad = ctx.createRadialGradient(px - planetR * 0.3, py - planetR * 0.3, 0, px, py, planetR);
+  bodyGrad.addColorStop(0, '#f0d98a');
+  bodyGrad.addColorStop(0.4, '#d4a855');
+  bodyGrad.addColorStop(0.75, '#b8863a');
+  bodyGrad.addColorStop(1, '#7a4f1a');
+  ctx.beginPath();
+  ctx.arc(px, py, planetR, 0, Math.PI * 2);
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+
+  // Belt bands
+  for (let i = 0; i < 4; i++) {
+    const by = py - planetR * 0.5 + i * planetR * 0.32;
+    ctx.beginPath();
+    ctx.ellipse(px, by, planetR * 0.98, planetR * 0.12, 0, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${140 + i * 10},${100 + i * 8},${50},0.25)`;
+    ctx.fill();
+  }
+
+  // Planet limb darkening
+  const limb = ctx.createRadialGradient(px, py, planetR * 0.5, px, py, planetR);
+  limb.addColorStop(0, 'rgba(0,0,0,0)');
+  limb.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.beginPath();
+  ctx.arc(px, py, planetR, 0, Math.PI * 2);
+  ctx.fillStyle = limb;
+  ctx.fill();
+
+  // Front ring segment (over planet)
+  ctx.beginPath();
+  ctx.ellipse(px, py, planetR * 2.4, planetR * 0.55, -0.18, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.strokeStyle = 'rgba(210,175,110,0.65)';
+  ctx.lineWidth = planetR * 0.5;
+  ctx.stroke();
+
+  // Ring inner gap (Cassini division sim)
+  ctx.beginPath();
+  ctx.ellipse(px, py, planetR * 1.85, planetR * 0.42, -0.18, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = planetR * 0.12;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 function drawTelescopeEyepiece(ctx, W, H, fobj, feye, aperture) {
-  // Simulate what a star field looks like
   const cx = W / 2, cy = H / 2;
   const r = Math.min(cx, cy) - 20;
+  const mag = fobj / feye;
 
-  // Clip to circle (eyepiece field of view)
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.clip();
 
-  // Background
-  ctx.fillStyle = '#000005';
+  // Deep space background gradient
+  const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  bg.addColorStop(0, '#05080f');
+  bg.addColorStop(1, '#010208');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Stars
-  const mag = fobj / feye;
-  const starCount = 80;
-  const rng = mulberry32(42);
-  for (let i = 0; i < starCount; i++) {
-    const sx = cx + (rng() - 0.5) * r * 2;
-    const sy = cy + (rng() - 0.5) * r * 2;
-    const brightness = rng();
-    const starR = Math.max(0.5, brightness * 2.5);
+  // Milky Way haze band
+  const mwAngle = 0.4;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(mwAngle);
+  const mw = ctx.createLinearGradient(-r, -r * 0.35, -r, r * 0.35);
+  mw.addColorStop(0, 'rgba(20,25,50,0)');
+  mw.addColorStop(0.4, 'rgba(30,35,65,0.22)');
+  mw.addColorStop(0.5, 'rgba(40,50,90,0.35)');
+  mw.addColorStop(0.6, 'rgba(30,35,65,0.22)');
+  mw.addColorStop(1, 'rgba(20,25,50,0)');
+  ctx.fillStyle = mw;
+  ctx.fillRect(-r, -r, r * 2, r * 2);
+  ctx.restore();
+
+  // Background dust stars (faint, many)
+  const rngBg = mulberry32(13);
+  for (let i = 0; i < 300; i++) {
+    const sx = cx + (rngBg() - 0.5) * r * 2;
+    const sy = cy + (rngBg() - 0.5) * r * 2;
+    const b = rngBg() * 0.35;
     ctx.beginPath();
-    ctx.arc(sx, sy, starR, 0, Math.PI * 2);
-    const v = Math.floor(brightness * 255);
-    ctx.fillStyle = `rgb(${v},${v},${Math.min(255, v + 40)})`;
+    ctx.arc(sx, sy, 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(180,190,220,${b})`;
     ctx.fill();
   }
 
-  // A planet / object
-  ctx.beginPath();
-  ctx.arc(cx + r * 0.15, cy - r * 0.1, Math.max(3, 8 * (mag / 32)), 0, Math.PI * 2);
-  ctx.fillStyle = '#c8a96e';
-  ctx.fill();
+  // Foreground stars with spectral color + bloom
+  const rng = mulberry32(42);
+  const starCount = 90;
+  for (let i = 0; i < starCount; i++) {
+    const sx = cx + (rng() - 0.5) * r * 2;
+    const sy = cy + (rng() - 0.5) * r * 2;
+    const brightness = Math.pow(rng(), 1.5);
+    const sizeBoost = mag > 50 ? 1.4 : 1.0;
+    drawStar(ctx, sx, sy, brightness, sizeBoost);
+  }
+
+  // Saturn — size grows with magnification
+  const planetR = Math.max(5, 14 * (mag / 32));
+  const px = cx + r * 0.18, py = cy - r * 0.12;
+  drawPlanet(ctx, px, py, planetR);
+
+  // Faint nebula patch
+  const neb = ctx.createRadialGradient(cx - r * 0.3, cy + r * 0.25, 0, cx - r * 0.3, cy + r * 0.25, r * 0.25);
+  neb.addColorStop(0, 'rgba(60,100,160,0.12)');
+  neb.addColorStop(0.5, 'rgba(80,60,140,0.06)');
+  neb.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = neb;
+  ctx.fillRect(0, 0, W, H);
 
   ctx.restore();
 
-  // Eyepiece ring
+  // Eyepiece barrel
+  const barrel = ctx.createRadialGradient(cx, cy, r - 6, cx, cy, r + 6);
+  barrel.addColorStop(0, '#1a2030');
+  barrel.addColorStop(0.5, '#2a3348');
+  barrel.addColorStop(1, '#0d1117');
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = '#30363d';
-  ctx.lineWidth = 8;
+  ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+  ctx.strokeStyle = barrel;
+  ctx.lineWidth = 10;
   ctx.stroke();
 
   // Crosshairs
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = 'rgba(180,200,255,0.12)';
+  ctx.lineWidth = 0.7;
+  ctx.setLineDash([3, 8]);
   ctx.beginPath();
   ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
   ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
   ctx.stroke();
   ctx.restore();
 
-  labelAxis(ctx, `Magnification: ${(fobj / feye).toFixed(0)}×   Aperture: ${aperture}mm`, 10, H - 10, '#8b949e');
+  labelAxis(ctx, `Magnification: ${mag.toFixed(0)}×   Aperture: ${aperture}mm`, 10, H - 10, '#8b949e');
 }
 
 function drawTelescopeCompare(ctx, W, H, fobj, feye, aperture) {
   const half = W / 2;
   const cy = H / 2;
   const r = Math.min(half * 0.85, cy - 20);
+  const mag = fobj / feye;
 
-  function drawStarView(cx, magFactor, label) {
+  function drawStarField(cx, sizeMult, planetSize, label) {
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#000005';
+
+    // Background
+    ctx.fillStyle = '#02040a';
     ctx.fillRect(cx - r, 0, r * 2, H);
 
-    const rng = mulberry32(99);
-    const count = Math.round(80 * magFactor);
-    for (let i = 0; i < Math.min(count, 200); i++) {
-      const sx = cx + (rng() - 0.5) * r * 2;
-      const sy = cy + (rng() - 0.5) * r * 2;
-      const b = rng();
+    // Background dust
+    const rngBg = mulberry32(77);
+    for (let i = 0; i < 200; i++) {
+      const sx = cx + (rngBg() - 0.5) * r * 2;
+      const sy = cy + (rngBg() - 0.5) * r * 2;
       ctx.beginPath();
-      ctx.arc(sx, sy, Math.max(0.4, b * 2 * magFactor), 0, Math.PI * 2);
-      const v = Math.floor(b * 255);
-      ctx.fillStyle = `rgb(${v},${v},${v + 20})`;
+      ctx.arc(sx, sy, 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(160,170,200,${rngBg() * 0.2})`;
       ctx.fill();
     }
-    ctx.restore();
 
+    const rng = mulberry32(99);
+    for (let i = 0; i < 70; i++) {
+      const sx = cx + (rng() - 0.5) * r * 2;
+      const sy = cy + (rng() - 0.5) * r * 2;
+      const b = Math.pow(rng(), 1.4);
+      drawStar(ctx, sx, sy, b, sizeMult);
+    }
+    // Planet
+    drawPlanet(ctx, cx + r * 0.15, cy - r * 0.1, planetSize);
+
+    ctx.restore();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = '#30363d';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#2a3348';
+    ctx.lineWidth = 5;
     ctx.stroke();
-
-    labelAxis(ctx, label, cx - r * 0.3, cy + r + 16, '#8b949e');
+    labelAxis(ctx, label, cx - r * 0.35, cy + r + 16, '#8b949e');
   }
 
-  drawStarView(half * 0.5, 1, 'Unaided Eye');
-  drawStarView(half * 1.5, fobj / feye / 10, `Telescope ${(fobj / feye).toFixed(0)}×`);
+  // Unaided: small stars, tiny planet
+  drawStarField(half * 0.5, 0.5, Math.max(2, 3), 'Unaided Eye (7mm pupil)');
+  // Telescope: larger bloom, bigger planet
+  drawStarField(half * 1.5, 1.5, Math.max(6, 14 * (mag / 32)), `Telescope ${mag.toFixed(0)}×`);
 
   // Divider
   ctx.save();
@@ -1025,6 +1160,80 @@ function drawMicroscopeRay(ctx, W, H, fobjMm, feye, tube, objDist) {
   labelAxis(ctx, 'Eye', eyeX - 6, cy + 28, '#8b949e');
 }
 
+function drawHECell(ctx, sx, sy, cr, angle, rng, mTotal) {
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(angle);
+
+  // Cytoplasm — pink H&E eosin stain gradient
+  const cytoGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, cr);
+  cytoGrad.addColorStop(0,   'rgba(245,190,195,0.85)');
+  cytoGrad.addColorStop(0.6, 'rgba(230,160,170,0.75)');
+  cytoGrad.addColorStop(1,   'rgba(200,130,145,0.55)');
+  ctx.beginPath();
+  ctx.ellipse(0, 0, cr, cr * (0.75 + rng() * 0.2), 0, 0, Math.PI * 2);
+  ctx.fillStyle = cytoGrad;
+  ctx.fill();
+
+  // Cell membrane — slightly darker pink border
+  ctx.strokeStyle = 'rgba(180,100,115,0.7)';
+  ctx.lineWidth = Math.max(0.5, cr * 0.04);
+  ctx.stroke();
+
+  // Nucleus — hematoxylin deep purple/blue
+  if (mTotal > 30 && cr > 4) {
+    const nx = (rng() - 0.5) * cr * 0.35;
+    const ny = (rng() - 0.5) * cr * 0.35;
+    const nr = cr * (0.28 + rng() * 0.1);
+    const nucGrad = ctx.createRadialGradient(nx - nr * 0.2, ny - nr * 0.2, 0, nx, ny, nr);
+    nucGrad.addColorStop(0,   'rgba(80,50,150,0.95)');
+    nucGrad.addColorStop(0.5, 'rgba(60,35,120,0.9)');
+    nucGrad.addColorStop(1,   'rgba(40,20,90,0.7)');
+    ctx.beginPath();
+    ctx.ellipse(nx, ny, nr, nr * (0.85 + rng() * 0.15), rng() * Math.PI, 0, Math.PI * 2);
+    ctx.fillStyle = nucGrad;
+    ctx.fill();
+
+    // Nucleolus (visible at high magnification)
+    if (mTotal > 150 && nr > 6) {
+      const nlR = nr * 0.22;
+      ctx.beginPath();
+      ctx.arc(nx + (rng() - 0.5) * nr * 0.4, ny + (rng() - 0.5) * nr * 0.4, nlR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(200,100,130,0.9)';
+      ctx.fill();
+    }
+
+    // Chromatin granules (high mag)
+    if (mTotal > 300 && nr > 10) {
+      for (let g = 0; g < 5; g++) {
+        ctx.beginPath();
+        ctx.arc(nx + (rng() - 0.5) * nr, ny + (rng() - 0.5) * nr, rng() * 1.5 + 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(50,20,110,0.8)';
+        ctx.fill();
+      }
+    }
+  }
+
+  // Vacuoles (visible at high mag)
+  if (mTotal > 200 && cr > 12) {
+    const nv = 1 + Math.floor(rng() * 2);
+    for (let v = 0; v < nv; v++) {
+      const vx = (rng() - 0.5) * cr * 0.7;
+      const vy = (rng() - 0.5) * cr * 0.6;
+      const vr = cr * (0.06 + rng() * 0.08);
+      ctx.beginPath();
+      ctx.arc(vx, vy, vr, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,240,245,0.7)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(180,140,150,0.4)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
 function drawSpecimenView(ctx, W, H, mTotal) {
   const cx = W / 2, cy = H / 2;
   const r = Math.min(cx, cy) - 20;
@@ -1034,43 +1243,62 @@ function drawSpecimenView(ctx, W, H, mTotal) {
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.clip();
 
-  ctx.fillStyle = '#f5f0e8';
-  ctx.fillRect(cx - r, 0, r * 2, H);
+  // Slide glass background — slightly yellow-pink (H&E mounting medium)
+  const slideBg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  slideBg.addColorStop(0, '#fdf4f0');
+  slideBg.addColorStop(0.6, '#faeae6');
+  slideBg.addColorStop(1, '#f5ddd8');
+  ctx.fillStyle = slideBg;
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
 
-  // Draw cells scaled by magnification
-  const cellScale = mTotal / 400;
-  const cellR = Math.max(3, 18 * cellScale);
-  const rng = mulberry32(77);
-
-  for (let i = 0; i < 25; i++) {
-    const sx = cx + (rng() - 0.5) * r * 1.7;
-    const sy = cy + (rng() - 0.5) * r * 1.7;
-    const cr = cellR * (0.7 + rng() * 0.6);
-
-    // Cell wall
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, cr, cr * 0.85, rng() * Math.PI, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${100 + Math.floor(rng() * 40)},${160 + Math.floor(rng() * 40)},${100 + Math.floor(rng() * 40)},0.55)`;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(60,100,60,0.8)';
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-
-    // Nucleus (if magnification high enough)
-    if (mTotal > 80 && cr > 5) {
+  // Extracellular matrix fibres (visible at medium+ mag)
+  if (mTotal > 80) {
+    const rngF = mulberry32(11);
+    ctx.strokeStyle = 'rgba(220,185,190,0.3)';
+    ctx.lineWidth = 0.6;
+    for (let f = 0; f < 12; f++) {
+      const fx = cx + (rngF() - 0.5) * r * 2;
+      const fy = cy + (rngF() - 0.5) * r * 2;
       ctx.beginPath();
-      ctx.arc(sx + (rng() - 0.5) * cr * 0.5, sy + (rng() - 0.5) * cr * 0.5, cr * 0.3, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(80, 60, 160, 0.6)';
-      ctx.fill();
+      ctx.moveTo(fx, fy);
+      ctx.bezierCurveTo(fx + rngF() * 40 - 20, fy + rngF() * 20 - 10,
+                        fx + rngF() * 40 - 20, fy + rngF() * 20 - 10,
+                        fx + (rngF() - 0.5) * 60, fy + (rngF() - 0.5) * 60);
+      ctx.stroke();
     }
   }
 
+  // Cells — size scales with magnification
+  const cellScale = mTotal / 400;
+  const cellR = Math.max(3, 20 * cellScale);
+  const rng = mulberry32(77);
+
+  for (let i = 0; i < 28; i++) {
+    const sx = cx + (rng() - 0.5) * r * 1.8;
+    const sy = cy + (rng() - 0.5) * r * 1.8;
+    const cr = cellR * (0.7 + rng() * 0.55);
+    const angle = rng() * Math.PI;
+    drawHECell(ctx, sx, sy, cr, angle, rng, mTotal);
+  }
+
+  // Focus vignette (slightly blurry edge — optical effect)
+  const vig = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(240,220,215,0.35)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
   ctx.restore();
 
+  // Objective barrel ring
+  const barrel = ctx.createRadialGradient(cx, cy, r - 4, cx, cy, r + 6);
+  barrel.addColorStop(0, '#1a2030');
+  barrel.addColorStop(0.5, '#2a3348');
+  barrel.addColorStop(1, '#0d1117');
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = '#30363d';
-  ctx.lineWidth = 8;
+  ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+  ctx.strokeStyle = barrel;
+  ctx.lineWidth = 10;
   ctx.stroke();
 
   labelAxis(ctx, `Total magnification: ${mTotal.toFixed(0)}×`, 10, H - 10, '#8b949e');
@@ -1081,39 +1309,46 @@ function drawMicroscopeCompare(ctx, W, H, mTotal) {
   const cy = H / 2;
   const r = Math.min(half * 0.85, cy - 20);
 
-  function drawSample(cx, scale, label) {
+  function drawSample(cx, effectiveMag, label) {
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#f5f0e8';
+
+    // Slide background
+    ctx.fillStyle = '#fdf4f0';
     ctx.fillRect(cx - r, 0, r * 2, H);
 
+    const cellScale = effectiveMag / 400;
+    const cellR = Math.max(1.5, 20 * cellScale);
     const rng = mulberry32(55);
-    for (let i = 0; i < 18; i++) {
-      const sx = cx + (rng() - 0.5) * r * 1.6;
-      const sy = cy + (rng() - 0.5) * r * 1.6;
-      const cr = Math.max(2, 6 * scale);
-      ctx.beginPath();
-      ctx.ellipse(sx, sy, cr, cr * 0.85, rng() * Math.PI, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(120,170,110,0.5)`;
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(60,100,60,0.7)';
-      ctx.lineWidth = 0.7;
-      ctx.stroke();
-    }
-    ctx.restore();
 
+    for (let i = 0; i < 22; i++) {
+      const sx = cx + (rng() - 0.5) * r * 1.7;
+      const sy = cy + (rng() - 0.5) * r * 1.7;
+      const cr = cellR * (0.7 + rng() * 0.55);
+      drawHECell(ctx, sx, sy, cr, rng() * Math.PI, rng, effectiveMag);
+    }
+
+    // Edge vignette
+    const vig = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(240,220,215,0.3)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(cx - r, 0, r * 2, H);
+
+    ctx.restore();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = '#30363d';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#2a3348';
+    ctx.lineWidth = 5;
     ctx.stroke();
-    labelAxis(ctx, label, cx - r * 0.35, cy + r + 16, '#8b949e');
+    labelAxis(ctx, label, cx - r * 0.4, cy + r + 16, '#8b949e');
   }
 
-  drawSample(half * 0.5, 1, 'Unaided Eye');
-  drawSample(half * 1.5, mTotal / 40, `Microscope ${mTotal.toFixed(0)}×`);
+  // Unaided: cells appear as tiny smudges (effective mag ~1)
+  drawSample(half * 0.5, 4, 'Unaided Eye');
+  drawSample(half * 1.5, mTotal, `Microscope ${mTotal.toFixed(0)}×`);
 
   ctx.save();
   ctx.strokeStyle = '#30363d';
