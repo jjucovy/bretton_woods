@@ -43,5 +43,4 @@ const BattleReportCard = ({ report }) => {
     );
 };
 
-// Exporting Components
-export { FlagBanner, CountryModal, DiplomaticAgreementCard, BattleReportCard };
+// Components are available as globals via Babel standalone (no ES module export needed)
