@@ -774,8 +774,18 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           onClick={async () => {
                             const gameCode = `game_${Date.now()}`;
                             console.log('Creating new game:', gameCode);
-                            
+
                             try {
+                              // Get the current highest game_id so we can pass the next one
+                              const idRes = await fetch('https://jucovy.com/api.php', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ action: 'getHighestGameId', api_key: 'bretton-woods-secret-key-2024' })
+                              });
+                              const idData = await idRes.json();
+                              const nextGameId = (idData?.data?.highest_game_id || idData?.highest_game_id || 0) + 1;
+                              console.log('Next game_id:', nextGameId);
+
                               // Create game in database
                               const response = await fetch('https://jucovy.com/api.php', {
                                 method: 'POST',
@@ -783,27 +793,28 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 body: JSON.stringify({
                                   action: 'createNewGame',
                                   api_key: 'bretton-woods-secret-key-2024',
+                                  game_id: nextGameId,
                                   gameCode: gameCode,
                                   createdBy: playerId
                                 })
                               });
-                              
+
                               const result = await response.json();
                               console.log('Game created in database:', result);
-                              
-                              if (result.game_id) {
+
+                              if (result.success || result.game_id || result.data?.game_id) {
                                 // Create room in server memory - pass userId so superadmin becomes host
-                                socket.emit('createRoom', { 
+                                socket.emit('createRoom', {
                                   userId: playerId,
-                                  roomName: gameCode 
+                                  roomName: gameCode
                                 });
-                                
+
                                 socket.once('roomCreated', ({ success, roomId, hostId }) => {
                                   if (success) {
                                     console.log('Game created successfully:', roomId);
                                     console.log('Host ID:', hostId);
                                     alert(`Game created: ${gameCode}\nYou are the host.`);
-                                    
+
                                     // Refresh games list
                                     setLoadingGames(true);
                                     socket.emit('getActiveGames', { playerId });
@@ -815,6 +826,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     });
                                   }
                                 });
+                              } else {
+                                console.error('DB returned error:', result);
+                                alert('Failed to create game in database. Check console for details.');
                               }
                             } catch (err) {
                               console.error('Error creating game:', err);
