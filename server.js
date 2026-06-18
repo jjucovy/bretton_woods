@@ -73,6 +73,11 @@ const STATE_FILE = path.join(__dirname, 'game-state.json');
 // queryDatabase imported from ./server/database.js
 // sendAdminNotification imported from ./server/email.js
 
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Serve game HTML as the main page (MUST come before static middleware!)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
