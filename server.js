@@ -80,6 +80,7 @@ app.get('/health', (req, res) => {
 
 // Serve game HTML as the main page (MUST come before static middleware!)
 app.get('/', (req, res) => {
+  console.log(`🌐 Page request from ${req.ip}`);
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
