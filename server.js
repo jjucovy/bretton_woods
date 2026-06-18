@@ -2719,37 +2719,44 @@ io.on('connection', (socket) => {
     
     console.log(`   Room host set to userId: ${creatorId} (superadmin: ${isSuperAdmin})`);
     
-    // If this looks like a game code (e.g., "game_123"), update status to active
+    // If this looks like a game code (e.g., "game_123"), create it in the DB
     if (roomId.startsWith('game_')) {
       globalState.rooms[roomId].status = 'active';
       globalState.rooms[roomId].gameCode = roomId;
 
-      // Fetch the actual game_id from database and store it
       try {
-        const gameData = await queryDatabase('getGame', { gameCode: roomId });
-        if (gameData && gameData.game_id) {
-          globalState.rooms[roomId].gameId = gameData.game_id;
-          console.log(`   Retrieved game_id ${gameData.game_id} from database for ${roomId}`);
-        }
-      } catch (err) {
-        console.error('Error fetching game_id:', err);
-      }
+        // PHP requires game_id as input — fetch the current max and increment
+        const idResult = await queryDatabase('getHighestGameId', {});
+        console.log(`   getHighestGameId result:`, JSON.stringify(idResult));
+        const highest = idResult?.highest_game_id ?? idResult?.data?.highest_game_id ?? 0;
+        const nextGameId = Number(highest) + 1;
+        console.log(`   Using game_id=${nextGameId} for new game ${roomId}`);
 
-      // Update database to set status to active and assign host
-      try {
-        const gameIdToUpdate = globalState.rooms[roomId].gameId;
-        if (gameIdToUpdate) {
-          await queryDatabase('updateGameStatus', {
-            game_id: gameIdToUpdate,
-            status: 'active',
-            hostUserId: creatorId
-          });
-          console.log(`✅ Game ${roomId} (game_id: ${gameIdToUpdate}) marked as active in database with host ${creatorId}`);
+        const created = await queryDatabase('createNewGame', {
+          game_id: nextGameId,
+          gameCode: roomId,
+          createdBy: creatorId,
+        });
+        console.log(`   createNewGame result:`, JSON.stringify(created));
+
+        if (created) {
+          const gameId = created.game_id ?? created.insertId ?? nextGameId;
+          globalState.rooms[roomId].gameId = gameId;
+          console.log(`✅ Game created in DB: game_id=${gameId} code=${roomId}`);
+          await queryDatabase('updateGame', { gameCode: roomId, status: 'active' });
         } else {
-          console.log(`⚠️ Cannot update game status - no game_id available for ${roomId}`);
+          // INSERT may still have succeeded — verify via getGame
+          const gameData = await queryDatabase('getGame', { gameCode: roomId });
+          if (gameData && gameData.game_id) {
+            globalState.rooms[roomId].gameId = gameData.game_id;
+            console.log(`   Recovered game_id=${gameData.game_id} via getGame`);
+            await queryDatabase('updateGame', { gameCode: roomId, status: 'active' });
+          } else {
+            console.error(`❌ Game ${roomId} not persisted to DB`);
+          }
         }
       } catch (err) {
-        console.error('Error updating game status:', err);
+        console.error('Error persisting game to DB:', err);
       }
     }
     
