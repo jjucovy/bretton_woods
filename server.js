@@ -6055,7 +6055,7 @@ process.on('unhandledRejection', (reason, promise) => {
     }
   }, 60000);
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log('🌍 Bretton Woods Multi-Room Server');
     console.log('===================================');
     console.log(`🚀 Server running on port ${PORT}`);
