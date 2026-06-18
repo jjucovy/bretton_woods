@@ -1,4 +1,5 @@
 // server/database.js - Database API client
+const axios = require('axios');
 
 const DB_API = {
   url: 'https://jucovy.com/api.php',
@@ -13,37 +14,20 @@ async function queryDatabase(action, data = {}) {
       ...data
     };
 
-    console.log(`📤 DB Request [${action}]:`, JSON.stringify(data, null, 2));
+    console.log(`📤 DB Request [${action}]:`, JSON.stringify(data));
 
-    const response = await fetch(DB_API.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
+    const response = await axios.post(DB_API.url, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 15000
     });
 
-    const text = await response.text();
+    const result = response.data;
+    console.log(`📥 DB Response [${action}]:`, JSON.stringify(result).substring(0, 300));
 
-    if (!text || text.trim() === '') {
-      console.error(`❌ DB Error [${action}]: Empty response from API`);
-      return null;
-    }
-
-    let result;
-    try {
-      result = JSON.parse(text);
-    } catch (parseError) {
-      console.error(`❌ DB Error [${action}]: Invalid JSON response:`, text.substring(0, 200));
-      return null;
-    }
-
-    console.log(`📥 DB Response [${action}]:`, JSON.stringify(result).substring(0, 200));
-
-    if (result.success) {
+    if (result && result.success) {
       return result.data || result;
     } else {
-      console.error(`❌ DB Error [${action}]:`, result.error || result.message);
+      console.error(`❌ DB Error [${action}]:`, result?.error || result?.message || JSON.stringify(result));
       return null;
     }
   } catch (error) {
