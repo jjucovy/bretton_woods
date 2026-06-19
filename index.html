@@ -261,6 +261,16 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             if (activeCrisisId) setCrisisMinimized(false);
           }, [activeCrisisId]);
 
+          // Superadmin: poll for fresh game state every 3 seconds so ready-status
+          // updates arrive even when the socket briefly leaves the room.
+          useEffect(() => {
+            if (userRole !== 'superadmin' || !currentRoomId || !playerId) return;
+            const interval = setInterval(() => {
+              socket.emit('requestState', { roomId: currentRoomId, userId: playerId });
+            }, 3000);
+            return () => clearInterval(interval);
+          }, [userRole, currentRoomId, playerId]);
+
           // Check for existing session
           useEffect(() => {
             const savedUsername = sessionStorage.getItem('brettonWoodsUsername');

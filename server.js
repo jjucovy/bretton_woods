@@ -3349,6 +3349,23 @@ io.on('connection', (socket) => {
     console.log(`Player ${id} left game in room ${roomId}`);
   });
   
+  // Lightweight state request — superadmin polls every few seconds to stay in sync
+  // without the full joinRoom async flow. Also refreshes room membership + registry.
+  socket.on('requestState', ({ roomId, userId }) => {
+    const room = globalState.rooms[roomId];
+    if (!room) return;
+
+    // Ensure socket is in the room for future push broadcasts
+    socket.join(roomId);
+
+    // Update observer registry so next broadcast reaches this socket
+    if (userId && observerRegistry[roomId] && userId in observerRegistry[roomId]) {
+      observerRegistry[roomId][userId] = socket.id;
+    }
+
+    socket.emit('stateUpdate', room);
+  });
+
   // Set ready status
   socket.on('setReady', async ({ roomId, userId, playerid, ready }) => {
     const room = globalState.rooms[roomId];
