@@ -791,17 +791,22 @@ function broadcastToRoom(roomId) {
   // left the socket.io room due to rapid reconnects)
   io.to(roomId).emit('stateUpdate', room);
 
-  const observerEntries = Object.entries(room.observerSockets || {});
-  if (observerEntries.length > 0) {
+  // Active observer entries: skip null (stale/disconnected) socket IDs
+  const observerEntries = Object.entries(room.observerSockets || {}).filter(([, sid]) => sid);
+  const hasObservers = Object.keys(room.observerSockets || {}).length > 0;
+
+  if (hasObservers) {
     io.in(roomId).allSockets().then(roomSockets => {
       for (const [userId, socketId] of observerEntries) {
         if (!roomSockets.has(socketId)) {
-          // Observer socket is not in the room — emit directly
+          // Observer socket is not in the socket.io room — emit directly by ID
           io.to(socketId).emit('stateUpdate', room);
           console.log(`📡 Direct emit to observer ${userId} (socket ${socketId}) — not in room`);
         }
       }
-      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${observerEntries.length}`);
+      const activeCount = observerEntries.length;
+      const staleCount = Object.keys(room.observerSockets || {}).length - activeCount;
+      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${activeCount} active/${staleCount} stale`);
     });
   } else {
     io.in(roomId).allSockets().then(sockets => {
@@ -5646,12 +5651,14 @@ io.on('connection', (socket) => {
     Object.keys(globalState.rooms).forEach(roomId => {
       const room = globalState.rooms[roomId];
 
-      // Remove stale observer socket reference
+      // Mark observer socket as stale (null) rather than deleting the key.
+      // Keeping the key lets the fast-update at the top of joinRoom re-register
+      // the new socket ID immediately on reconnect, before any async DB calls.
       if (room.observerSockets) {
         for (const [uid, sid] of Object.entries(room.observerSockets)) {
           if (sid === socket.id) {
-            delete room.observerSockets[uid];
-            console.log(`Observer ${uid} disconnected from room ${roomId}`);
+            room.observerSockets[uid] = null;
+            console.log(`Observer ${uid} disconnected from room ${roomId} (socket marked stale)`);
           }
         }
       }
