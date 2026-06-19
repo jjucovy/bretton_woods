@@ -3753,11 +3753,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <span style={{ fontWeight: 'bold' }}>
                                 {countries[player.country]?.name || player.country}
                               </span>
-                              {player.id === playerId && <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>(You)</span>}
+                              {player.userId === playerId && <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>(You)</span>}
                               {player.disconnected && <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#d97706' }}>🔌 Disconnected</span>}
                             </div>
                             <div>
-                              {gameState?.readyPlayers?.includes(player.userId) ? (
+                              {gameState?.readyPlayers?.includes(player.id) ? (
                                 <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓ Ready</span>
                               ) : (
                                 <span style={{ color: '#64748b' }}>Not Ready</span>
