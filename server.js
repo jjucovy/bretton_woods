@@ -3304,7 +3304,7 @@ io.on('connection', (socket) => {
   });
   
   // Set ready status
-  socket.on('setReady', ({ roomId, userId, playerid, ready }) => {
+  socket.on('setReady', async ({ roomId, userId, playerid, ready }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
@@ -3320,7 +3320,15 @@ io.on('connection', (socket) => {
     } else {
       room.readyPlayers = room.readyPlayers.filter(pid => pid !== id);
     }
-    
+
+    // Persist ready status to DB
+    if (player?.id) {
+      queryDatabase('updatePlayerReady', {
+        player_id: player.id,
+        is_ready: ready ? 1 : 0
+      }).catch(err => console.error('Failed to persist ready status:', err.message));
+    }
+
     broadcastToRoom(roomId);
     saveState();
   });
@@ -5679,16 +5687,20 @@ async function initializeFromDatabase() {
         const players = await queryDatabase('getPlayers', { game_id: game.game_id });
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
+            const isReady = player.is_ready === 1 || player.is_ready === '1';
             existingRoom.players[player.user_id] = {
               id: player.player_id,
               userId: player.user_id,
               playerId: player.player_id,
               country: normalizeCountryName(player.country_code) || player.country_code,
-              ready: false,
+              ready: isReady,
               score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
               phase1_score: parseInt(player.phase1_score) || 0,
               phase2_score: parseInt(player.phase2_score) || 0
             };
+            if (isReady && !existingRoom.readyPlayers.includes(player.player_id)) {
+              existingRoom.readyPlayers.push(player.player_id);
+            }
           }
         }
         continue; // Keep existing room state (now with snapshot updates)
@@ -5732,17 +5744,21 @@ async function initializeFromDatabase() {
         console.log(`   Found ${players.length} player(s) in database`);
         for (const player of players) {
           // Key by userId for consistency (so client can find them by userId)
+          const isReady = player.is_ready === 1 || player.is_ready === '1';
           roomState.players[player.user_id] = {
             id: player.player_id,
             userId: player.user_id,
             playerId: player.player_id,
             country: normalizeCountryName(player.country_code) || player.country_code,
-            ready: false,
+            ready: isReady,
             score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
             phase1_score: parseInt(player.phase1_score) || 0,
             phase2_score: parseInt(player.phase2_score) || 0
           };
-          console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}`);
+          if (isReady && !roomState.readyPlayers.includes(player.player_id)) {
+            roomState.readyPlayers.push(player.player_id);
+          }
+          console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}, ready=${isReady}`);
         }
       } else {
         console.log(`   No players found for game ${gameCode}`);
