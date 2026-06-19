@@ -351,7 +351,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               if (state.players[playerId]) {
                 const myPlayer = state.players[playerId];
                 setPlayerCountry(myPlayer.country);
-                setIsReady(state.readyPlayers.includes(playerId));
+                setIsReady(state.readyPlayers.includes(myPlayer.id));
                 
                 // Save country to session storage for persistence
                 sessionStorage.setItem('brettonWoodsCountry', myPlayer.country);
@@ -2414,7 +2414,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       console.log(`   yearlyData keys:`, Object.keys(gameState.phase2?.yearlyData || {}));
                       console.log(`   yearlyData[${currentYear}]=`, gameState.phase2?.yearlyData?.[currentYear]);
                       console.log(`   myData=`, myData);
-                      const hasSubmitted = gameState.readyPlayers?.includes(playerId);
+                      const hasSubmitted = gameState.readyPlayers?.includes(gameState.players[playerId]?.id);
 
                       // Use shared normalization for crisis matching
                       const normalizedPlayerCountry = normalizeCountryName(playerCountry);

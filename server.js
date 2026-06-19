@@ -3299,8 +3299,10 @@ io.on('connection', (socket) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
-    // Client sends userId (login id) and checks readyPlayers.includes(userId) — use userId here
-    const id = userId || playerid;
+    // Look up player by userId to get their player_id for readyPlayers
+    const socketUserId = userId || playerid;
+    const player = room.players[socketUserId];
+    const id = player?.id || socketUserId;
 
     if (ready) {
       if (!room.readyPlayers.includes(id)) {
