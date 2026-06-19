@@ -2759,6 +2759,7 @@ io.on('connection', (socket) => {
           gameId: nextGameId,
           game_code: roomId,
           gameCode: roomId,
+          created_by: creatorId,
           createdBy: creatorId,
         });
         console.log(`   createNewGame result:`, JSON.stringify(created));
