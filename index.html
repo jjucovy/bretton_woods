@@ -345,6 +345,23 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('Disconnected from server');
             });
 
+            // When admin creates or deletes a game, refresh the available game list
+            // so players in the lobby see it immediately without re-logging in.
+            socket.on('roomListUpdate', () => {
+              const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
+              const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
+              if (savedUserRole === 'player' && savedPlayerId) {
+                socket.once('availableGamesResult', ({ success, games }) => {
+                  if (success) setAvailableGames(games || []);
+                });
+                socket.once('playerActiveGamesResult', ({ success, games }) => {
+                  if (success) setMyActiveGames(games || []);
+                });
+                socket.emit('getAvailableGames', { playerId: savedPlayerId });
+                socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
+              }
+            });
+
             socket.on('stateUpdate', (state) => {
               console.log('=== STATE UPDATE ===');
               console.log('State', Object.values(state))

@@ -318,7 +318,6 @@ function saveState() {
     }
 
     fs.writeFileSync(STATE_FILE, JSON.stringify(globalState, null, 2));
-    console.log('💾 Multi-room state saved');
   } catch (err) {
     console.error('❌ Error saving state:', err);
   }
@@ -355,7 +354,6 @@ function saveGamePhase2State(roomId) {
     };
 
     fs.writeFileSync(gameStateFile, JSON.stringify(phase2State, null, 2));
-    console.log(`💾 Phase 2 state saved for ${roomId} (year: ${room.phase2.currentYear}, active: ${room.phase2.active})`);
   } catch (err) {
     console.error(`❌ Error saving Phase 2 state for ${roomId}:`, err);
   }
@@ -5542,58 +5540,22 @@ io.on('connection', (socket) => {
   });
 
   // Get available games (for regular users - lobby games they can join)
-  socket.on('getAvailableGames', async ({ playerId }) => {
-    console.log('getAvailableGames request from playerId:', playerId);
+  socket.on('getAvailableGames', ({ playerId }) => {
+    // Scan in-memory rooms for lobby-phase games with open slots.
+    // (DB status is 'active' for all games; gamePhase is the authoritative lobby flag.)
+    const availableGames = Object.values(globalState.rooms)
+      .filter(room => room.gamePhase === 'lobby' && !room.gameStarted)
+      .filter(room => Object.keys(room.players).length < 7)
+      .map(room => ({
+        gameCode: room.gameCode || room.roomId,
+        gameId: room.gameId,
+        playerCount: Object.keys(room.players).length,
+        availableSlots: 7 - Object.keys(room.players).length,
+        hostUserId: room.hostUserId || room.hostId,
+        createdAt: room.createdAt
+      }));
 
-    const availableGames = [];
-
-    // Get only 'lobby' status games - active games have already started and cannot be joined
-    const lobbyGames = await queryDatabase('getGames', { status: 'lobby' }) || [];
-    const dbGames = Array.isArray(lobbyGames) ? lobbyGames : [];
-
-    console.log(`Found ${dbGames.length} lobby games in database`);
-
-    if (dbGames.length > 0) {
-      for (const game of dbGames) {
-        const roomState = globalState.rooms[game.game_code];
-
-        // Only show lobby games with available slots
-        if (roomState && roomState.gamePhase === 'lobby' && !roomState.gameStarted) {
-          const playerCount = Object.keys(roomState.players).length;
-          if (playerCount < 7) {
-            availableGames.push({
-              gameCode: game.game_code,
-              gameId: game.game_id,
-              status: game.status,
-              playerCount: playerCount,
-              availableSlots: 7 - playerCount,
-              createdAt: game.created_at,
-              hostUserId: game.host_user_id
-            });
-          }
-        } else if (!roomState) {
-          // Game exists in DB but not in memory - create room state for it
-          console.log(`   Game ${game.game_code} not in memory, creating room state...`);
-          const newRoomState = createGameState(game.game_code, `Game ${game.game_code}`, game.host_user_id);
-          newRoomState.gameId = game.game_id;
-          newRoomState.status = game.status;
-          newRoomState.gamePhase = 'lobby';
-          globalState.rooms[game.game_code] = newRoomState;
-
-          availableGames.push({
-            gameCode: game.game_code,
-            gameId: game.game_id,
-            status: game.status,
-            playerCount: 0,
-            availableSlots: 7,
-            createdAt: game.created_at,
-            hostUserId: game.host_user_id
-          });
-        }
-      }
-    }
-
-    console.log(`Returning ${availableGames.length} available games`);
+    console.log(`getAvailableGames: returning ${availableGames.length} lobby game(s) for player ${playerId}`);
 
     socket.emit('availableGamesResult', {
       success: true,
