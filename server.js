@@ -318,7 +318,6 @@ function saveState() {
     }
 
     fs.writeFileSync(STATE_FILE, JSON.stringify(globalState, null, 2));
-    console.log('💾 Multi-room state saved');
   } catch (err) {
     console.error('❌ Error saving state:', err);
   }
@@ -355,7 +354,6 @@ function saveGamePhase2State(roomId) {
     };
 
     fs.writeFileSync(gameStateFile, JSON.stringify(phase2State, null, 2));
-    console.log(`💾 Phase 2 state saved for ${roomId} (year: ${room.phase2.currentYear}, active: ${room.phase2.active})`);
   } catch (err) {
     console.error(`❌ Error saving Phase 2 state for ${roomId}:`, err);
   }
@@ -767,48 +765,23 @@ function updateRoomList() {
 function broadcastToRoom(roomId) {
   const room = globalState.rooms[roomId];
   if (!room) return;
-  
-  // Log what we're about to broadcast
-  if (room.phase2?.active) {
-    console.log(`\n📡 BROADCASTING ROOM ${roomId}:`);
-    console.log(`   phase2.active: ${room.phase2.active}`);
-    console.log(`   phase2.currentYear: ${room.phase2.currentYear}`);
-    console.log(`   phase2.yearlyData type: ${typeof room.phase2.yearlyData}`);
-    console.log(`   phase2.yearlyData keys:`, Object.keys(room.phase2.yearlyData));
-    
-    if (room.phase2.yearlyData[1946]) {
-      const year1946 = room.phase2.yearlyData[1946];
-      console.log(`   yearlyData[1946] type: ${typeof year1946}`);
-      console.log(`   yearlyData[1946] keys:`, Object.keys(year1946));
-      
-      const firstCountry = Object.entries(year1946)[0];
-      if (firstCountry) {
-        console.log(`   Sample (${firstCountry[0]}):`, JSON.stringify(firstCountry[1], null, 2).substring(0, 200));
-      }
-    } else {
-      console.log(`   ⚠️ yearlyData[1946] is ${typeof room.phase2.yearlyData[1946]}`);
-    }
-  }
 
-  // Emit to room (players) and directly to any registered observers
-  // (belt-and-suspenders: direct emit handles cases where observer socket
-  // left the socket.io room due to rapid reconnects)
   io.to(roomId).emit('stateUpdate', room);
 
-  // Use the global observer registry (immune to room object replacements)
+  // Direct emit to any observers not currently in the socket.io room
+  // (handles rapid reconnect race where observer socket left the room)
   const roomObservers = observerRegistry[roomId] || {};
   const activeObservers = Object.entries(roomObservers).filter(([, sid]) => sid);
-  const staleCount = Object.keys(roomObservers).length - activeObservers.length;
-
-  io.in(roomId).allSockets().then(roomSockets => {
-    for (const [userId, socketId] of activeObservers) {
-      if (!roomSockets.has(socketId)) {
-        io.to(socketId).emit('stateUpdate', room);
-        console.log(`📡 Direct emit to observer ${userId} (socket ${socketId}) — not in room`);
+  if (activeObservers.length > 0) {
+    io.in(roomId).allSockets().then(roomSockets => {
+      for (const [userId, socketId] of activeObservers) {
+        if (!roomSockets.has(socketId)) {
+          io.to(socketId).emit('stateUpdate', room);
+          console.log(`📡 Direct emit to observer ${userId} (socket ${socketId}) — not in room`);
+        }
       }
-    }
-    console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${activeObservers.length} active/${staleCount} stale`);
-  });
+    });
+  }
 }
 
 // Broadcast room list to lobby
