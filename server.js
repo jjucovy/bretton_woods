@@ -5538,7 +5538,7 @@ io.on('connection', (socket) => {
     console.log(`Returning ${myActiveGames.length} active games for player ${playerId}`);
     socket.emit('playerActiveGamesResult', { success: true, games: myActiveGames });
   });
-
+/*
   // Get available games (for regular users - lobby games they can join)
   socket.on('getAvailableGames', ({ playerId }) => {
     // Scan in-memory rooms for lobby-phase games with open slots.
@@ -5561,7 +5561,7 @@ io.on('connection', (socket) => {
       success: true,
       games: availableGames
     });
-  });
+  });*/
 
   // NEW: Superadmin request for active games list (all games, any phase)
   socket.on('getActiveGames', async ({ playerId }) => {
