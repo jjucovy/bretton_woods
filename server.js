@@ -2749,13 +2749,7 @@ io.on('connection', (socket) => {
       try {
         const created = await queryDatabase('createNewGame', {
           gameCode: roomId,
-          game_code: roomId,
-          game_id: 0,
-          data: {
-            game_id: 0,
-            game_code: roomId,
-            created_by: creatorId,
-          }
+          createdBy: creatorId,
         });
         console.log(`   createNewGame result:`, JSON.stringify(created));
 
