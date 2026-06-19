@@ -2757,14 +2757,14 @@ io.on('connection', (socket) => {
           const gameId = created.game_id ?? created.insertId;
           globalState.rooms[roomId].gameId = gameId;
           console.log(`✅ Game created in DB: game_id=${gameId} code=${roomId}`);
-          await queryDatabase('updateGame', { gameCode: roomId, status: 'active' });
+          await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
         } else {
           // INSERT may still have succeeded — verify via getGame
           const gameData = await queryDatabase('getGame', { gameCode: roomId });
           if (gameData && gameData.game_id) {
             globalState.rooms[roomId].gameId = gameData.game_id;
             console.log(`   Recovered game_id=${gameData.game_id} via getGame`);
-            await queryDatabase('updateGame', { gameCode: roomId, status: 'active' });
+            await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
           } else {
             console.error(`❌ Game ${roomId} not persisted to DB`);
           }
