@@ -2805,6 +2805,10 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', async ({ roomId, userId }) => {
     console.log(`📥 joinRoom request: roomId=${roomId}, userId=${userId}`);
 
+    // Join the socket.io room immediately before any async operations
+    // so the socket is in the room even if async DB calls take time
+    socket.join(roomId);
+
     // If room not in memory, try to reconstruct from database + saved state
     if (!globalState.rooms[roomId]) {
       console.log(`⚠️ Room ${roomId} not in memory - attempting to load from database...`);
@@ -2917,9 +2921,7 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
-    socket.join(roomId);
-    
+
     // If userId provided, check if they have an active player assignment in this game
     if (userId) {
       console.log(`   Room has ${Object.keys(room.players).length} players`);
