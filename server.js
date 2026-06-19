@@ -3171,7 +3171,16 @@ io.on('connection', (socket) => {
           countryCode: country
         });
 
-        assignedPlayerId = result?.player_id || `player_${Date.now()}`;
+        if (result?.player_id) {
+          assignedPlayerId = result.player_id;
+        } else {
+          // PHP didn't return player_id — fetch it from DB so id is stable across restarts
+          const fetched = await queryDatabase('getPlayerAssignment', {
+            user_id: parseInt(id),
+            game_id: parseInt(room.gameId)
+          }).catch(() => null);
+          assignedPlayerId = fetched?.player_id || `player_${Date.now()}`;
+        }
         console.log(`   Created player assignment in database: userId=${id}, gameCode=${roomId}, country=${country}, player_id=${assignedPlayerId}`);
       }
     } catch (err) {
@@ -5423,8 +5432,6 @@ io.on('connection', (socket) => {
             (roomState && roomState.gamePhase === 'complete');
 
           if (!isCompleted) {
-            debugger
-            console.log("game.game_id")
             myActiveGames.push({
               game_id: game.game_id,
               gameCode: game.game_code,

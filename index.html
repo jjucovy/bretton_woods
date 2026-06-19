@@ -1007,7 +1007,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         </div>
                       ) : (
                     <div style={{ display: 'grid', gap: '16px' }}>
-                      {availableGames.map((game) => (
+                      {availableGames.filter((game) => !myActiveGames.some(ag => ag.gameCode === game.gameCode)).map((game) => (
                         <div 
                           key={game.gameCode}
                           onClick={() => handleSelectGame(game.gameCode)}
