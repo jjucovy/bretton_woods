@@ -5670,13 +5670,14 @@ async function initializeFromDatabase() {
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
             existingRoom.players[player.user_id] = {
-              id: player.player_id,
+              id: player.user_id,
               userId: player.user_id,
+              playerId: player.player_id,
               country: normalizeCountryName(player.country_code) || player.country_code,
               ready: false,
-              score: (player.phase1_score || 0) + (player.phase2_score || 0),
-              phase1_score: player.phase1_score || 0,
-              phase2_score: player.phase2_score || 0
+              score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
+              phase1_score: parseInt(player.phase1_score) || 0,
+              phase2_score: parseInt(player.phase2_score) || 0
             };
           }
         }
@@ -5722,13 +5723,14 @@ async function initializeFromDatabase() {
         for (const player of players) {
           // Key by userId for consistency (so client can find them by userId)
           roomState.players[player.user_id] = {
-            id: player.player_id,  // Keep actual player_id for DB operations
+            id: player.user_id,
             userId: player.user_id,
+            playerId: player.player_id,
             country: normalizeCountryName(player.country_code) || player.country_code,
             ready: false,
-            score: (player.phase1_score || 0) + (player.phase2_score || 0),
-            phase1_score: player.phase1_score || 0,
-            phase2_score: player.phase2_score || 0
+            score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
+            phase1_score: parseInt(player.phase1_score) || 0,
+            phase2_score: parseInt(player.phase2_score) || 0
           };
           console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}`);
         }
@@ -5739,8 +5741,9 @@ async function initializeFromDatabase() {
       // Rebuild room.scores from player data (fallback - always available)
       for (const player of Object.values(roomState.players)) {
         const country = player.country;
-        if (country && player.phase1_score) {
-          roomState.scores[country] = (roomState.scores[country] || 0) + player.phase1_score;
+        const s = parseInt(player.phase1_score) || 0;
+        if (country && s) {
+          roomState.scores[country] = (roomState.scores[country] || 0) + s;
         }
       }
       console.log(`   📊 Scores rebuilt from player data:`, roomState.scores);
