@@ -208,7 +208,7 @@ app.get('/api/active-games', async (req, res) => {
   }
   
   // Also check for rooms in memory that might not be in database
-  for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
+ /* for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
     if (!activeGames.find(g => g.gameCode === roomId)) {
       activeGames.push({
         gameCode: roomId,
@@ -224,7 +224,7 @@ app.get('/api/active-games', async (req, res) => {
         inMemory: true
       });
     }
-  }
+  }*/
   
   res.json({ games: activeGames });
 });
