@@ -3182,7 +3182,7 @@ io.on('connection', (socket) => {
     
     // Store player with both id and userId for flexibility
     room.players[id] = {
-      id: id,
+      id: assignedPlayerId,
       userId: userId || id,
       playerId: assignedPlayerId,
       country: country,
@@ -3298,9 +3298,12 @@ io.on('connection', (socket) => {
   socket.on('setReady', ({ roomId, userId, playerid, ready }) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
-    
-    const id = userId || playerid;  // Support both userId (new) and playerid (legacy)
-    
+
+    const socketUserId = userId || playerid;
+    // Look up by userId to get the player's player_id (id field), which readyPlayers tracks
+    const player = room.players[socketUserId];
+    const id = player?.id || socketUserId;
+
     if (ready) {
       if (!room.readyPlayers.includes(id)) {
         room.readyPlayers.push(id);
@@ -5670,7 +5673,7 @@ async function initializeFromDatabase() {
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
             existingRoom.players[player.user_id] = {
-              id: player.user_id,
+              id: player.player_id,
               userId: player.user_id,
               playerId: player.player_id,
               country: normalizeCountryName(player.country_code) || player.country_code,
@@ -5723,7 +5726,7 @@ async function initializeFromDatabase() {
         for (const player of players) {
           // Key by userId for consistency (so client can find them by userId)
           roomState.players[player.user_id] = {
-            id: player.user_id,
+            id: player.player_id,
             userId: player.user_id,
             playerId: player.player_id,
             country: normalizeCountryName(player.country_code) || player.country_code,
