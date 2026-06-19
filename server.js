@@ -3308,10 +3308,14 @@ io.on('connection', (socket) => {
     const room = globalState.rooms[roomId];
     if (!room) return;
 
-    // Look up player by userId to get their player_id for readyPlayers
     const socketUserId = userId || playerid;
     const player = room.players[socketUserId];
     const id = player?.id || socketUserId;
+
+    // Update ready flag directly on the player object so observers see it immediately
+    if (player) {
+      player.ready = !!ready;
+    }
 
     if (ready) {
       if (!room.readyPlayers.includes(id)) {
