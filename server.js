@@ -3003,7 +3003,7 @@ io.on('connection', (socket) => {
 
           // Add player back to room state
           room.players[userId] = {
-            id: userId,
+            id: dbAssignment.player_id,
             userId: userId,
             playerId: dbAssignment.player_id,
             country: assignedCountry,
