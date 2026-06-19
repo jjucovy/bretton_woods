@@ -5593,7 +5593,7 @@ io.on('connection', (socket) => {
         });
       }
     }
-    
+    /*
     // Also check for rooms in memory only
     for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
       if (!activeGames.find(g => g.gameCode === roomId)) {
@@ -5613,7 +5613,7 @@ io.on('connection', (socket) => {
         });
       }
     }
-    
+    */
     console.log(`Returning ${activeGames.length} games`);
     
     socket.emit('activeGamesResult', { 
