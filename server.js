@@ -3306,15 +3306,23 @@ io.on('connection', (socket) => {
   // Set ready status
   socket.on('setReady', async ({ roomId, userId, playerid, ready }) => {
     const room = globalState.rooms[roomId];
-    if (!room) return;
+    if (!room) {
+      console.log(`❌ setReady: room ${roomId} not found`);
+      return;
+    }
 
     const socketUserId = userId || playerid;
     const player = room.players[socketUserId];
     const id = player?.id || socketUserId;
 
+    console.log(`🔔 setReady: userId=${socketUserId}, player found=${!!player}, player.id=${player?.id}, ready=${ready}`);
+
     // Update ready flag directly on the player object so observers see it immediately
     if (player) {
       player.ready = !!ready;
+    } else {
+      console.log(`⚠️ setReady: player not found in room.players for userId=${socketUserId}`);
+      console.log(`   room.players keys:`, Object.keys(room.players));
     }
 
     if (ready) {
@@ -3324,6 +3332,10 @@ io.on('connection', (socket) => {
     } else {
       room.readyPlayers = room.readyPlayers.filter(pid => pid !== id);
     }
+
+    // Log who's in the socket.io room
+    const socketsInRoom = await io.in(roomId).allSockets();
+    console.log(`📡 Broadcasting to ${socketsInRoom.size} socket(s) in room ${roomId}:`, [...socketsInRoom]);
 
     // Persist ready status to DB
     if (player?.id) {
