@@ -284,36 +284,46 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
               const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
               const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom');
 
               // Only fetch lobby on reconnect if user has a saved session
               // (page refresh scenario - fresh login is handled by handleLogin)
               if (savedPlayerId && savedUsername) {
-                console.log('User reconnected - showing game lobby');
-                setShowGameSelection(true);
-                setLoadingGames(true);
-
-                if (savedUserRole === 'superadmin') {
-                  socket.emit('getActiveGames', { playerId: savedPlayerId });
-                  socket.once('activeGamesResult', ({ success, games }) => {
-                    setLoadingGames(false);
-                    if (success) setAvailableGames(games || []);
-                  });
+                // If user was in a game room, re-join it so they keep receiving broadcasts
+                if (savedGameRoom) {
+                  console.log('Reconnecting - re-joining room:', savedGameRoom);
+                  window.actualRoomId = savedGameRoom;
+                  setCurrentRoomId(savedGameRoom);
+                  socket.emit('joinRoom', { roomId: savedGameRoom, userId: savedPlayerId });
+                  setShowGameSelection(false);
                 } else {
-                  // Fetch both active games and available lobby games in parallel
-                  let responses = 0;
-                  const checkDone = () => { if (++responses >= 2) setLoadingGames(false); };
+                  console.log('User reconnected - showing game lobby');
+                  setShowGameSelection(true);
+                  setLoadingGames(true);
 
-                  socket.emit('getAvailableGames', { playerId: savedPlayerId });
-                  socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
+                  if (savedUserRole === 'superadmin') {
+                    socket.emit('getActiveGames', { playerId: savedPlayerId });
+                    socket.once('activeGamesResult', ({ success, games }) => {
+                      setLoadingGames(false);
+                      if (success) setAvailableGames(games || []);
+                    });
+                  } else {
+                    // Fetch both active games and available lobby games in parallel
+                    let responses = 0;
+                    const checkDone = () => { if (++responses >= 2) setLoadingGames(false); };
 
-                  socket.once('availableGamesResult', ({ success, games }) => {
-                    if (success) setAvailableGames(games || []);
-                    checkDone();
-                  });
-                  socket.once('playerActiveGamesResult', ({ success, games }) => {
-                    if (success) setMyActiveGames(games || []);
-                    checkDone();
-                  });
+                    socket.emit('getAvailableGames', { playerId: savedPlayerId });
+                    socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
+
+                    socket.once('availableGamesResult', ({ success, games }) => {
+                      if (success) setAvailableGames(games || []);
+                      checkDone();
+                    });
+                    socket.once('playerActiveGamesResult', ({ success, games }) => {
+                      if (success) setMyActiveGames(games || []);
+                      checkDone();
+                    });
+                  }
                 }
               }
             });
