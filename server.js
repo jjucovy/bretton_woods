@@ -2754,13 +2754,13 @@ io.on('connection', (socket) => {
         const nextGameId = Number(highest) + 1;
         console.log(`   Using game_id=${nextGameId} for new game ${roomId}`);
 
-        const created = await queryDatabaseForm('createNewGame', {
-          game_id: nextGameId,
-          gameId: nextGameId,
-          game_code: roomId,
-          gameCode: roomId,
-          created_by: creatorId,
-          createdBy: creatorId,
+        // PHP createNewGame handler reads from $body['data'], not $body directly
+        const created = await queryDatabase('createNewGame', {
+          data: {
+            game_id: nextGameId,
+            game_code: roomId,
+            created_by: creatorId,
+          }
         });
         console.log(`   createNewGame result:`, JSON.stringify(created));
 
