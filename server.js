@@ -2838,6 +2838,15 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId}`);
 
+    // If this user was a known observer, update their socket ID RIGHT NOW before
+    // any async calls — handles the reconnect race where a broadcast fires during
+    // the getAllUsers DB query and the old socket ID is stale
+    const existingRoom = globalState.rooms[roomId];
+    if (existingRoom?.observerSockets && userId in existingRoom.observerSockets) {
+      existingRoom.observerSockets[userId] = socket.id;
+      console.log(`🔭 Fast-updated observer socket for ${userId}: ${socket.id}`);
+    }
+
     // If room not in memory, try to reconstruct from database + saved state
     if (!globalState.rooms[roomId]) {
       console.log(`⚠️ Room ${roomId} not in memory - attempting to load from database...`);
