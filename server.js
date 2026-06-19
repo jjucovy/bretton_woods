@@ -2747,19 +2747,10 @@ io.on('connection', (socket) => {
       globalState.rooms[roomId].gameCode = roomId;
 
       try {
-        // PHP requires game_id as input — fetch the current max and increment
-        const idResult = await queryDatabase('getHighestGameId', {});
-        console.log(`   getHighestGameId result:`, JSON.stringify(idResult));
-        const highest = idResult?.highest_game_id ?? idResult?.data?.highest_game_id ?? 0;
-        const nextGameId = Number(highest) + 1;
-        console.log(`   Using game_id=${nextGameId} for new game ${roomId}`);
-
-        // PHP createNewGame reads gameCode from top level, game_id from $body['data']
         const created = await queryDatabase('createNewGame', {
           gameCode: roomId,
           game_code: roomId,
           data: {
-            game_id: nextGameId,
             game_code: roomId,
             created_by: creatorId,
           }
@@ -2767,7 +2758,7 @@ io.on('connection', (socket) => {
         console.log(`   createNewGame result:`, JSON.stringify(created));
 
         if (created) {
-          const gameId = created.game_id ?? created.insertId ?? nextGameId;
+          const gameId = created.game_id ?? created.insertId;
           globalState.rooms[roomId].gameId = gameId;
           console.log(`✅ Game created in DB: game_id=${gameId} code=${roomId}`);
           await queryDatabase('updateGame', { gameCode: roomId, status: 'active' });
