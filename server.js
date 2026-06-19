@@ -785,9 +785,10 @@ function broadcastToRoom(roomId) {
     }
   }
 
-  // Debug: Log players being broadcast
-  console.log(`📡 Broadcasting to ${roomId}: ${Object.keys(room.players).length} players:`,
-    Object.values(room.players).map(p => ({ id: p.id, country: p.country })));
+  // Debug: Log players and sockets being broadcast
+  io.in(roomId).allSockets().then(sockets => {
+    console.log(`📡 Broadcasting to ${roomId}: ${Object.keys(room.players).length} player(s), ${sockets.size} socket(s):`, [...sockets]);
+  });
 
   io.to(roomId).emit('stateUpdate', room);
 }
@@ -2729,9 +2730,13 @@ io.on('connection', (socket) => {
   socket.on('createRoom', async ({ playerId, roomName, userId }) => {
     const roomId = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const creatorId = userId || playerId; // Use userId if provided, otherwise playerId
-    
+
     console.log(`📝 Creating room: ${roomId} for user ${creatorId}`);
-    
+
+    // Join the socket.io room immediately before any async operations
+    socket.join(roomId);
+    console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId} (createRoom)`);
+
     // Check if creator is superadmin
     let isSuperAdmin = false;
     try {
@@ -2786,8 +2791,7 @@ io.on('connection', (socket) => {
         console.error('Error persisting game to DB:', err);
       }
     }
-    
-    socket.join(roomId);
+
     socket.emit('roomCreated', { 
       success: true, 
       roomId: roomId,
@@ -2808,6 +2812,7 @@ io.on('connection', (socket) => {
     // Join the socket.io room immediately before any async operations
     // so the socket is in the room even if async DB calls take time
     socket.join(roomId);
+    console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId}`);
 
     // If room not in memory, try to reconstruct from database + saved state
     if (!globalState.rooms[roomId]) {

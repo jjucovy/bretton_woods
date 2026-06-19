@@ -796,6 +796,15 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 console.log('Game created successfully:', roomId);
                                 alert(`Game created: ${gameCode}\nYou are the host.`);
 
+                                // Save game room so reconnect re-joins automatically
+                                window.actualRoomId = roomId;
+                                setCurrentRoomId(roomId);
+                                sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+                                setShowGameSelection(false);
+
+                                // Also emit joinRoom so the admin is officially in the socket room
+                                socket.emit('joinRoom', { roomId, userId: playerId });
+
                                 // Refresh games list
                                 setLoadingGames(true);
                                 socket.emit('getActiveGames', { playerId });
