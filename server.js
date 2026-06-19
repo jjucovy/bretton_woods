@@ -3164,28 +3164,15 @@ io.on('connection', (socket) => {
         assignedPlayerId = existingAssignment.player_id;
         console.log(`   User already has player_id ${assignedPlayerId} in this game`);
       } else {
-        // Get next available player_id from database
-        const nextPlayerId = await queryDatabase('getNextPlayerId', {});
-        assignedPlayerId = nextPlayerId?.next_id || `player_${Date.now()}`;
-
-        console.log(`   Assigned new player_id: ${assignedPlayerId}`);
-
-        // Get country_id from country code
-
-        
-        const countryData = await queryDatabase('getCountryByCode', { country_code: country });
-const countryId = countryData?.country_id || null;
-        
         // Save player assignment to database
-        const result = await queryDatabase('createPlayerAssignment', {
-          user_id: id,
-          game_code: roomId,
-          player_id: assignedPlayerId,
-          country_id: countryId,
-          country_code: country
+        const result = await queryDatabase('addPlayer', {
+          gameCode: roomId,
+          userId: id,
+          countryCode: country
         });
 
-        console.log(`   Created player assignment in database: user_id=${id}, player_id=${assignedPlayerId}, game_code=${roomId}, country=${country}`);
+        assignedPlayerId = result?.player_id || `player_${Date.now()}`;
+        console.log(`   Created player assignment in database: userId=${id}, gameCode=${roomId}, country=${country}, player_id=${assignedPlayerId}`);
       }
     } catch (err) {
       console.error('Error managing player assignment:', err);
