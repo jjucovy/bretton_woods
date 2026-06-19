@@ -16,7 +16,7 @@ const {
   INITIAL_EXCHANGE_RATES,
   COUNTRIES
 } = require('./shared/country-utils');
-const { queryDatabase } = require('./server/database');
+const { queryDatabase, queryDatabaseForm } = require('./server/database');
 const { sendAdminNotification } = require('./server/email');
 const {
   REGIONS: DEPLOYMENT_REGIONS,
@@ -92,13 +92,29 @@ app.get('/debug/users', (req, res) => {
     role: data.role,
     createdAt: new Date(data.createdAt).toLocaleString()
   }));
-  
+
   res.json({
     totalUsers: userList.length,
     users: userList,
     totalRooms: Object.keys(globalState.rooms).length,
     rooms: Object.keys(globalState.rooms)
   });
+});
+
+// Diagnostic endpoint to check rooms
+app.get('/debug/rooms', (req, res) => {
+  const rooms = Object.entries(globalState.rooms).map(([roomId, room]) => ({
+    roomId,
+    gameCode: room.gameCode,
+    gameId: room.gameId,
+    gamePhase: room.gamePhase,
+    gameStarted: room.gameStarted,
+    hostUserId: room.hostUserId,
+    hostIsSuperAdmin: room.hostIsSuperAdmin,
+    playerCount: Object.keys(room.players || {}).length,
+    createdAt: room.createdAt
+  }));
+  res.json({ totalRooms: rooms.length, rooms });
 });
 
 // Serve static files (after the specific route)
@@ -2738,8 +2754,9 @@ io.on('connection', (socket) => {
         const nextGameId = Number(highest) + 1;
         console.log(`   Using game_id=${nextGameId} for new game ${roomId}`);
 
-        const created = await queryDatabase('createNewGame', {
+        const created = await queryDatabaseForm('createNewGame', {
           game_id: nextGameId,
+          gameId: nextGameId,
           gameCode: roomId,
           createdBy: creatorId,
         });
