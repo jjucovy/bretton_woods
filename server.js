@@ -16,7 +16,7 @@ const {
   INITIAL_EXCHANGE_RATES,
   COUNTRIES
 } = require('./shared/country-utils');
-const { queryDatabase } = require('./server/database');
+const { queryDatabase, queryDatabaseForm } = require('./server/database');
 const { sendAdminNotification } = require('./server/email');
 const {
   REGIONS: DEPLOYMENT_REGIONS,
@@ -2754,7 +2754,7 @@ io.on('connection', (socket) => {
         const nextGameId = Number(highest) + 1;
         console.log(`   Using game_id=${nextGameId} for new game ${roomId}`);
 
-        const created = await queryDatabase('createNewGame', {
+        const created = await queryDatabaseForm('createNewGame', {
           game_id: nextGameId,
           gameId: nextGameId,
           gameCode: roomId,
