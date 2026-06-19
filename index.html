@@ -284,7 +284,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
               const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
               const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
-              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom');
+              // Fall back to window.actualRoomId so admin/observer re-joins even when
+              // sessionStorage wasn't set (e.g. joined via createRoom before this fix)
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom') || window.actualRoomId;
 
               // Only fetch lobby on reconnect if user has a saved session
               // (page refresh scenario - fresh login is handled by handleLogin)
@@ -406,6 +408,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 if (role === 'superadmin') {
                   console.log('✓ Joined as superadmin/observer');
                   setPlayerCountry(null); // Superadmin does not have a country
+                  // Ensure game room is persisted so reconnect works
+                  if (roomId && !sessionStorage.getItem('brettonWoodsGameRoom')) {
+                    sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+                  }
                 }
               } else {
                 console.error('Failed to join room:', message);
