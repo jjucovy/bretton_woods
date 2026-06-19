@@ -2757,6 +2757,7 @@ io.on('connection', (socket) => {
         const created = await queryDatabaseForm('createNewGame', {
           game_id: nextGameId,
           gameId: nextGameId,
+          game_code: roomId,
           gameCode: roomId,
           createdBy: creatorId,
         });
