@@ -276,7 +276,8 @@ function createGameState(roomId, roomName, hostId) {
       }
     },
     maxPlayers: 7,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    observerSockets: {}   // userId → socketId for superadmin observers
   };
 }
 
@@ -785,12 +786,28 @@ function broadcastToRoom(roomId) {
     }
   }
 
-  // Debug: Log players and sockets being broadcast
-  io.in(roomId).allSockets().then(sockets => {
-    console.log(`📡 Broadcasting to ${roomId}: ${Object.keys(room.players).length} player(s), ${sockets.size} socket(s):`, [...sockets]);
-  });
-
+  // Emit to room (players) and directly to any registered observers
+  // (belt-and-suspenders: direct emit handles cases where observer socket
+  // left the socket.io room due to rapid reconnects)
   io.to(roomId).emit('stateUpdate', room);
+
+  const observerEntries = Object.entries(room.observerSockets || {});
+  if (observerEntries.length > 0) {
+    io.in(roomId).allSockets().then(roomSockets => {
+      for (const [userId, socketId] of observerEntries) {
+        if (!roomSockets.has(socketId)) {
+          // Observer socket is not in the room — emit directly
+          io.to(socketId).emit('stateUpdate', room);
+          console.log(`📡 Direct emit to observer ${userId} (socket ${socketId}) — not in room`);
+        }
+      }
+      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${observerEntries.length}`);
+    });
+  } else {
+    io.in(roomId).allSockets().then(sockets => {
+      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), ${sockets.size} socket(s):`, [...sockets]);
+    });
+  }
 }
 
 // Broadcast room list to lobby
@@ -2792,13 +2809,20 @@ io.on('connection', (socket) => {
       }
     }
 
-    socket.emit('roomCreated', { 
-      success: true, 
+    // Register creator as observer so they receive direct state updates
+    if (isSuperAdmin) {
+      if (!globalState.rooms[roomId].observerSockets) globalState.rooms[roomId].observerSockets = {};
+      globalState.rooms[roomId].observerSockets[creatorId] = socket.id;
+      console.log(`🔭 Registered superadmin ${creatorId} as observer of ${roomId} (socket ${socket.id})`);
+    }
+
+    socket.emit('roomCreated', {
+      success: true,
       roomId: roomId,
       roomName: roomName || roomId,
       hostId: creatorId
     });
-    
+
     broadcastRoomList();
     saveState();
     
@@ -2953,17 +2977,21 @@ io.on('connection', (socket) => {
           }
         }
         
-        console.log(`✅ Superadmin ${userId} joined room ${roomId} as ${isHost ? 'HOST' : 'OBSERVER'}`);
+        console.log(`✅ Superadmin ${userId} joined room ${roomId} as ${isHost ? 'HOST' : 'OBSERVER'} (socket ${socket.id})`);
         console.log(`   Host check: room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, userId=${userId}, isHost=${isHost}`);
-        
-        socket.emit('joinRoomResult', { 
-          success: true, 
+
+        // Register observer socket for direct emit fallback
+        if (!room.observerSockets) room.observerSockets = {};
+        room.observerSockets[userId] = socket.id;
+
+        socket.emit('joinRoomResult', {
+          success: true,
           roomId: roomId,
           actualRoomId: roomId,
           role: 'superadmin',
           isHost: isHost
         });
-        
+
         broadcastToRoom(roomId);
         console.log(`✅ Superadmin ${userId} joined room: ${roomId} (will observe only)`);
         return;
@@ -5605,25 +5633,36 @@ io.on('connection', (socket) => {
   });
   
   socket.on('disconnect', () => {
-    // Find rooms where this socket is a player
+    // Find rooms where this socket is a player or observer
     Object.keys(globalState.rooms).forEach(roomId => {
       const room = globalState.rooms[roomId];
+
+      // Remove stale observer socket reference
+      if (room.observerSockets) {
+        for (const [uid, sid] of Object.entries(room.observerSockets)) {
+          if (sid === socket.id) {
+            delete room.observerSockets[uid];
+            console.log(`Observer ${uid} disconnected from room ${roomId}`);
+          }
+        }
+      }
+
       const playerid = Object.keys(room.players).find(
         id => room.players[id].socketId === socket.id
       );
-      
+
       if (playerid) {
         room.players[playerid].disconnected = true;
         room.players[playerid].disconnectedAt = Date.now();
         room.readyPlayers = room.readyPlayers.filter(id => id !== playerid);
-        
+
         broadcastToRoom(roomId);
         saveState();
-        
+
         console.log(`Player ${playerid} disconnected from room ${roomId} - keeping in game`);
       }
     });
-    
+
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
