@@ -2751,6 +2751,7 @@ io.on('connection', (socket) => {
           gameCode: roomId,
           game_code: roomId,
           data: {
+            game_id: 0,
             game_code: roomId,
             created_by: creatorId,
           }
