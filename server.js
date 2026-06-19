@@ -240,6 +240,10 @@ let globalState = {
   roomList: [] // { id, name, host, playerCount, maxPlayers, status, createdAt }
 };
 
+// Global observer registry: roomId -> { userId -> socketId | null }
+// Kept separate from room objects so room replacements/reconstructions don't lose it.
+const observerRegistry = {};
+
 // Load military deployments data
 const militaryDeploymentsData = require('./military-deployments.json');
 
@@ -791,28 +795,20 @@ function broadcastToRoom(roomId) {
   // left the socket.io room due to rapid reconnects)
   io.to(roomId).emit('stateUpdate', room);
 
-  // Active observer entries: skip null (stale/disconnected) socket IDs
-  const observerEntries = Object.entries(room.observerSockets || {}).filter(([, sid]) => sid);
-  const hasObservers = Object.keys(room.observerSockets || {}).length > 0;
+  // Use the global observer registry (immune to room object replacements)
+  const roomObservers = observerRegistry[roomId] || {};
+  const activeObservers = Object.entries(roomObservers).filter(([, sid]) => sid);
+  const staleCount = Object.keys(roomObservers).length - activeObservers.length;
 
-  if (hasObservers) {
-    io.in(roomId).allSockets().then(roomSockets => {
-      for (const [userId, socketId] of observerEntries) {
-        if (!roomSockets.has(socketId)) {
-          // Observer socket is not in the socket.io room — emit directly by ID
-          io.to(socketId).emit('stateUpdate', room);
-          console.log(`📡 Direct emit to observer ${userId} (socket ${socketId}) — not in room`);
-        }
+  io.in(roomId).allSockets().then(roomSockets => {
+    for (const [userId, socketId] of activeObservers) {
+      if (!roomSockets.has(socketId)) {
+        io.to(socketId).emit('stateUpdate', room);
+        console.log(`📡 Direct emit to observer ${userId} (socket ${socketId}) — not in room`);
       }
-      const activeCount = observerEntries.length;
-      const staleCount = Object.keys(room.observerSockets || {}).length - activeCount;
-      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${activeCount} active/${staleCount} stale`);
-    });
-  } else {
-    io.in(roomId).allSockets().then(sockets => {
-      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), ${sockets.size} socket(s):`, [...sockets]);
-    });
-  }
+    }
+    console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${activeObservers.length} active/${staleCount} stale`);
+  });
 }
 
 // Broadcast room list to lobby
@@ -2814,10 +2810,10 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Register creator as observer so they receive direct state updates
+    // Register creator as observer in global registry so they receive direct state updates
     if (isSuperAdmin) {
-      if (!globalState.rooms[roomId].observerSockets) globalState.rooms[roomId].observerSockets = {};
-      globalState.rooms[roomId].observerSockets[creatorId] = socket.id;
+      if (!observerRegistry[roomId]) observerRegistry[roomId] = {};
+      observerRegistry[roomId][creatorId] = socket.id;
       console.log(`🔭 Registered superadmin ${creatorId} as observer of ${roomId} (socket ${socket.id})`);
     }
 
@@ -2845,10 +2841,10 @@ io.on('connection', (socket) => {
 
     // If this user was a known observer, update their socket ID RIGHT NOW before
     // any async calls — handles the reconnect race where a broadcast fires during
-    // the getAllUsers DB query and the old socket ID is stale
-    const existingRoom = globalState.rooms[roomId];
-    if (existingRoom?.observerSockets && userId in existingRoom.observerSockets) {
-      existingRoom.observerSockets[userId] = socket.id;
+    // the getAllUsers DB query and the old socket ID is stale.
+    // Uses the global observerRegistry (immune to room object replacements).
+    if (observerRegistry[roomId] && userId in observerRegistry[roomId]) {
+      observerRegistry[roomId][userId] = socket.id;
       console.log(`🔭 Fast-updated observer socket for ${userId}: ${socket.id}`);
     }
 
@@ -2994,9 +2990,10 @@ io.on('connection', (socket) => {
         console.log(`✅ Superadmin ${userId} joined room ${roomId} as ${isHost ? 'HOST' : 'OBSERVER'} (socket ${socket.id})`);
         console.log(`   Host check: room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, userId=${userId}, isHost=${isHost}`);
 
-        // Register observer socket for direct emit fallback
-        if (!room.observerSockets) room.observerSockets = {};
-        room.observerSockets[userId] = socket.id;
+        // Register observer socket in global registry for direct emit fallback
+        if (!observerRegistry[roomId]) observerRegistry[roomId] = {};
+        observerRegistry[roomId][userId] = socket.id;
+        console.log(`🔭 Registered observer ${userId} in global registry for room ${roomId}`);
 
         socket.emit('joinRoomResult', {
           success: true,
@@ -5651,14 +5648,14 @@ io.on('connection', (socket) => {
     Object.keys(globalState.rooms).forEach(roomId => {
       const room = globalState.rooms[roomId];
 
-      // Mark observer socket as stale (null) rather than deleting the key.
-      // Keeping the key lets the fast-update at the top of joinRoom re-register
-      // the new socket ID immediately on reconnect, before any async DB calls.
-      if (room.observerSockets) {
-        for (const [uid, sid] of Object.entries(room.observerSockets)) {
+      // Mark observer stale (null) in global registry — keeps the key so the
+      // fast-update at the top of joinRoom re-registers the new socket ID on reconnect.
+      const roomObs = observerRegistry[roomId];
+      if (roomObs) {
+        for (const [uid, sid] of Object.entries(roomObs)) {
           if (sid === socket.id) {
-            room.observerSockets[uid] = null;
-            console.log(`Observer ${uid} disconnected from room ${roomId} (socket marked stale)`);
+            roomObs[uid] = null;
+            console.log(`Observer ${uid} disconnected from room ${roomId} (marked stale in registry)`);
           }
         }
       }
