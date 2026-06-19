@@ -102,6 +102,19 @@ app.get('/debug/users', (req, res) => {
 });
 
 // Diagnostic endpoint to check rooms
+app.get('/admin/clear-memory-games', (req, res) => {
+  const before = Object.keys(globalState.rooms).length;
+  let removed = 0;
+  for (const roomId of Object.keys(globalState.rooms)) {
+    if (!globalState.rooms[roomId].gameId) {
+      delete globalState.rooms[roomId];
+      removed++;
+    }
+  }
+  saveState();
+  res.json({ removed, remaining: Object.keys(globalState.rooms).length, before });
+});
+
 app.get('/debug/rooms', (req, res) => {
   const rooms = Object.entries(globalState.rooms).map(([roomId, room]) => ({
     roomId,
