@@ -63,7 +63,10 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 const PORT = process.env.PORT || 65002;
-const STATE_FILE = path.join(__dirname, 'game-state.json');
+// Write state files to /tmp so pm2-watch doesn't detect changes and restart the server.
+// DB snapshots + player scores are the authoritative persistence; the state file is a
+// fast-start cache that's safe to lose across reboots.
+const STATE_FILE = '/tmp/bretton-woods-state.json';
 
 // Database (queryDatabase) imported from ./server/database.js
 // Email (sendAdminNotification) imported from ./server/email.js
@@ -330,7 +333,7 @@ function saveGamePhase2State(roomId) {
     // Save if we have phase2 data (don't require active - game might be complete)
     if (!room || !room.phase2 || !room.phase2.yearlyData) return;
 
-    const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
+    const gameStateFile = `/tmp/bretton-woods-phase2-${roomId}.json`;
     const phase2State = {
       currentYear: room.phase2.currentYear,
       yearlyData: room.phase2.yearlyData,
@@ -437,7 +440,7 @@ async function saveGameStateSnapshot(roomId, snapshotType) {
 // Load Phase 2 state from per-game file
 function loadGamePhase2State(roomId) {
   try {
-    const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
+    const gameStateFile = `/tmp/bretton-woods-phase2-${roomId}.json`;
     if (!fs.existsSync(gameStateFile)) {
       return null;
     }
@@ -2882,7 +2885,7 @@ io.on('connection', (socket) => {
           }
 
           // 4. Load Phase 2 state from saved file if it exists
-          const gameStateFile = path.join(__dirname, `game-state-${roomId}.json`);
+          const gameStateFile = `/tmp/bretton-woods-phase2-${roomId}.json`;
           if (fs.existsSync(gameStateFile)) {
             try {
               const phase2Data = JSON.parse(fs.readFileSync(gameStateFile, 'utf8'));
