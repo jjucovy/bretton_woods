@@ -152,8 +152,8 @@ app.get('/api/available-games', async (req, res) => {
   
   if (dbGames && Array.isArray(dbGames)) {
     for (const game of dbGames) {
-      const roomState = globalState.rooms[game.game_code];
-      
+      const roomState = globalState.rooms[String(game.game_id)] || globalState.rooms[game.game_code];
+
       // Only show games that are in lobby phase and have room for more players
       if (roomState && roomState.gamePhase === 'lobby') {
         const playerCount = Object.keys(roomState.players).length;
@@ -192,10 +192,11 @@ app.get('/api/active-games', async (req, res) => {
   
   if (dbGames && Array.isArray(dbGames)) {
     for (const game of dbGames) {
-      const roomState = globalState.rooms[game.game_code];
+      const roomState = globalState.rooms[String(game.game_id)] || globalState.rooms[game.game_code];
       activeGames.push({
         gameCode: game.game_code,
         gameId: game.game_id,
+        roomId: String(game.game_id),
         status: game.status,
         currentRound: game.current_round,
         hostUserId: game.host_user_id,
@@ -209,13 +210,14 @@ app.get('/api/active-games', async (req, res) => {
       });
     }
   }
-  
+
   // Also check for rooms in memory that might not be in database
   for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
-    if (!activeGames.find(g => g.gameCode === roomId)) {
+    if (!activeGames.find(g => String(g.gameId) === roomId)) {
       activeGames.push({
-        gameCode: roomId,
+        gameCode: roomState.gameCode || roomId,
         gameId: roomState.gameId,
+        roomId: roomId,
         status: 'memory-only',
         currentRound: roomState.currentRound,
         hostUserId: roomState.hostId,
@@ -2677,8 +2679,8 @@ io.on('connection', (socket) => {
         const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
         for (const game of games) {
           if (game && game.game_code) {
-        
-            const roomState = globalState.rooms[game.game_code];
+
+            const roomState = globalState.rooms[String(game.game_id)] || globalState.rooms[game.game_code];
             const isCompleted = game.status === 'completed' ||
               game.game_status === 'completed' ||
               (roomState && roomState.gamePhase === 'complete');
@@ -2686,10 +2688,11 @@ io.on('connection', (socket) => {
             if (isCompleted) {
               console.log(`⏭️ User's game ${game.game_code} is completed - skipping`);
             } else {
-              
+
               myActiveGames.push({
                 game_id: game.game_id,
                 gameCode: game.game_code,
+                roomId: String(game.game_id),
                 country_id: game.country_id,
                 country_code: game.country_code,
                 status: game.status,
@@ -2719,6 +2722,7 @@ io.on('connection', (socket) => {
         availableGames = lobbyGames.map(room => ({
           roomId: room.roomId,
           gameCode: room.gameCode || room.roomId,
+          gameId: room.gameId,
           playerCount: Object.keys(room.players).length,
           maxPlayers: 7,
           availableSlots: 7 - Object.keys(room.players).length,
@@ -2751,14 +2755,10 @@ io.on('connection', (socket) => {
   
   // Create new room
   socket.on('createRoom', async ({ playerId, roomName, userId }) => {
-    const roomId = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const gameCode = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const creatorId = userId || playerId; // Use userId if provided, otherwise playerId
 
-    console.log(`📝 Creating room: ${roomId} for user ${creatorId}`);
-
-    // Join the socket.io room immediately before any async operations
-    socket.join(roomId);
-    console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId} (createRoom)`);
+    console.log(`📝 Creating room: ${gameCode} for user ${creatorId}`);
 
     // Check if creator is superadmin
     let isSuperAdmin = false;
@@ -2774,46 +2774,55 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking creator role:', err);
     }
-    
-    // Create room state - hostId is set to the creator's userId
-    globalState.rooms[roomId] = createGameState(roomId, roomName || roomId, creatorId);
-    globalState.rooms[roomId].hostUserId = creatorId; // Store the host's user ID
-    globalState.rooms[roomId].hostIsSuperAdmin = isSuperAdmin;
-    
-    console.log(`   Room host set to userId: ${creatorId} (superadmin: ${isSuperAdmin})`);
-    
-    // If this looks like a game code (e.g., "game_123"), create it in the DB
-    if (roomId.startsWith('game_')) {
-      globalState.rooms[roomId].status = 'active';
-      globalState.rooms[roomId].gameCode = roomId;
 
+    // Persist to DB first and get game_id — that becomes the primary room key
+    let gameId = null;
+    if (gameCode.startsWith('game_')) {
       try {
         const created = await queryDatabase('createNewGame', {
-          gameCode: roomId,
+          gameCode: gameCode,
           createdBy: creatorId,
         });
         console.log(`   createNewGame result:`, JSON.stringify(created));
 
         if (created) {
-          const gameId = created.game_id ?? created.insertId;
-          globalState.rooms[roomId].gameId = gameId;
-          console.log(`✅ Game created in DB: game_id=${gameId} code=${roomId}`);
+          gameId = created.game_id ?? created.insertId;
+          console.log(`✅ Game created in DB: game_id=${gameId} code=${gameCode}`);
           await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
         } else {
           // INSERT may still have succeeded — verify via getGame
-          const gameData = await queryDatabase('getGame', { gameCode: roomId });
+          const gameData = await queryDatabase('getGame', { gameCode: gameCode });
           if (gameData && gameData.game_id) {
-            globalState.rooms[roomId].gameId = gameData.game_id;
-            console.log(`   Recovered game_id=${gameData.game_id} via getGame`);
+            gameId = gameData.game_id;
+            console.log(`   Recovered game_id=${gameId} via getGame`);
             await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
           } else {
-            console.error(`❌ Game ${roomId} not persisted to DB`);
+            console.error(`❌ Game ${gameCode} not persisted to DB`);
           }
         }
       } catch (err) {
         console.error('Error persisting game to DB:', err);
       }
     }
+
+    // Use DB game_id as the primary room key; fall back to gameCode if DB failed
+    const roomId = gameId ? String(gameId) : gameCode;
+
+    // Join the socket.io room using the new roomId
+    socket.join(roomId);
+    console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId} (createRoom)`);
+
+    // Create room state keyed by game_id
+    const room = createGameState(roomId, roomName || gameCode, creatorId);
+    room.hostUserId = creatorId;
+    room.hostIsSuperAdmin = isSuperAdmin;
+    room.gameCode = gameCode;
+    room.gameId = gameId;
+    room.roomId = roomId;
+    if (gameCode.startsWith('game_')) room.status = 'active';
+    globalState.rooms[roomId] = room;
+
+    console.log(`   Room host set to userId: ${creatorId} (superadmin: ${isSuperAdmin})`);
 
     // Register creator as observer in global registry + dedicated Socket.IO room
     if (isSuperAdmin) {
@@ -2825,15 +2834,16 @@ io.on('connection', (socket) => {
 
     socket.emit('roomCreated', {
       success: true,
+      gameId: roomId,
       roomId: roomId,
-      roomName: roomName || roomId,
+      roomName: roomName || gameCode,
       hostId: creatorId
     });
 
     broadcastRoomList();
     saveState();
-    
-    console.log(`✅ Room created: ${roomName || roomId} (${roomId}) by ${creatorId} as ${isSuperAdmin ? 'HOST (superadmin)' : 'player'}`);
+
+    console.log(`✅ Room created: roomId=${roomId} gameCode=${gameCode} by ${creatorId} as ${isSuperAdmin ? 'HOST (superadmin)' : 'player'}`);
   });
   
   // Join existing room
@@ -2863,21 +2873,27 @@ io.on('connection', (socket) => {
 
       try {
         // 1. Check if game exists in database
-        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        // roomId is now the DB game_id string (e.g. "35"); try that first, then legacy gameCode
+        let gameData = await queryDatabase('getGame', { game_id: parseInt(roomId) || undefined });
+        if (!gameData || !gameData.game_code) {
+          gameData = await queryDatabase('getGame', { gameCode: roomId });
+        }
 
         if (gameData && gameData.game_code) {
           console.log(`   ✅ Found game in database: game_id=${gameData.game_id}, status=${gameData.status}`);
 
           // 2. Create room state from database info
-          const restoredRoom = createGameState(roomId, roomId, gameData.host_user_id);
+          const restoredRoom = createGameState(roomId, gameData.game_code, gameData.host_user_id);
           restoredRoom.gameId = gameData.game_id;
+          restoredRoom.gameCode = gameData.game_code;
+          restoredRoom.roomId = roomId;
           restoredRoom.hostUserId = gameData.host_user_id;
           restoredRoom.gameStarted = gameData.status === 'active' || gameData.status === 'phase2';
           restoredRoom.gamePhase = gameData.status === 'phase2' ? 'phase2' : (gameData.status === 'active' ? 'phase1' : 'lobby');
           restoredRoom.currentRound = gameData.current_round || 0;
 
           // 3. Load players from database
-          const dbPlayers = await queryDatabase('getPlayers', { gameCode: roomId });
+          const dbPlayers = await queryDatabase('getPlayers', { gameCode: gameData.game_code });
           if (dbPlayers && Array.isArray(dbPlayers)) {
             dbPlayers.forEach(p => {
               const playerId = p.user_id || p.player_id;
@@ -2936,13 +2952,13 @@ io.on('connection', (socket) => {
 
     const room = globalState.rooms[roomId];
 
-    // Ensure we have the database game_id (not just Date.now() timestamp)
-    if (roomId.startsWith('game_') && (!room.gameId || room.gameId > 1000000000000)) {
-      // gameId looks like a timestamp, fetch the real one from database
+    // Ensure we have the database game_id (roomId IS the game_id now, but check anyway)
+    if (!room.gameId) {
       try {
-        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        const gameData = await queryDatabase('getGame', { game_id: parseInt(roomId) || undefined });
         if (gameData && gameData.game_id) {
           room.gameId = gameData.game_id;
+          room.gameCode = room.gameCode || gameData.game_code;
           console.log(`   Updated gameId from database: ${gameData.game_id}`);
         }
       } catch (err) {
@@ -5527,7 +5543,7 @@ io.on('connection', (socket) => {
 
       for (const game of games) {
         if (game && game.game_code) {
-          const roomState = globalState.rooms[game.game_code];
+          const roomState = globalState.rooms[String(game.game_id)] || globalState.rooms[game.game_code];
           const isCompleted = game.status === 'completed' ||
             game.game_status === 'completed' ||
             (roomState && roomState.gamePhase === 'complete');
@@ -5536,6 +5552,7 @@ io.on('connection', (socket) => {
             myActiveGames.push({
               game_id: game.game_id,
               gameCode: game.game_code,
+              roomId: String(game.game_id),
               country_id: game.country_id,
               country_code: game.country_code,
               status: game.status,
@@ -5565,6 +5582,7 @@ io.on('connection', (socket) => {
       .map(room => ({
         gameCode: room.gameCode || room.roomId,
         gameId: room.gameId,
+        roomId: room.roomId,
         playerCount: Object.keys(room.players).length,
         availableSlots: 7 - Object.keys(room.players).length,
         hostUserId: room.hostUserId || room.hostId,
@@ -5591,11 +5609,12 @@ io.on('connection', (socket) => {
     
     if (dbGames && Array.isArray(dbGames)) {
       for (const game of dbGames) {
-        const roomState = globalState.rooms[game.game_code];
-        console.log(`  - Game ${game.game_code}: inMemory=${!!roomState}`);
+        const roomState = globalState.rooms[String(game.game_id)] || globalState.rooms[game.game_code];
+        console.log(`  - Game ${game.game_code} (game_id=${game.game_id}): inMemory=${!!roomState}`);
         activeGames.push({
           gameCode: game.game_code,
           gameId: game.game_id,
+          roomId: String(game.game_id),
           status: game.status,
           currentRound: game.current_round,
           hostUserId: game.host_user_id,
@@ -5612,11 +5631,12 @@ io.on('connection', (socket) => {
     
     // Also check for rooms in memory only
     for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
-      if (!activeGames.find(g => g.gameCode === roomId)) {
+      if (!activeGames.find(g => String(g.gameId) === roomId)) {
         console.log(`  - Memory-only game: ${roomId}`);
         activeGames.push({
-          gameCode: roomId,
+          gameCode: roomState.gameCode || roomId,
           gameId: roomState.gameId,
+          roomId: roomId,
           status: 'memory-only',
           currentRound: roomState.currentRound,
           hostUserId: roomState.hostId,
@@ -5687,11 +5707,21 @@ async function initializeFromDatabase() {
     // Convert DB games to room state
     for (const game of games) {
       const gameCode = game.game_code; // e.g., "game_39"
+      const roomId = String(game.game_id); // primary key is now game_id (e.g. "35")
 
-      console.log(`📋 Loading game: ${gameCode}`);
+      console.log(`📋 Loading game: ${gameCode} (game_id=${game.game_id}, roomId=${roomId})`);
 
       // Check if we already have this room from the main state file (with yearlyData etc.)
-      const existingRoom = globalState.rooms[gameCode];
+      // Accept either new game_id key or legacy gameCode key (migrate if needed)
+      let existingRoom = globalState.rooms[roomId];
+      if (!existingRoom && globalState.rooms[gameCode]) {
+        existingRoom = globalState.rooms[gameCode];
+        globalState.rooms[roomId] = existingRoom;
+        delete globalState.rooms[gameCode];
+        existingRoom.roomId = roomId;
+        existingRoom.gameCode = gameCode;
+        console.log(`   📦 Migrated room key '${gameCode}' → '${roomId}'`);
+      }
       if (existingRoom && existingRoom.phase2?.yearlyData && Object.keys(existingRoom.phase2.yearlyData).length > 0) {
         console.log(`   📂 Found existing state from file (yearlyData years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')}, currentYear: ${existingRoom.phase2.currentYear})`);
 
@@ -5777,7 +5807,9 @@ async function initializeFromDatabase() {
       }
 
       // Create room state from database game (no existing state found)
-      const roomState = createGameState(gameCode, `Game ${gameCode}`, game.host_user_id);
+      const roomState = createGameState(roomId, `Game ${gameCode}`, game.host_user_id);
+      roomState.roomId = roomId;
+      roomState.gameCode = gameCode;
       roomState.gameId = game.game_id;
       roomState.hostUserId = game.host_user_id;
       roomState.status = game.status;
@@ -6049,7 +6081,7 @@ async function initializeFromDatabase() {
         console.error(`   ⚠️ Failed to load snapshots for ${gameCode}:`, snapshotErr);
       }
 
-      globalState.rooms[gameCode] = roomState;
+      globalState.rooms[roomId] = roomState;
 
       // Try to load Phase 2 state from per-game JSON file (if it exists)
       // On Render, per-game files don't survive restarts, so snapshot restoration above is primary
@@ -6092,11 +6124,11 @@ async function initializeFromDatabase() {
         } else {
           // No per-game file AND no snapshot data — last resort, initialize fresh
           console.log(`   ⚠️ No saved Phase 2 state found anywhere — initializing fresh from 1946...`);
-          initializePhase2(gameCode);
+          initializePhase2(roomId);
         }
       }
 
-      console.log(`  ✅ Loaded game: ${gameCode} with ${Object.keys(roomState.players).length} player(s)`);
+      console.log(`  ✅ Loaded game: ${gameCode} (roomId=${roomId}) with ${Object.keys(roomState.players).length} player(s)`);
     }
   } else {
     console.log('ℹ️  No active games found in database');
@@ -6107,10 +6139,10 @@ async function initializeFromDatabase() {
   // ONLY prune if the DB query actually succeeded (Array.isArray check).
   // If DB returned 503 or null, skip pruning to avoid wiping all rooms.
   if (Array.isArray(games)) {
-    const dbGameCodes = new Set(games.map(g => g.game_code));
+    const dbGameIds = new Set(games.map(g => String(g.game_id)));
     let pruned = 0;
     for (const roomId of Object.keys(globalState.rooms)) {
-      if (!dbGameCodes.has(roomId)) {
+      if (!dbGameIds.has(roomId)) {
         delete globalState.rooms[roomId];
         pruned++;
       }
