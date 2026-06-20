@@ -347,19 +347,21 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
             // When admin creates or deletes a game, refresh the available game list
             // so players in the lobby see it immediately without re-logging in.
+            // Only fires if the player is logged in AND not currently in a game room.
             socket.on('roomListUpdate', () => {
               const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
               const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
-              if (savedUserRole === 'player' && savedPlayerId) {
-                socket.once('availableGamesResult', ({ success, games }) => {
-                  if (success) setAvailableGames(games || []);
-                });
-                socket.once('playerActiveGamesResult', ({ success, games }) => {
-                  if (success) setMyActiveGames(games || []);
-                });
-                socket.emit('getAvailableGames', { playerId: savedPlayerId });
-                socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
-              }
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom');
+              // Skip if not a logged-in player or if they're already in a game
+              if (savedUserRole !== 'player' || !savedPlayerId || savedGameRoom) return;
+              socket.once('availableGamesResult', ({ success, games }) => {
+                if (success) setAvailableGames(games || []);
+              });
+              socket.once('playerActiveGamesResult', ({ success, games }) => {
+                if (success) setMyActiveGames(games || []);
+              });
+              socket.emit('getAvailableGames', { playerId: savedPlayerId });
+              socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
             });
 
             socket.on('stateUpdate', (state) => {
