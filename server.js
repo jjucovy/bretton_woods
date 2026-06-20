@@ -791,23 +791,23 @@ function broadcastToRoom(roomId) {
     }
   }
 
-  // Emit to room (players)
+  // Emit to all players in the room
   io.to(roomId).emit('stateUpdate', room);
 
-  // ALWAYS direct-emit to all registered observers regardless of room membership.
-  // Players' old WebSocket connections can survive restarts and occupy the socket.io
-  // room, leaving the admin's newer socket outside the room count — the fallback
-  // "not in room" check is therefore unreliable. Direct emit costs nothing extra.
+  // Emit to all observers via their dedicated Socket.IO room.
+  // This is authoritative — the observer socket.io room is managed directly by
+  // Socket.IO and survives observerRegistry quirks/bugs.
+  io.to(`observers:${roomId}`).emit('stateUpdate', room);
+
+  // Registry-based count for logging only
   const roomObservers = observerRegistry[roomId] || {};
   const activeObservers = Object.entries(roomObservers).filter(([, sid]) => sid);
   const staleCount = Object.keys(roomObservers).length - activeObservers.length;
 
-  for (const [userId, socketId] of activeObservers) {
-    io.to(socketId).emit('stateUpdate', room);
-  }
-
   io.in(roomId).allSockets().then(roomSockets => {
-    console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${activeObservers.length} active/${staleCount} stale`);
+    io.in(`observers:${roomId}`).allSockets().then(obsSockets => {
+      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${obsSockets.size} (registry: ${activeObservers.length} active/${staleCount} stale)`);
+    });
   });
 }
 
@@ -2807,10 +2807,11 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Register creator as observer in global registry so they receive direct state updates
+    // Register creator as observer in global registry + dedicated Socket.IO room
     if (isSuperAdmin) {
       if (!observerRegistry[roomId]) observerRegistry[roomId] = {};
       observerRegistry[roomId][creatorId] = socket.id;
+      socket.join(`observers:${roomId}`);
       console.log(`🔭 Registered superadmin ${creatorId} as observer of ${roomId} (socket ${socket.id})`);
     }
 
@@ -2987,10 +2988,13 @@ io.on('connection', (socket) => {
         console.log(`✅ Superadmin ${userId} joined room ${roomId} as ${isHost ? 'HOST' : 'OBSERVER'} (socket ${socket.id})`);
         console.log(`   Host check: room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, userId=${userId}, isHost=${isHost}`);
 
-        // Register observer socket in global registry for direct emit fallback
+        // Register observer socket in global registry AND a dedicated Socket.IO
+        // observer room. The Socket.IO room is authoritative for delivery;
+        // the registry is kept only for the log/count.
         if (!observerRegistry[roomId]) observerRegistry[roomId] = {};
         observerRegistry[roomId][userId] = socket.id;
-        console.log(`🔭 Registered observer ${userId} in global registry for room ${roomId}`);
+        socket.join(`observers:${roomId}`);
+        console.log(`🔭 Registered observer ${userId} in global registry + observers:${roomId} room (socket ${socket.id})`);
 
         socket.emit('joinRoomResult', {
           success: true,
