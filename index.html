@@ -266,7 +266,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           useEffect(() => {
             if (userRole !== 'superadmin' || !currentRoomId || !playerId) return;
             const interval = setInterval(() => {
-              socket.emit('requestState', { roomId: currentRoomId, userId: playerId });
+              socket.emit('requestState', { gameId: currentRoomId, userId: playerId });
             }, 3000);
             return () => clearInterval(interval);
           }, [userRole, currentRoomId, playerId]);
@@ -306,7 +306,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   console.log('Reconnecting - re-joining room:', savedGameRoom);
                   window.actualRoomId = savedGameRoom;
                   setCurrentRoomId(savedGameRoom);
-                  socket.emit('joinRoom', { roomId: savedGameRoom, userId: savedPlayerId });
+                  socket.emit('joinRoom', { gameId: savedGameRoom, userId: savedPlayerId });
                   setShowGameSelection(false);
                 } else {
                   console.log('User reconnected - showing game lobby');
@@ -411,10 +411,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   console.log('   Attempting to rejoin as:', savedCountry);
                   
                   // Try to rejoin with saved country
-                  socket.emit('rejoinGame', { 
-                    roomId: currentRoomId, 
-                    playerId, 
-                    country: savedCountry 
+                  socket.emit('rejoinGame', {
+                    gameId: currentRoomId,
+                    playerId,
+                    country: savedCountry
                   });
                 }
               }
@@ -739,7 +739,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             setCurrentRoomId(roomId);
 
             // Join the selected room
-            socket.emit('joinRoom', { roomId: roomId, userId: playerId });
+            socket.emit('joinRoom', { gameId: roomId, userId: playerId });
 
             // Hide game selection screen
             setShowGameSelection(false);
@@ -763,7 +763,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               return;
             }
             
-            socket.emit('joinGame', { roomId: window.actualRoomId, userId: playerId, country });
+            socket.emit('joinGame', { gameId: window.actualRoomId, userId: playerId, country });
           };
 
           const handleLeaveGame = () => {
@@ -771,13 +771,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.error('No room ID available.');
               return;
             }
-            socket.emit('leaveGame', { roomId: window.actualRoomId, userId: playerId });
+            socket.emit('leaveGame', { gameId: window.actualRoomId, userId: playerId });
             setPlayerCountry(null);
             setIsReady(false);
           };
 
           const handleReady = () => {
-            socket.emit('setReady', { roomId: currentRoomId, userId: playerId, ready: !isReady });
+            socket.emit('setReady', { gameId: currentRoomId, userId: playerId, ready: !isReady });
           };
 
           // Get countries and issues from game data
@@ -876,7 +876,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 setShowGameSelection(false);
 
                                 // Also emit joinRoom so the admin is officially in the socket room
-                                socket.emit('joinRoom', { roomId: newRoomId, userId: playerId });
+                                socket.emit('joinRoom', { gameId: newRoomId, userId: playerId });
 
                                 // Refresh games list
                                 setLoadingGames(true);
@@ -1472,7 +1472,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         if (confirm('Leave this game and return to game selection?')) {
                           console.log('🚪 Leaving game...');
                           const roomToLeave = gameState?.roomId || currentRoomId;
-                          socket.emit('leaveRoom', { roomId: roomToLeave });
+                          socket.emit('leaveRoom', { gameId: roomToLeave });
                           sessionStorage.removeItem('brettonWoodsGameRoom');
                           localStorage.removeItem('brettonWoodsGameRoom');
                           sessionStorage.removeItem('brettonWoodsCountry');
@@ -1517,7 +1517,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                     onClick={() => {
                       console.log('🚪 Returning to lobby...');
                       const roomToLeave = gameState?.roomId || currentRoomId;
-                      socket.emit('leaveRoom', { roomId: roomToLeave });
+                      socket.emit('leaveRoom', { gameId: roomToLeave });
                       sessionStorage.removeItem('brettonWoodsGameRoom');
                       sessionStorage.removeItem('brettonWoodsCountry');
                       window.actualRoomId = null;
@@ -1656,7 +1656,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                     <button
                       onClick={() => {
                         if (confirm('Reset the game? All progress will be lost.')) {
-                          socket.emit('resetRoom', { roomId: currentRoomId, playerId });
+                          socket.emit('resetRoom', { gameId: currentRoomId, playerId });
                         }
                       }}
                       style={{
@@ -1722,10 +1722,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           <button
                             onClick={() => {
                               console.log('Start game button clicked, skipPhase1:', skipPhase1);
-                              socket.emit('startGame', { 
-                                roomId: currentRoomId, 
+                              socket.emit('startGame', {
+                                gameId: currentRoomId,
                                 playerid: playerId,
-                                skipPhase1: skipPhase1 
+                                skipPhase1: skipPhase1
                               });
                             }}
                             className="btn-primary"
@@ -1739,7 +1739,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         <button
                           onClick={() => {
                             if (window.confirm('Reset the game? All progress will be lost.')) {
-                              socket.emit('resetRoom', { roomId: currentRoomId, playerId });
+                              socket.emit('resetRoom', { gameId: currentRoomId, playerId });
                             }
                           }}
                           style={{
@@ -1941,7 +1941,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <button
                                 onClick={() => {
                                   if (window.confirm(`Skip Round ${gameState.currentRound} and advance to the next round?\n\nAny votes already cast this round will be discarded.`)) {
-                                    socket.emit('advanceRound', { roomId: currentRoomId, playerId });
+                                    socket.emit('advanceRound', { gameId: currentRoomId, playerId });
                                   }
                                 }}
                                 style={{
@@ -2205,7 +2205,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         key={idx}
                                         onClick={() => {
                                           socket.emit('vote', {
-                                            roomId: currentRoomId,
+                                            gameId: currentRoomId,
                                             playerid: playerId,
                                             choice: option.id || optionLetter.toLowerCase()
                                           });
@@ -2446,7 +2446,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             <button
                               onClick={() => {
                                 socket.emit('advanceRound', {
-                                  roomId: currentRoomId,
+                                  gameId: currentRoomId,
                                   playerId
                                 });
                               }}
@@ -2772,7 +2772,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         key={option.id}
                                         onClick={() => {
                                           socket.emit('submitCrisisResponse', {
-                                            roomId: currentRoomId,
+                                            gameId: currentRoomId,
                                             playerid: playerId,
                                             choiceId: option.id,
                                             crisisId: activeCrisis?.id
@@ -2863,7 +2863,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                   <button
                                     onClick={() => {
                                       socket.emit('resolveCrisis', {
-                                        roomId: currentRoomId,
+                                        gameId: currentRoomId,
                                         userId: playerId  // Super admin sends userId
                                       });
                                     }}
@@ -3543,8 +3543,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <button
                                 onClick={() => {
                                   // Super admin sends userId, not playerId (they're not a player)
-                                  socket.emit('advanceYear', { 
-                                    roomId: currentRoomId, 
+                                  socket.emit('advanceYear', {
+                                    gameId: currentRoomId,
                                     userId: playerId  // playerId for superadmin is actually their userId
                                   });
                                 }}
@@ -3740,7 +3740,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               console.log('🚪 Leaving completed game...');
                               const roomToLeave = gameState?.roomId || currentRoomId;
                               socket.emit('leaveCompletedGame', {
-                                roomId: roomToLeave,
+                                gameId: roomToLeave,
                                 userId: playerId
                               });
                               sessionStorage.removeItem('brettonWoodsGameRoom');
@@ -3816,7 +3816,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 onClick={() => {
                                   if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
                                     socket.emit('startNewGame', {
-                                      roomId: currentRoomId,
+                                      gameId: currentRoomId,
                                       playerId
                                     });
                                   }
@@ -4146,7 +4146,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             onClick={() => {
                               console.log('⚔️ Player chose FIGHT');
                               socket.emit('submitBattleDecision', {
-                                roomId: currentRoomId,
+                                gameId: currentRoomId,
                                 playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
@@ -4176,7 +4176,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             onClick={() => {
                               console.log('🤝 Player chose NEGOTIATE');
                               socket.emit('submitBattleDecision', {
-                                roomId: currentRoomId,
+                                gameId: currentRoomId,
                                 playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
@@ -4206,7 +4206,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             onClick={() => {
                               console.log('🏃 Player chose RETREAT');
                               socket.emit('submitBattleDecision', {
-                                roomId: currentRoomId,
+                                gameId: currentRoomId,
                                 playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
@@ -4482,7 +4482,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
                             console.log('🤝 Submitting diplomatic stances:', diplomaticStances);
                             socket.emit('submitDiplomaticStance', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               region: diplomaticConflict.region,
                               stances: diplomaticStances
@@ -4592,7 +4592,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           onClick={() => {
                             console.log('⚔️ Player chose ATTACK');
                             socket.emit('submitBattleOption', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               battleId: battleOptionsData.battleId,
                               region: battleOptionsData.region,
@@ -4623,7 +4623,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           onClick={() => {
                             console.log('🤝 Player chose NEGOTIATE');
                             socket.emit('submitBattleOption', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               battleId: battleOptionsData.battleId,
                               region: battleOptionsData.region,
@@ -4654,7 +4654,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           onClick={() => {
                             console.log('🏃 Player chose RETREAT');
                             socket.emit('submitBattleOption', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               battleId: battleOptionsData.battleId,
                               region: battleOptionsData.region,
