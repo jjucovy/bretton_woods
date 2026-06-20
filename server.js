@@ -6157,7 +6157,7 @@ function gracefulShutdown(signal) {
     Object.keys(globalState.games).forEach(gameId => {
       const room = globalState.games[gameId];
       if (room && room.phase2 && room.phase2.yearlyData) {
-        saveGamePhase2State(roomId);
+        saveGamePhase2State(gameId);
       }
     });
     console.log('✅ All state saved. Shutting down.');
@@ -6179,7 +6179,7 @@ process.on('uncaughtException', (err) => {
     Object.keys(globalState.games).forEach(gameId => {
       const room = globalState.games[gameId];
       if (room && room.phase2 && room.phase2.yearlyData) {
-        saveGamePhase2State(roomId);
+        saveGamePhase2State(gameId);
       }
     });
     console.log('✅ Emergency state save complete.');
@@ -6197,7 +6197,7 @@ process.on('unhandledRejection', (reason, promise) => {
     Object.keys(globalState.games).forEach(gameId => {
       const room = globalState.games[gameId];
       if (room && room.phase2 && room.phase2.yearlyData) {
-        saveGamePhase2State(roomId);
+        saveGamePhase2State(gameId);
       }
     });
   } catch (err) {
@@ -6216,7 +6216,7 @@ process.on('unhandledRejection', (reason, promise) => {
       Object.keys(globalState.games).forEach(gameId => {
         const room = globalState.games[gameId];
         if (room && room.phase2 && room.phase2.yearlyData) {
-          saveGamePhase2State(roomId);
+          saveGamePhase2State(gameId);
         }
       });
     } catch (err) {
