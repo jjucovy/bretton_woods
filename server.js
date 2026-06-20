@@ -2559,9 +2559,6 @@ function resolveCrisisEffects(roomId, crisisId = null) {
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
   
-  // Send current room list
-  socket.emit('roomListUpdate', globalState.roomList);
-  
   // Register new user
   socket.on('register', async ({ username, password, email }) => {
     if (!username || !password || !email) {
