@@ -791,23 +791,22 @@ function broadcastToRoom(roomId) {
     }
   }
 
-  // Emit to room (players) and directly to any registered observers
-  // (belt-and-suspenders: direct emit handles cases where observer socket
-  // left the socket.io room due to rapid reconnects)
+  // Emit to room (players)
   io.to(roomId).emit('stateUpdate', room);
 
-  // Use the global observer registry (immune to room object replacements)
+  // ALWAYS direct-emit to all registered observers regardless of room membership.
+  // Players' old WebSocket connections can survive restarts and occupy the socket.io
+  // room, leaving the admin's newer socket outside the room count — the fallback
+  // "not in room" check is therefore unreliable. Direct emit costs nothing extra.
   const roomObservers = observerRegistry[roomId] || {};
   const activeObservers = Object.entries(roomObservers).filter(([, sid]) => sid);
   const staleCount = Object.keys(roomObservers).length - activeObservers.length;
 
+  for (const [userId, socketId] of activeObservers) {
+    io.to(socketId).emit('stateUpdate', room);
+  }
+
   io.in(roomId).allSockets().then(roomSockets => {
-    for (const [userId, socketId] of activeObservers) {
-      if (!roomSockets.has(socketId)) {
-        io.to(socketId).emit('stateUpdate', room);
-        console.log(`📡 Direct emit to observer ${userId} (socket ${socketId}) — not in room`);
-      }
-    }
     console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${activeObservers.length} active/${staleCount} stale`);
   });
 }
