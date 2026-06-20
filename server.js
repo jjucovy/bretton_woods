@@ -2785,20 +2785,12 @@ io.on('connection', (socket) => {
         });
         console.log(`   createNewGame result:`, JSON.stringify(created));
 
-        if (created) {
-          gameId = created.game_id ?? created.insertId;
+        if (created && created.game_id) {
+          gameId = created.game_id;
           console.log(`✅ Game created in DB: game_id=${gameId} code=${gameCode}`);
           await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
         } else {
-          // INSERT may still have succeeded — verify via getGame
-          const gameData = await queryDatabase('getGame', { gameCode: gameCode });
-          if (gameData && gameData.game_id) {
-            gameId = gameData.game_id;
-            console.log(`   Recovered game_id=${gameId} via getGame`);
-            await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
-          } else {
-            console.error(`❌ Game ${gameCode} not persisted to DB`);
-          }
+          console.error(`❌ Game ${gameCode} not persisted to DB — createNewGame returned:`, JSON.stringify(created));
         }
       } catch (err) {
         console.error('Error persisting game to DB:', err);
