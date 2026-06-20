@@ -796,10 +796,10 @@ function broadcastToRoom(roomId) {
   // Emit to dedicated observer Socket.IO room (belt-and-suspenders)
   io.to(`observers:${roomId}`).emit('stateUpdate', room);
 
-  // Last-resort: find the admin's socket by userId directly via fetchSockets().
+  // Last-resort: find the admin's socket by host_user_id via fetchSockets().
   // This works even if their socket was never in the game/observer room
   // (e.g. after a rapid restart where room membership was lost).
-  const adminUserId = String(room.hostId || room.hostUserId || '');
+  const adminUserId = String(room.hostUserId || room.hostId || '');
   if (adminUserId) {
     io.fetchSockets().then(allSockets => {
       const adminSock = allSockets.find(s => String(s.userId) === adminUserId);
@@ -5779,6 +5779,7 @@ async function initializeFromDatabase() {
       // Create room state from database game (no existing state found)
       const roomState = createGameState(gameCode, `Game ${gameCode}`, game.host_user_id);
       roomState.gameId = game.game_id;
+      roomState.hostUserId = game.host_user_id;
       roomState.status = game.status;
 
       // Restore game state from database
