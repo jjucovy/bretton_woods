@@ -318,7 +318,7 @@ function loadState() {
 function saveState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      const backupFile = STATE_FILE.replace('.json', '-backup.json');
+      const getGameStateSnapshotsbackupFile = STATE_FILE.replace('.json', '-backup.json');
       fs.copyFileSync(STATE_FILE, backupFile);
     }
 
@@ -329,7 +329,7 @@ function saveState() {
 }
 
 // Save Phase 2 state to per-game file (backup for server restarts)
-function saveGamePhase2State(roomId) {
+function saveGamePhase2State(gameId) {
   try {
     const room = globalState.games[gameId];
     // Save if we have phase2 data (don't require active - game might be complete)
