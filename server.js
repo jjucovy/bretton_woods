@@ -5545,8 +5545,7 @@ io.on('connection', (socket) => {
     // (DB status is 'active' for all games; gamePhase is the authoritative lobby flag.)
     const availableGames = Object.values(globalState.rooms)
       .filter(room => Object.keys(room.players).length < 7)
-      .filter(room => room.gamePhase === 'lobby' && !room.gameStarted)
-      .filter(room => !globalState.rooms[game.game_code])
+      .filter(room => room.gamePhase === 'lobby' && !room.gameStarted&& inMemory===false)
       .map(room => ({
         gameCode: room.gameCode || room.roomId,
         gameId: room.gameId,
