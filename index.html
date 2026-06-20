@@ -728,18 +728,19 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           };
           
           // NEW: Handler to select and join a game
-          const handleSelectGame = (gameCode) => {
-            console.log('User selected game:', gameCode);
-            
+          const handleSelectGame = (gameId) => {
+            const roomId = String(gameId);
+            console.log('User selected game:', roomId);
+
             // Set the room ID
-            window.actualRoomId = gameCode;
-            sessionStorage.setItem('brettonWoodsGameRoom', gameCode);
-            localStorage.setItem('brettonWoodsGameRoom', gameCode);
-            setCurrentRoomId(gameCode);
-            
+            window.actualRoomId = roomId;
+            sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+            localStorage.setItem('brettonWoodsGameRoom', roomId);
+            setCurrentRoomId(roomId);
+
             // Join the selected room
-            socket.emit('joinRoom', { roomId: gameCode, userId: playerId });
-            
+            socket.emit('joinRoom', { roomId: roomId, userId: playerId });
+
             // Hide game selection screen
             setShowGameSelection(false);
           };
@@ -861,20 +862,21 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               roomName: gameCode
                             });
 
-                            socket.once('roomCreated', ({ success, roomId, hostId }) => {
+                            socket.once('roomCreated', ({ success, gameId, roomId: createdRoomId, hostId }) => {
                               if (success) {
-                                console.log('Game created successfully:', roomId);
-                                alert(`Game created: ${gameCode}\nYou are the host.`);
+                                const newRoomId = gameId || createdRoomId;
+                                console.log('Game created successfully:', newRoomId);
+                                alert(`Game created (ID: ${newRoomId})\nYou are the host.`);
 
                                 // Save game room so reconnect re-joins automatically
-                                window.actualRoomId = roomId;
-                                setCurrentRoomId(roomId);
-                                sessionStorage.setItem('brettonWoodsGameRoom', roomId);
-                                localStorage.setItem('brettonWoodsGameRoom', roomId);
+                                window.actualRoomId = newRoomId;
+                                setCurrentRoomId(newRoomId);
+                                sessionStorage.setItem('brettonWoodsGameRoom', newRoomId);
+                                localStorage.setItem('brettonWoodsGameRoom', newRoomId);
                                 setShowGameSelection(false);
 
                                 // Also emit joinRoom so the admin is officially in the socket room
-                                socket.emit('joinRoom', { roomId, userId: playerId });
+                                socket.emit('joinRoom', { roomId: newRoomId, userId: playerId });
 
                                 // Refresh games list
                                 setLoadingGames(true);
@@ -968,7 +970,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             {myActiveGames.map((game) => (
                               <div
                                 key={game.gameCode}
-                                onClick={() => handleSelectGame(game.gameCode)}
+                                onClick={() => handleSelectGame(game.roomId || game.game_id || game.gameCode)}
                                 style={{
                                   padding: '16px 20px',
                                   background: '#f0fdf4',
@@ -1033,7 +1035,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleSelectGame(game.gameCode);
+                                      handleSelectGame(game.roomId || game.game_id || game.gameCode);
                                     }}
                                     style={{
                                       padding: '10px 20px',
@@ -1098,9 +1100,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       ) : (
                     <div style={{ display: 'grid', gap: '16px' }}>
                       {availableGames.filter((game) => !myActiveGames.some(ag => ag.gameCode === game.gameCode)).map((game) => (
-                        <div 
+                        <div
                           key={game.gameCode}
-                          onClick={() => handleSelectGame(game.gameCode)}
+                          onClick={() => handleSelectGame(game.gameId || game.roomId || game.gameCode)}
                           style={{
                             padding: '20px',
                             background: 'white',
@@ -1174,7 +1176,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleSelectGame(game.gameCode);
+                                handleSelectGame(game.gameId || game.roomId || game.gameCode);
                               }}
                               style={{
                                 padding: '10px 20px',
