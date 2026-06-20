@@ -1853,13 +1853,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 <p style={{ color: '#64748b', fontSize: '0.95rem' }}>
                                   {currentIssue.description}
                                 </p>
-                                
+
                                 <div style={{ marginTop: '20px' }}>
                                   <h4 style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '10px' }}>
                                     Voting Progress:
                                   </h4>
-                                  <div style={{ 
-                                    display: 'grid', 
+                                  <div style={{
+                                    display: 'grid',
                                     gap: '8px'
                                   }}>
                                     {playerList.map((player) => (
@@ -1888,6 +1888,41 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 </div>
                               </div>
                             )}
+
+                            {/* Admin controls during voting — force-advance if players are stuck */}
+                            <div style={{
+                              padding: '20px',
+                              background: '#fef2f2',
+                              borderRadius: '8px',
+                              border: '2px solid #fca5a5',
+                              marginTop: '10px'
+                            }}>
+                              <h4 style={{ margin: '0 0 8px 0', color: '#7f1d1d', fontSize: '0.95rem' }}>
+                                🛡️ Admin Controls
+                              </h4>
+                              <p style={{ margin: '0 0 12px 0', color: '#991b1b', fontSize: '0.8rem' }}>
+                                Use if players are unable to vote (e.g. after a server restart). Skips this round without recording results.
+                              </p>
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Skip Round ${gameState.currentRound} and advance to the next round?\n\nAny votes already cast this round will be discarded.`)) {
+                                    socket.emit('advanceRound', { roomId: currentRoomId, playerId });
+                                  }
+                                }}
+                                style={{
+                                  padding: '10px 24px',
+                                  background: '#dc2626',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  fontSize: '0.9rem',
+                                  fontWeight: '600',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                ⏭ Force Advance to Round {(gameState.currentRound || 1) + 1}
+                              </button>
+                            </div>
                           </div>
                         )}
 
