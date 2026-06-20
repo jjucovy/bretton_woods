@@ -122,7 +122,7 @@ app.get('/debug/rooms', (req, res) => {
   const rooms = Object.entries(globalState.rooms).map(([gameId, room]) => ({
     gameId,
     gameCode: room.gameCode,
-    gameId: room.gameId,
+    gameId: games.game_id,
     gamePhase: room.gamePhase,
     gameStarted: room.gameStarted,
     hostUserId: room.hostUserId,
