@@ -6077,19 +6077,23 @@ async function initializeFromDatabase() {
 
   // Prune rooms that exist only in the local state file (no DB record).
   // These accumulate as stale test games and should not appear in any game list.
-  const dbGameCodes = new Set(
-    (games && Array.isArray(games)) ? games.map(g => g.game_code) : []
-  );
-  let pruned = 0;
-  for (const roomId of Object.keys(globalState.rooms)) {
-    if (!dbGameCodes.has(roomId)) {
-      delete globalState.rooms[roomId];
-      pruned++;
+  // ONLY prune if the DB query actually succeeded (Array.isArray check).
+  // If DB returned 503 or null, skip pruning to avoid wiping all rooms.
+  if (Array.isArray(games)) {
+    const dbGameCodes = new Set(games.map(g => g.game_code));
+    let pruned = 0;
+    for (const roomId of Object.keys(globalState.rooms)) {
+      if (!dbGameCodes.has(roomId)) {
+        delete globalState.rooms[roomId];
+        pruned++;
+      }
     }
-  }
-  if (pruned > 0) {
-    console.log(`🧹 Pruned ${pruned} memory-only room(s) with no database record`);
-    saveState();
+    if (pruned > 0) {
+      console.log(`🧹 Pruned ${pruned} memory-only room(s) with no database record`);
+      saveState();
+    }
+  } else {
+    console.log('⚠️ Skipping room prune — DB query failed or returned no data');
   }
 }
 
