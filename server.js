@@ -799,7 +799,7 @@ function broadcastToRoom(roomId) {
   // Last-resort: find the admin's socket by host_user_id via fetchSockets().
   // This works even if their socket was never in the game/observer room
   // (e.g. after a rapid restart where room membership was lost).
-  const adminUserId = String(room.hostUserId || room.hostId || '');
+  const adminUserId = String(game.host_user_id || room.hostId || '');
   if (adminUserId) {
     io.fetchSockets().then(allSockets => {
       const adminSock = allSockets.find(s => String(s.userId) === adminUserId);
@@ -2722,7 +2722,7 @@ io.on('connection', (socket) => {
           playerCount: Object.keys(room.players).length,
           maxPlayers: 7,
           availableSlots: 7 - Object.keys(room.players).length,
-          hostUserId: room.hostUserId || room.hostId,
+          hostUserId: game.host_user_id || room.hostId,
           createdAt: room.createdAt
         }));
         console.log(`   Found ${availableGames.length} available lobby games for player`);
@@ -2951,7 +2951,7 @@ io.on('connection', (socket) => {
     }
 
     // Debug: Log room host information
-    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${room.hostUserId}, hostIsSuperAdmin=${room.hostIsSuperAdmin}, gameId=${room.gameId}`);
+    console.log(`   Room host info: hostId=${room.hostId}, hostUserId=${game.host_user_id}, hostIsSuperAdmin=${room.hostIsSuperAdmin}, gameId=${room.gameId}`);
     
     // Check if user is superadmin
     let isSuperAdmin = false;
