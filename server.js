@@ -5544,9 +5544,8 @@ io.on('connection', (socket) => {
     // Scan in-memory rooms for lobby-phase games with open slots.
     // (DB status is 'active' for all games; gamePhase is the authoritative lobby flag.)
     const availableGames = Object.values(globalState.rooms)
-      console.log(availableGames)
-      .filter(room => Object.keys(room.players).length < 7)
       .filter(room => room.gamePhase === 'lobby' && !room.gameStarted)
+      .filter(room => Object.keys(room.players).length < 7)
       .map(room => ({
         gameCode: room.gameCode || room.roomId,
         gameId: room.gameId,
