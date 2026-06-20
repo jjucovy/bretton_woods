@@ -5870,13 +5870,23 @@ async function initializeFromDatabase() {
             try {
               const fullState = typeof latest.full_state === 'string' ? JSON.parse(latest.full_state) : latest.full_state;
               if (fullState && typeof fullState === 'object') {
-                // Restore core game state
-                if (fullState.currentRound) roomState.currentRound = fullState.currentRound;
-                if (fullState.gamePhase) roomState.gamePhase = fullState.gamePhase;
+                // Only restore round/phase from snapshot if it is at least as far as
+                // the DB record (game.current_round). A stale snapshot (e.g. round_end
+                // for round 1) must NOT overwrite a DB that already shows round 2.
+                const dbRound = parseInt(game.current_round) || 0;
+                const snapRound = parseInt(fullState.currentRound) || 0;
+                const snapAheadOfDB = snapRound >= dbRound;
+
+                if (snapAheadOfDB) {
+                  if (fullState.currentRound) roomState.currentRound = fullState.currentRound;
+                  if (fullState.gamePhase) roomState.gamePhase = fullState.gamePhase;
+                } else {
+                  console.log(`   ⚠️ Snapshot round (${snapRound}) is behind DB round (${dbRound}) — keeping DB round/phase (${roomState.gamePhase})`);
+                }
                 if (fullState.gameStarted !== undefined) roomState.gameStarted = fullState.gameStarted;
                 if (fullState.scores) roomState.scores = fullState.scores;
                 if (fullState.roundHistory) roomState.roundHistory = fullState.roundHistory;
-                if (fullState.votes) roomState.votes = fullState.votes;
+                if (fullState.votes && snapAheadOfDB) roomState.votes = fullState.votes;
 
                 // Restore Phase 2 state (critical for year progression)
                 if (fullState.phase2) {
