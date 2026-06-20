@@ -108,9 +108,9 @@ app.get('/debug/users', (req, res) => {
 app.get('/admin/clear-memory-games', (req, res) => {
   const before = Object.keys(globalState.rooms).length;
   let removed = 0;
-  for (const roomId of Object.keys(globalState.rooms)) {
-    if (!globalState.rooms[roomId].gameId) {
-      delete globalState.rooms[roomId];
+  for (const gameId of Object.keys(globalState.rooms)) {
+    if (!globalState.rooms[gameId].gameId) {
+      delete globalState.rooms[gameId];
       removed++;
     }
   }
@@ -119,8 +119,8 @@ app.get('/admin/clear-memory-games', (req, res) => {
 });
 
 app.get('/debug/rooms', (req, res) => {
-  const rooms = Object.entries(globalState.rooms).map(([roomId, room]) => ({
-    roomId,
+  const rooms = Object.entries(globalState.rooms).map(([gameId, room]) => ({
+    gameId,
     gameCode: room.gameCode,
     gameId: room.gameId,
     gamePhase: room.gamePhase,
@@ -211,10 +211,10 @@ app.get('/api/active-games', async (req, res) => {
   }
   
   // Also check for rooms in memory that might not be in database
- /* for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
-    if (!activeGames.find(g => g.gameCode === roomId)) {
+ /* for (const [gameId, roomState] of Object.entries(globalState.rooms)) {
+    if (!activeGames.find(g => g.gameCode === gameId)) {
       activeGames.push({
-        gameCode: roomId,
+        gameCode: gameId,
         gameId: roomState.gameId,
         status: 'memory-only',
         currentRound: roomState.currentRound,
@@ -239,11 +239,11 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 // Multi-room game state
 let globalState = {
   users: {}, // username -> { password: hashedPassword, playerid: string, createdAt: timestamp }
-  rooms: {}, // roomId -> gameState
+  rooms: {}, // gameId -> gameState
   roomList: [] // { id, name, host, playerCount, maxPlayers, status, createdAt }
 };
 
-// Global observer registry: roomId -> { userId -> socketId | null }
+// Global observer registry: gameId -> { userId -> socketId | null }
 // Kept separate from room objects so room replacements/reconstructions don't lose it.
 const observerRegistry = {};
 
@@ -254,9 +254,9 @@ const militaryDeploymentsData = require('./military-deployments.json');
 const crisisEventsData = require('./crisis-events.json');
 
 // Create default game state template
-function createGameState(roomId, roomName, hostId) {
+function createGameState(gameId, roomName, hostId) {
   return {
-    roomId: roomId,
+    gameId: gameId,
     roomName: roomName,
     hostId: hostId,
     gameId: Date.now(),
@@ -327,13 +327,13 @@ function saveState() {
 }
 
 // Save Phase 2 state to per-game file (backup for server restarts)
-function saveGamePhase2State(roomId) {
+function saveGamePhase2State(gameId) {
   try {
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
     // Save if we have phase2 data (don't require active - game might be complete)
     if (!room || !room.phase2 || !room.phase2.yearlyData) return;
 
-    const gameStateFile = `/tmp/bretton-woods-phase2-${roomId}.json`;
+    const gameStateFile = `/tmp/bretton-woods-phase2-${gameId}.json`;
     const phase2State = {
       currentYear: room.phase2.currentYear,
       yearlyData: room.phase2.yearlyData,
@@ -358,14 +358,14 @@ function saveGamePhase2State(roomId) {
 
     fs.writeFileSync(gameStateFile, JSON.stringify(phase2State, null, 2));
   } catch (err) {
-    console.error(`❌ Error saving Phase 2 state for ${roomId}:`, err);
+    console.error(`❌ Error saving Phase 2 state for ${gameId}:`, err);
   }
 }
 
 // Save a complete game state snapshot to MySQL (Hostinger)
 // Called at end of each round (Phase 1) or year (Phase 2)
-async function saveGameStateSnapshot(roomId, snapshotType) {
-  const room = globalState.rooms[roomId];
+async function saveGameStateSnapshot(gameId, snapshotType) {
+  const room = globalState.rooms[gameId];
   if (!room) return;
 
   try {
@@ -381,7 +381,7 @@ async function saveGameStateSnapshot(roomId, snapshotType) {
       console.error(`⚠️ Could not serialize room state: ${e.message}`);
     }
     const fullStateSizeKB = Math.round(fullStateJson.length / 1024);
-    console.log(`📸 Preparing snapshot: ${roomId} [${snapshotType}] phase=${phase} round/year=${roundOrYear} full_state=${fullStateSizeKB}KB`);
+    console.log(`📸 Preparing snapshot: ${gameId} [${snapshotType}] phase=${phase} round/year=${roundOrYear} full_state=${fullStateSizeKB}KB`);
 
     // If full_state is too large (>500KB), skip it to avoid PHP/MySQL limits
     // The individual fields (yearly_data, policies, etc.) will still be saved
@@ -391,7 +391,7 @@ async function saveGameStateSnapshot(roomId, snapshotType) {
     }
 
     const snapshotData = {
-      game_code: roomId,
+      game_code: gameId,
       game_id: room.gameId || null,
       snapshot_type: snapshotType,
       phase,
@@ -420,47 +420,47 @@ async function saveGameStateSnapshot(roomId, snapshotType) {
 
     const result = await queryDatabase('saveGameStateSnapshot', snapshotData);
     if (result) {
-      console.log(`📸 Snapshot saved OK: ${roomId} [${snapshotType}] phase=${phase} round/year=${roundOrYear}`);
+      console.log(`📸 Snapshot saved OK: ${gameId} [${snapshotType}] phase=${phase} round/year=${roundOrYear}`);
     } else {
-      console.error(`⚠️ Snapshot save returned null for ${roomId} [${snapshotType}] — retrying without full_state...`);
+      console.error(`⚠️ Snapshot save returned null for ${gameId} [${snapshotType}] — retrying without full_state...`);
       // Retry without full_state (which may be causing the failure)
       snapshotData.full_state = '';
       const retry = await queryDatabase('saveGameStateSnapshot', snapshotData);
       if (retry) {
-        console.log(`📸 Snapshot saved OK (without full_state): ${roomId} [${snapshotType}] round/year=${roundOrYear}`);
+        console.log(`📸 Snapshot saved OK (without full_state): ${gameId} [${snapshotType}] round/year=${roundOrYear}`);
       } else {
-        console.error(`❌ Snapshot save failed even without full_state for ${roomId}`);
+        console.error(`❌ Snapshot save failed even without full_state for ${gameId}`);
       }
     }
   } catch (err) {
-    console.error(`⚠️ Failed to save game state snapshot for ${roomId}:`, err);
+    console.error(`⚠️ Failed to save game state snapshot for ${gameId}:`, err);
   }
 }
 
 // Load Phase 2 state from per-game file
-function loadGamePhase2State(roomId) {
+function loadGamePhase2State(gameId) {
   try {
-    const gameStateFile = `/tmp/bretton-woods-phase2-${roomId}.json`;
+    const gameStateFile = `/tmp/bretton-woods-phase2-${gameId}.json`;
     if (!fs.existsSync(gameStateFile)) {
       return null;
     }
 
     const data = fs.readFileSync(gameStateFile, 'utf8');
     const phase2State = JSON.parse(data);
-    console.log(`📂 Loaded Phase 2 state for ${roomId} (saved at ${new Date(phase2State.savedAt).toLocaleString()})`);
+    console.log(`📂 Loaded Phase 2 state for ${gameId} (saved at ${new Date(phase2State.savedAt).toLocaleString()})`);
     return phase2State;
   } catch (err) {
-    console.error(`❌ Error loading Phase 2 state for ${roomId}:`, err);
+    console.error(`❌ Error loading Phase 2 state for ${gameId}:`, err);
     return null;
   }
 }
 
 // Save player scores (phase1_score and/or phase2_score) to the players table in DB
-async function savePlayerScoresToDB(roomId, phase) {
-  const room = globalState.rooms[roomId];
+async function savePlayerScoresToDB(gameId, phase) {
+  const room = globalState.rooms[gameId];
   if (!room || !room.gameId) return;
 
-  const gameCode = roomId;
+  const gameCode = gameId;
   for (const [userId, player] of Object.entries(room.players)) {
     const country = normalizeCountryName(player.country) || player.country;
     const score = room.scores?.[country] || 0;
@@ -481,14 +481,14 @@ async function savePlayerScoresToDB(roomId, phase) {
 }
 
 // Save game state to database
-async function saveGameToDatabase(roomId) {
+async function saveGameToDatabase(gameId) {
   try {
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
     if (!room) return;
 
     // Ensure we have a valid game_id (not a timestamp)
     if (!room.gameId || room.gameId > 1000000000000) {
-      console.log(`⚠️ Invalid game_id for ${roomId}, skipping database update`);
+      console.log(`⚠️ Invalid game_id for ${gameId}, skipping database update`);
       return;
     }
 
@@ -520,15 +520,15 @@ async function saveGameToDatabase(roomId) {
       updateData.endedAt = true; // API will set to NOW()
     }
 
-    console.log(`💾 Saving game ${roomId} (game_id=${room.gameId}) to database: status=${gameStatus}, round=${currentRound}, year=${room.phase2?.currentYear || 'N/A'}`);
+    console.log(`💾 Saving game ${gameId} (game_id=${room.gameId}) to database: status=${gameStatus}, round=${currentRound}, year=${room.phase2?.currentYear || 'N/A'}`);
 
     // Update game in database
     const result = await queryDatabase('updateGame', updateData);
 
     if (result) {
-      console.log(`✅ Game ${roomId} saved to database`);
+      console.log(`✅ Game ${gameId} saved to database`);
     } else {
-      console.log(`⚠️ Game ${roomId} DB update returned no result - check PHP API logs`);
+      console.log(`⚠️ Game ${gameId} DB update returned no result - check PHP API logs`);
     }
   } catch (err) {
     console.error('❌ Error saving game to database:', err);
@@ -536,10 +536,10 @@ async function saveGameToDatabase(roomId) {
 }
 
 // Enhanced saveState that also saves to database
-function saveStateWithDB(roomId) {
+function saveStateWithDB(gameId) {
   saveState(); // Save to JSON file
-  if (roomId) {
-    saveGameToDatabase(roomId); // Save to database
+  if (gameId) {
+    saveGameToDatabase(gameId); // Save to database
   }
 }
 
@@ -551,9 +551,9 @@ loadState();
 // ============================================
 
 // Export game state (download JSON)
-app.get('/api/export-state/:roomId', (req, res) => {
-  const { roomId } = req.params;
-  const room = globalState.rooms[roomId];
+app.get('/api/export-state/:gameId', (req, res) => {
+  const { gameId } = req.params;
+  const room = globalState.rooms[gameId];
   
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -563,22 +563,22 @@ app.get('/api/export-state/:roomId', (req, res) => {
   const exportData = {
     exportedAt: new Date().toISOString(),
     version: '2.0',
-    roomId: roomId,
+    gameId: gameId,
     roomData: room
   };
   
   // Set headers for file download
-  const filename = `bretton-woods-${roomId}-${Date.now()}.json`;
+  const filename = `bretton-woods-${gameId}-${Date.now()}.json`;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   
   res.json(exportData);
-  console.log(`📥 Exported game state for room ${roomId}`);
+  console.log(`📥 Exported game state for room ${gameId}`);
 });
 
 // Import game state (restore from JSON)
-app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), async (req, res) => {
-  const { roomId } = req.params;
+app.post('/api/import-state/:gameId', express.json({ limit: '10mb' }), async (req, res) => {
+  const { gameId } = req.params;
   const { roomData, playerid } = req.body;
   
   // Verify admin permissions by checking database
@@ -608,15 +608,15 @@ app.post('/api/import-state/:roomId', express.json({ limit: '10mb' }), async (re
   
   try {
     // Restore room state
-    globalState.rooms[roomId] = roomData;
+    globalState.rooms[gameId] = roomData;
     
     // Save to disk
     saveState();
     
     // Broadcast update to all clients in room
-    io.to(roomId).emit('gameStateUpdate', roomData);
+    io.to(gameId).emit('gameStateUpdate', roomData);
     
-    console.log(`📤 Imported game state for room ${roomId}`);
+    console.log(`📤 Imported game state for room ${gameId}`);
     res.json({ success: true, message: 'Game state imported successfully' });
   } catch (err) {
     console.error('Error importing state:', err);
@@ -747,12 +747,12 @@ app.get('/api/export-users', async (req, res) => {
 
 // Helper to update room list
 function updateRoomList() {
-  globalState.roomList = Object.keys(globalState.rooms).map(roomId => {
-    const room = globalState.rooms[roomId];
+  globalState.roomList = Object.keys(globalState.rooms).map(gameId => {
+    const room = globalState.rooms[gameId];
     const playerCount = Object.keys(room.players).length;
     
     return {
-      id: roomId,
+      id: gameId,
       name: room.roomName,
       host: room.hostId,
       playerCount: playerCount,
@@ -765,13 +765,13 @@ function updateRoomList() {
 }
 
 // Broadcast to specific room
-function broadcastToRoom(roomId) {
-  const room = globalState.rooms[roomId];
+function broadcastToRoom(gameId) {
+  const room = globalState.rooms[gameId];
   if (!room) return;
   
   // Log what we're about to broadcast
   if (room.phase2?.active) {
-    console.log(`\n📡 BROADCASTING ROOM ${roomId}:`);
+    console.log(`\n📡 BROADCASTING ROOM ${gameId}:`);
     console.log(`   phase2.active: ${room.phase2.active}`);
     console.log(`   phase2.currentYear: ${room.phase2.currentYear}`);
     console.log(`   phase2.yearlyData type: ${typeof room.phase2.yearlyData}`);
@@ -792,9 +792,9 @@ function broadcastToRoom(roomId) {
   }
 
   // Emit to all sockets in the game room (players + anyone who joined)
-  io.to(roomId).emit('stateUpdate', room);
+  io.to(gameId).emit('stateUpdate', room);
   // Emit to dedicated observer Socket.IO room (belt-and-suspenders)
-  io.to(`observers:${roomId}`).emit('stateUpdate', room);
+  io.to(`observers:${gameId}`).emit('stateUpdate', room);
 
   // Last-resort: find the admin's socket by host_user_id via fetchSockets().
   // This works even if their socket was never in the game/observer room
@@ -806,15 +806,15 @@ function broadcastToRoom(roomId) {
       if (adminSock) {
         adminSock.emit('stateUpdate', room);
       }
-      io.in(roomId).allSockets().then(roomSockets => {
-        io.in(`observers:${roomId}`).allSockets().then(obsSockets => {
-          console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size}, obsRoom=${obsSockets.size}, adminFound=${!!adminSock}`);
+      io.in(gameId).allSockets().then(roomSockets => {
+        io.in(`observers:${gameId}`).allSockets().then(obsSockets => {
+          console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size}, obsRoom=${obsSockets.size}, adminFound=${!!adminSock}`);
         });
       });
     });
   } else {
-    io.in(roomId).allSockets().then(roomSockets => {
-      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} (no hostId)`);
+    io.in(gameId).allSockets().then(roomSockets => {
+      console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} (no hostId)`);
     });
   }
 }
@@ -829,8 +829,8 @@ function broadcastRoomList() {
 // PHASE 2: POST-WAR ECONOMIC MANAGEMENT (1946-1952)
 // ============================================
 
-function initializePhase2(roomId) {
-  const room = globalState.rooms[roomId];
+function initializePhase2(gameId) {
+  const room = globalState.rooms[gameId];
   if (!room) return;
   
   const gameDataPath = path.join(__dirname, 'game-data.json');
@@ -848,7 +848,7 @@ function initializePhase2(roomId) {
   
   // Initialize starting economic conditions for each country
   room.phase2.yearlyData[1946] = {};
-  console.log(`\n🎯 INITIALIZING PHASE 2 FOR ROOM ${roomId}`);
+  console.log(`\n🎯 INITIALIZING PHASE 2 FOR ROOM ${gameId}`);
   console.log(`   Players in room:`, Object.keys(room.players).length);
   
   Object.values(room.players).forEach(player => {
@@ -896,10 +896,10 @@ function initializePhase2(roomId) {
   console.log(`\n📦 PHASE 2 DATA READY:`);
   console.log(`   yearlyData[1946] keys:`, Object.keys(room.phase2.yearlyData[1946]));
   console.log(`   yearlyData[1946] sample:`, JSON.stringify(room.phase2.yearlyData[1946], null, 2).substring(0, 400));
-  console.log(`Phase 2 initialized for room ${roomId}: Post-war economic management begins (1946-1952)\n`);
+  console.log(`Phase 2 initialized for room ${gameId}: Post-war economic management begins (1946-1952)\n`);
 
   // Compute and cache Phase 1 outcomes so they're available throughout Phase 2
-  const phase1Outcomes = getPhase1Outcomes(roomId);
+  const phase1Outcomes = getPhase1Outcomes(gameId);
   console.log(`   Phase 1 outcomes:`, JSON.stringify(phase1Outcomes));
 
   // Auto-apply occupation zones (treaty-mandated deployments, no cost)
@@ -956,18 +956,18 @@ function initializePhase2(roomId) {
   });
 
   // Check for 1946 crises at game start
-  triggerCrisisIfNeeded(roomId, 1946);
+  triggerCrisisIfNeeded(gameId, 1946);
 
   // Save all state (main state file + per-game Phase 2 file)
   saveState();
-  saveGamePhase2State(roomId);
-  saveGameStateSnapshot(roomId, 'phase_transition');
+  saveGamePhase2State(gameId);
+  saveGameStateSnapshot(gameId, 'phase_transition');
 }
 
 // Derive structured Phase 1 outcomes from roundHistory.
 // Each of the 10 voting issues maps to a concrete world-state decision.
-function getPhase1Outcomes(roomId) {
-  const room = globalState.rooms[roomId];
+function getPhase1Outcomes(gameId) {
+  const room = globalState.rooms[gameId];
   if (!room) return {};
 
   // Cache so we only compute once per room
@@ -1028,13 +1028,13 @@ function getPhase1Outcomes(roomId) {
   return outcomes;
 }
 
-function calculateAgreementBonus(roomId) {
-  const room = globalState.rooms[roomId];
+function calculateAgreementBonus(gameId) {
+  const room = globalState.rooms[gameId];
   if (!room) return {};
 
   const bonus = {};
   const roundHistory = room.roundHistory || [];
-  const outcomes = getPhase1Outcomes(roomId);
+  const outcomes = getPhase1Outcomes(gameId);
 
   // Analyze each country's alignment with the agreed world order
   Object.values(room.players).forEach(player => {
@@ -1232,7 +1232,7 @@ function calculateExchangeRate(country, currentYear, policy, previousData, room)
   }
   
   // Phase 1 exchange rate system affects band width and volatility
-  const phase1 = getPhase1Outcomes(room.roomId || '');
+  const phase1 = getPhase1Outcomes(room.gameId || '');
   let bandWidth = 1; // Default Bretton Woods ±1% band
   if (phase1.exchangeRateSystem === 'adjustable') {
     bandWidth = 5; // Adjustable pegs allow ±5% before intervention
@@ -1273,8 +1273,8 @@ function calculateExchangeRate(country, currentYear, policy, previousData, room)
 // Can trigger multiple crises per year, with random chance per crisis
 // Options:
 //   deploymentTriggered: { country, region, troops } - if called from a deployment action
-function triggerCrisisIfNeeded(roomId, year, options = {}) {
-  const room = globalState.rooms[roomId];
+function triggerCrisisIfNeeded(gameId, year, options = {}) {
+  const room = globalState.rooms[gameId];
   if (!room) return;
 
   const deploymentTriggered = options.deploymentTriggered || null;
@@ -1414,8 +1414,8 @@ function triggerCrisisIfNeeded(roomId, year, options = {}) {
   console.log(`✋ ${triggeredCrises.length} crisis(es) active - waiting for player responses`);
 }
 
-function calculateYearEconomics(roomId) {
-  const room = globalState.rooms[roomId];
+function calculateYearEconomics(gameId) {
+  const room = globalState.rooms[gameId];
   if (!room) return;
   
   const currentYear = room.phase2.currentYear;
@@ -1429,8 +1429,8 @@ function calculateYearEconomics(roomId) {
   room.phase2.yearlyData[nextYear] = {};
   
   // Get Bretton Woods agreements impact
-  const agreementBonuses = calculateAgreementBonus(roomId);
-  const phase1 = getPhase1Outcomes(roomId);
+  const agreementBonuses = calculateAgreementBonus(gameId);
+  const phase1 = getPhase1Outcomes(gameId);
   
   // STEP 1: Calculate average global economic conditions
   const allCountries = Object.values(room.players).map(p => p.country);
@@ -2119,20 +2119,20 @@ function calculateYearEconomics(roomId) {
     room.phase2.yearlyData[nextYear][country] = tempResults[country];
   });
   
-  console.log(`Calculated economics for year ${nextYear} in room ${roomId} with cross-country dynamics`);
+  console.log(`Calculated economics for year ${nextYear} in room ${gameId} with cross-country dynamics`);
 }
 
 // Award Phase 2 points each year based on that year's economic performance.
 // Called after calculateYearEconomics() so yearlyData[year] is populated.
 // This gives a running total players can see during Phase 2.
-function calculateYearlyPhase2Score(roomId, year) {
-  const room = globalState.rooms[roomId];
+function calculateYearlyPhase2Score(gameId, year) {
+  const room = globalState.rooms[gameId];
   if (!room) return;
 
   if (!room.phase2.yearlyScores) room.phase2.yearlyScores = {};
   room.phase2.yearlyScores[year] = {};
 
-  console.log(`📊 Scoring year ${year} for room ${roomId}`);
+  console.log(`📊 Scoring year ${year} for room ${gameId}`);
 
   Object.values(room.players).forEach(player => {
     const rawCountry = player.country;
@@ -2183,18 +2183,18 @@ function calculateYearlyPhase2Score(roomId, year) {
   });
 
   // Save updated phase2 running totals to DB
-  savePlayerScoresToDB(roomId, 'phase2').catch(err => {
+  savePlayerScoresToDB(gameId, 'phase2').catch(err => {
     console.error('⚠️ Failed to save yearly phase2 scores:', err);
   });
 }
 
 // Final Phase 2 bonus — awarded once at game end for overall performance.
 // This is ON TOP of the yearly scores accumulated above.
-function calculatePhase2Scores(roomId) {
-  const room = globalState.rooms[roomId];
+function calculatePhase2Scores(gameId) {
+  const room = globalState.rooms[gameId];
   if (!room) return;
 
-  console.log(`\n📊 Calculating Phase 2 FINAL BONUS scores for room ${roomId}`);
+  console.log(`\n📊 Calculating Phase 2 FINAL BONUS scores for room ${gameId}`);
   console.log(`   Players:`, Object.values(room.players).map(p => `${p.country} -> ${normalizeCountryName(p.country)}`));
   console.log(`   YearlyData years:`, Object.keys(room.phase2.yearlyData || {}));
 
@@ -2288,7 +2288,7 @@ function calculatePhase2Scores(roomId) {
       score += breakdown.stability;
 
       // Bretton Woods cooperation bonus
-      const agreementBonuses = calculateAgreementBonus(roomId);
+      const agreementBonuses = calculateAgreementBonus(gameId);
       const bwBonus = agreementBonuses[country];
       if (bwBonus) {
         breakdown.brettonWoods = Math.round((bwBonus.gdpBonus + bwBonus.tradeBonus / 100) * 8);
@@ -2328,7 +2328,7 @@ function calculatePhase2Scores(roomId) {
         Object.values(room.phase2.yearlyScores || {}).reduce((sum, ys) => sum + (ys[country] || 0), 0);
       try {
         await queryDatabase('updatePlayerPoints', {
-          gameCode: roomId,
+          gameCode: gameId,
           userId: userId,
           points: totalP2,
           phase: 'phase2'
@@ -2439,8 +2439,8 @@ function flattenDeployments(cumulativeDeployments, year) {
 
 // Helper function to resolve a specific crisis and apply effects
 // If crisisId is not provided, resolves all active crises
-function resolveCrisisEffects(roomId, crisisId = null) {
-  const room = globalState.rooms[roomId];
+function resolveCrisisEffects(gameId, crisisId = null) {
+  const room = globalState.rooms[gameId];
   if (!room) return false;
 
   // Handle both old single-crisis format and new array format
@@ -2717,8 +2717,8 @@ io.on('connection', (socket) => {
           return true;
         });
         availableGames = lobbyGames.map(room => ({
-          roomId: room.roomId,
-          gameCode: room.gameCode || room.roomId,
+          gameId: room.gameId,
+          gameCode: room.gameCode || room.gameId,
           playerCount: Object.keys(room.players).length,
           maxPlayers: 7,
           availableSlots: 7 - Object.keys(room.players).length,
@@ -2751,14 +2751,14 @@ io.on('connection', (socket) => {
   
   // Create new room
   socket.on('createRoom', async ({ playerId, roomName, userId }) => {
-    const roomId = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const gameId = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const creatorId = userId || playerId; // Use userId if provided, otherwise playerId
 
-    console.log(`📝 Creating room: ${roomId} for user ${creatorId}`);
+    console.log(`📝 Creating room: ${gameId} for user ${creatorId}`);
 
     // Join the socket.io room immediately before any async operations
-    socket.join(roomId);
-    console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId} (createRoom)`);
+    socket.join(gameId);
+    console.log(`🔌 socket.join: socket ${socket.id} → room ${gameId} (createRoom)`);
 
     // Check if creator is superadmin
     let isSuperAdmin = false;
@@ -2776,38 +2776,38 @@ io.on('connection', (socket) => {
     }
     
     // Create room state - hostId is set to the creator's userId
-    globalState.rooms[roomId] = createGameState(roomId, roomName || roomId, creatorId);
-    globalState.rooms[roomId].hostUserId = creatorId; // Store the host's user ID
-    globalState.rooms[roomId].hostIsSuperAdmin = isSuperAdmin;
+    globalState.rooms[gameId] = createGameState(gameId, roomName || gameId, creatorId);
+    globalState.rooms[gameId].hostUserId = creatorId; // Store the host's user ID
+    globalState.rooms[gameId].hostIsSuperAdmin = isSuperAdmin;
     
     console.log(`   Room host set to userId: ${creatorId} (superadmin: ${isSuperAdmin})`);
     
     // If this looks like a game code (e.g., "game_123"), create it in the DB
-    if (roomId.startsWith('game_')) {
-      globalState.rooms[roomId].status = 'active';
-      globalState.rooms[roomId].gameCode = roomId;
+    if (gameId.startsWith('game_')) {
+      globalState.rooms[gameId].status = 'active';
+      globalState.rooms[gameId].gameCode = gameId;
 
       try {
         const created = await queryDatabase('createNewGame', {
-          gameCode: roomId,
+          gameCode: gameId,
           createdBy: creatorId,
         });
         console.log(`   createNewGame result:`, JSON.stringify(created));
 
         if (created) {
           const gameId = created.game_id ?? created.insertId;
-          globalState.rooms[roomId].gameId = gameId;
-          console.log(`✅ Game created in DB: game_id=${gameId} code=${roomId}`);
+          globalState.rooms[gameId].gameId = gameId;
+          console.log(`✅ Game created in DB: game_id=${gameId} code=${gameId}`);
           await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
         } else {
           // INSERT may still have succeeded — verify via getGame
-          const gameData = await queryDatabase('getGame', { gameCode: roomId });
+          const gameData = await queryDatabase('getGame', { gameCode: gameId });
           if (gameData && gameData.game_id) {
-            globalState.rooms[roomId].gameId = gameData.game_id;
+            globalState.rooms[gameId].gameId = gameData.game_id;
             console.log(`   Recovered game_id=${gameData.game_id} via getGame`);
             await queryDatabase('updateGame', { game_id: gameId, status: 'active', current_round: 0 });
           } else {
-            console.error(`❌ Game ${roomId} not persisted to DB`);
+            console.error(`❌ Game ${gameId} not persisted to DB`);
           }
         }
       } catch (err) {
@@ -2817,28 +2817,28 @@ io.on('connection', (socket) => {
 
     // Register creator as observer in global registry + dedicated Socket.IO room
     if (isSuperAdmin) {
-      if (!observerRegistry[roomId]) observerRegistry[roomId] = {};
-      observerRegistry[roomId][creatorId] = socket.id;
-      socket.join(`observers:${roomId}`);
-      console.log(`🔭 Registered superadmin ${creatorId} as observer of ${roomId} (socket ${socket.id})`);
+      if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+      observerRegistry[gameId][creatorId] = socket.id;
+      socket.join(`observers:${gameId}`);
+      console.log(`🔭 Registered superadmin ${creatorId} as observer of ${gameId} (socket ${socket.id})`);
     }
 
     socket.emit('roomCreated', {
       success: true,
-      roomId: roomId,
-      roomName: roomName || roomId,
+      gameId: gameId,
+      roomName: roomName || gameId,
       hostId: creatorId
     });
 
     broadcastRoomList();
     saveState();
     
-    console.log(`✅ Room created: ${roomName || roomId} (${roomId}) by ${creatorId} as ${isSuperAdmin ? 'HOST (superadmin)' : 'player'}`);
+    console.log(`✅ Room created: ${roomName || gameId} (${gameId}) by ${creatorId} as ${isSuperAdmin ? 'HOST (superadmin)' : 'player'}`);
   });
   
   // Join existing room
-  socket.on('joinRoom', async ({ roomId, userId }) => {
-    console.log(`📥 joinRoom request: roomId=${roomId}, userId=${userId}`);
+  socket.on('joinRoom', async ({ gameId, userId }) => {
+    console.log(`📥 joinRoom request: gameId=${gameId}, userId=${userId}`);
 
     // Set userId on socket NOW so fetchSockets() can find this socket by userId
     // even during async DB calls below
@@ -2846,30 +2846,30 @@ io.on('connection', (socket) => {
 
     // Join the socket.io room immediately before any async operations
     // so the socket is in the room even if async DB calls take time
-    socket.join(roomId);
-    console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId}`);
+    socket.join(gameId);
+    console.log(`🔌 socket.join: socket ${socket.id} → room ${gameId}`);
 
     // If this user was a known observer, re-join the observer room and update
     // registry BEFORE any async DB calls, so broadcasts during the DB query reach them.
-    if (observerRegistry[roomId] && userId in observerRegistry[roomId]) {
-      observerRegistry[roomId][userId] = socket.id;
-      socket.join(`observers:${roomId}`);
-      console.log(`🔭 Fast-updated observer socket for ${userId}: ${socket.id} (rejoined observers:${roomId})`);
+    if (observerRegistry[gameId] && userId in observerRegistry[gameId]) {
+      observerRegistry[gameId][userId] = socket.id;
+      socket.join(`observers:${gameId}`);
+      console.log(`🔭 Fast-updated observer socket for ${userId}: ${socket.id} (rejoined observers:${gameId})`);
     }
 
     // If room not in memory, try to reconstruct from database + saved state
-    if (!globalState.rooms[roomId]) {
-      console.log(`⚠️ Room ${roomId} not in memory - attempting to load from database...`);
+    if (!globalState.rooms[gameId]) {
+      console.log(`⚠️ Room ${gameId} not in memory - attempting to load from database...`);
 
       try {
         // 1. Check if game exists in database
-        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        const gameData = await queryDatabase('getGame', { gameCode: gameId });
 
         if (gameData && gameData.game_code) {
           console.log(`   ✅ Found game in database: game_id=${gameData.game_id}, status=${gameData.status}`);
 
           // 2. Create room state from database info
-          const restoredRoom = createGameState(roomId, roomId, gameData.host_user_id);
+          const restoredRoom = createGameState(gameId, gameId, gameData.host_user_id);
           restoredRoom.gameId = gameData.game_id;
           restoredRoom.hostUserId = gameData.host_user_id;
           restoredRoom.gameStarted = gameData.status === 'active' || gameData.status === 'phase2';
@@ -2877,7 +2877,7 @@ io.on('connection', (socket) => {
           restoredRoom.currentRound = gameData.current_round || 0;
 
           // 3. Load players from database
-          const dbPlayers = await queryDatabase('getPlayers', { gameCode: roomId });
+          const dbPlayers = await queryDatabase('getPlayers', { gameCode: gameId });
           if (dbPlayers && Array.isArray(dbPlayers)) {
             dbPlayers.forEach(p => {
               const playerId = p.user_id || p.player_id;
@@ -2896,7 +2896,7 @@ io.on('connection', (socket) => {
           }
 
           // 4. Load Phase 2 state from saved file if it exists
-          const gameStateFile = `/tmp/bretton-woods-phase2-${roomId}.json`;
+          const gameStateFile = `/tmp/bretton-woods-phase2-${gameId}.json`;
           if (fs.existsSync(gameStateFile)) {
             try {
               const phase2Data = JSON.parse(fs.readFileSync(gameStateFile, 'utf8'));
@@ -2916,16 +2916,16 @@ io.on('connection', (socket) => {
           }
 
           // 5. Store in memory
-          globalState.rooms[roomId] = restoredRoom;
-          console.log(`   ✅ Room ${roomId} reconstructed in memory with ${Object.keys(restoredRoom.players).length} players`);
+          globalState.rooms[gameId] = restoredRoom;
+          console.log(`   ✅ Room ${gameId} reconstructed in memory with ${Object.keys(restoredRoom.players).length} players`);
           saveState();
         } else {
-          console.log(`❌ Game ${roomId} not found in database either`);
+          console.log(`❌ Game ${gameId} not found in database either`);
           socket.emit('joinRoomResult', { success: false, message: 'Room not found' });
           return;
         }
       } catch (err) {
-        console.error(`❌ Error reconstructing room ${roomId}:`, err);
+        console.error(`❌ Error reconstructing room ${gameId}:`, err);
         socket.emit('joinRoomResult', { success: false, message: 'Room not found and could not be restored' });
         return;
       }
@@ -2934,13 +2934,13 @@ io.on('connection', (socket) => {
     // Store userId on socket for later reference
     socket.userId = userId;
 
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
 
     // Ensure we have the database game_id (not just Date.now() timestamp)
-    if (roomId.startsWith('game_') && (!room.gameId || room.gameId > 1000000000000)) {
+    if (gameId.startsWith('game_') && (!room.gameId || room.gameId > 1000000000000)) {
       // gameId looks like a timestamp, fetch the real one from database
       try {
-        const gameData = await queryDatabase('getGame', { gameCode: roomId });
+        const gameData = await queryDatabase('getGame', { gameCode: gameId });
         if (gameData && gameData.game_id) {
           room.gameId = gameData.game_id;
           console.log(`   Updated gameId from database: ${gameData.game_id}`);
@@ -2996,27 +2996,27 @@ io.on('connection', (socket) => {
           }
         }
         
-        console.log(`✅ Superadmin ${userId} joined room ${roomId} as ${isHost ? 'HOST' : 'OBSERVER'} (socket ${socket.id})`);
+        console.log(`✅ Superadmin ${userId} joined room ${gameId} as ${isHost ? 'HOST' : 'OBSERVER'} (socket ${socket.id})`);
         console.log(`   Host check: room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, userId=${userId}, isHost=${isHost}`);
 
         // Register observer socket in global registry AND a dedicated Socket.IO
         // observer room. The Socket.IO room is authoritative for delivery;
         // the registry is kept only for the log/count.
-        if (!observerRegistry[roomId]) observerRegistry[roomId] = {};
-        observerRegistry[roomId][userId] = socket.id;
-        socket.join(`observers:${roomId}`);
-        console.log(`🔭 Registered observer ${userId} in global registry + observers:${roomId} room (socket ${socket.id})`);
+        if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+        observerRegistry[gameId][userId] = socket.id;
+        socket.join(`observers:${gameId}`);
+        console.log(`🔭 Registered observer ${userId} in global registry + observers:${gameId} room (socket ${socket.id})`);
 
         socket.emit('joinRoomResult', {
           success: true,
-          roomId: roomId,
-          actualRoomId: roomId,
+          gameId: gameId,
+          actualgameId: gameId,
           role: 'superadmin',
           isHost: isHost
         });
 
-        broadcastToRoom(roomId);
-        console.log(`✅ Superadmin ${userId} joined room: ${roomId} (will observe only)`);
+        broadcastToRoom(gameId);
+        console.log(`✅ Superadmin ${userId} joined room: ${gameId} (will observe only)`);
         return;
       }
       
@@ -3029,12 +3029,12 @@ io.on('connection', (socket) => {
         // Player already in this game - update their socket ID for reconnection
         existingPlayer.socketId = socket.id;
         existingPlayer.disconnected = false;
-        console.log(`✅ User ${userId} reconnected to game ${roomId} as ${existingPlayer.country}`);
+        console.log(`✅ User ${userId} reconnected to game ${gameId} as ${existingPlayer.country}`);
         
         socket.emit('joinRoomResult', { 
           success: true, 
-          roomId: roomId,
-          actualRoomId: roomId,
+          gameId: gameId,
+          actualgameId: gameId,
           role: 'player',
           reconnected: true,
           country: existingPlayer.country
@@ -3073,24 +3073,24 @@ io.on('connection', (socket) => {
 
           socket.emit('joinRoomResult', {
             success: true,
-            roomId: roomId,
-            actualRoomId: roomId,
+            gameId: gameId,
+            actualgameId: gameId,
             role: 'player',
             reconnected: true,
             country: dbAssignment.country_code
           });
 
-          broadcastToRoom(roomId);
+          broadcastToRoom(gameId);
           saveState();
-          console.log(`✅ User ${userId} restored to game ${roomId} as ${dbAssignment.country_code} from database`);
+          console.log(`✅ User ${userId} restored to game ${gameId} as ${dbAssignment.country_code} from database`);
         } else {
           // Player has no assignment - they need to select a country
           console.log(`   User ${userId} not found in player database - needs country selection`);
 
           socket.emit('joinRoomResult', {
             success: true,
-            roomId: roomId,
-            actualRoomId: roomId,
+            gameId: gameId,
+            actualgameId: gameId,
             role: 'player',
             needsCountrySelection: true
           });
@@ -3099,28 +3099,28 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('joinRoomResult', { 
         success: true, 
-        roomId: roomId,
-        actualRoomId: roomId
+        gameId: gameId,
+        actualgameId: gameId
       });
     }
     
-    broadcastToRoom(roomId);
-    console.log(`✅ User ${userId || 'guest'} joined room: ${roomId}`);
+    broadcastToRoom(gameId);
+    console.log(`✅ User ${userId || 'guest'} joined room: ${gameId}`);
   });
   
   // Leave room
-  socket.on('leaveRoom', ({ roomId }) => {
-    socket.leave(roomId);
-    socket.emit('leftRoom', { roomId });
-    console.log(`Player left room: ${roomId}`);
+  socket.on('leaveRoom', ({ gameId }) => {
+    socket.leave(gameId);
+    socket.emit('leftRoom', { gameId });
+    console.log(`Player left room: ${gameId}`);
   });
   
   // Delete room (host only)
-  socket.on('deleteRoom', ({ roomId, playerId, playerid, userId }) => {
+  socket.on('deleteRoom', ({ gameId, playerId, playerid, userId }) => {
     // Support multiple parameter names
     const id = userId || playerId || playerid;
 
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
 
     if (!room) {
       socket.emit('deleteRoomResult', { success: false, message: 'Room not found' });
@@ -3134,23 +3134,23 @@ io.on('connection', (socket) => {
     }
     
     // Notify all players in room
-    io.to(roomId).emit('roomDeleted', { roomId });
+    io.to(gameId).emit('roomDeleted', { gameId });
     
     // Delete room
-    delete globalState.rooms[roomId];
+    delete globalState.rooms[gameId];
     
     socket.emit('deleteRoomResult', { success: true });
     broadcastRoomList();
     saveState();
     
-    console.log(`Room deleted: ${roomId}`);
+    console.log(`Room deleted: ${gameId}`);
   });
   
   // Join game in room
-  socket.on('joinGame', async ({ roomId, userId, playerid, country }) => {
+  socket.on('joinGame', async ({ gameId, userId, playerid, country }) => {
     // Support both userId (new) and playerid (legacy), fall back to socket.userId from joinRoom
     const id = userId || playerid || socket.userId;
-    console.log(`🎮 Join game request: roomId=${roomId}, userId=${userId}, playerid=${playerid}, socket.userId=${socket.userId}, resolved id=${id}, country=${country}`);
+    console.log(`🎮 Join game request: gameId=${gameId}, userId=${userId}, playerid=${playerid}, socket.userId=${socket.userId}, resolved id=${id}, country=${country}`);
     console.log(`   Available rooms:`, Object.keys(globalState.rooms));
 
     if (!id) {
@@ -3159,14 +3159,14 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
 
     if (!room) {
-      console.error(`❌ Room not found: ${roomId}`);
+      console.error(`❌ Room not found: ${gameId}`);
       console.error(`   Available rooms:`, Object.keys(globalState.rooms));
       socket.emit('joinResult', { 
         success: false, 
-        message: `Room not found: ${roomId}. Available rooms: ${Object.keys(globalState.rooms).join(', ') || 'none'}` 
+        message: `Room not found: ${gameId}. Available rooms: ${Object.keys(globalState.rooms).join(', ') || 'none'}` 
       });
       return;
     }
@@ -3224,7 +3224,7 @@ io.on('connection', (socket) => {
       } else {
         // Save player assignment to database
         const result = await queryDatabase('addPlayer', {
-          gameCode: roomId,
+          gameCode: gameId,
           userId: id,
           countryCode: country
         });
@@ -3239,7 +3239,7 @@ io.on('connection', (socket) => {
           }).catch(() => null);
           assignedPlayerId = fetched?.player_id || `player_${Date.now()}`;
         }
-        console.log(`   Created player assignment in database: userId=${id}, gameCode=${roomId}, country=${country}, player_id=${assignedPlayerId}`);
+        console.log(`   Created player assignment in database: userId=${id}, gameCode=${gameId}, country=${country}, player_id=${assignedPlayerId}`);
       }
     } catch (err) {
       console.error('Error managing player assignment:', err);
@@ -3263,16 +3263,16 @@ io.on('connection', (socket) => {
       playerId: assignedPlayerId,
       country: country
     });
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     broadcastRoomList();
     saveState();
     
-    console.log(`✅ Player ${id} (player_id: ${assignedPlayerId}) joined as ${country} in room ${roomId}`);
+    console.log(`✅ Player ${id} (player_id: ${assignedPlayerId}) joined as ${country} in room ${gameId}`);
   });
   
   // Rejoin game after disconnect/reconnect
-  socket.on('rejoinGame', ({ roomId, playerid, country }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('rejoinGame', ({ gameId, playerid, country }) => {
+    const room = globalState.rooms[gameId];
     
     if (!room) {
       socket.emit('rejoinResult', { success: false, message: 'Room not found' });
@@ -3284,10 +3284,10 @@ io.on('connection', (socket) => {
     
     if (existingPlayer && existingPlayer.country === country) {
       // Player is rejoining their previous slot
-      console.log(`✅ Player ${playerid} rejoining as ${country} in room ${roomId}`);
+      console.log(`✅ Player ${playerid} rejoining as ${country} in room ${gameId}`);
 
       // Join the socket room first so they receive the broadcast
-      socket.join(roomId);
+      socket.join(gameId);
 
       // Update socket ID and clear disconnected flag
       existingPlayer.socketId = socket.id;
@@ -3295,10 +3295,10 @@ io.on('connection', (socket) => {
       delete existingPlayer.disconnectedAt;
 
       socket.emit('rejoinResult', { success: true, country: country });
-      broadcastToRoom(roomId); // Now they'll receive this since they're in the room
+      broadcastToRoom(gameId); // Now they'll receive this since they're in the room
       saveState();
 
-      console.log(`Player ${playerid} reconnected to room ${roomId} as ${country}`);
+      console.log(`Player ${playerid} reconnected to room ${gameId} as ${country}`);
     } else if (existingPlayer && existingPlayer.country !== country) {
       // Player trying to rejoin as different country
       socket.emit('rejoinResult', { 
@@ -3316,18 +3316,18 @@ io.on('connection', (socket) => {
   
   // Leave game in room
   // Leave a completed game — releases player so they can join new games
-  socket.on('leaveCompletedGame', async ({ roomId, userId }) => {
-    console.log(`🚪 Player ${userId} leaving completed game ${roomId}`);
-    const room = globalState.rooms[roomId];
+  socket.on('leaveCompletedGame', async ({ gameId, userId }) => {
+    console.log(`🚪 Player ${userId} leaving completed game ${gameId}`);
+    const room = globalState.rooms[gameId];
 
     // Only allow leaving completed games
     if (room && room.gamePhase !== 'complete') {
-      console.log(`   ❌ Game ${roomId} is not complete (phase: ${room.gamePhase}) - cannot leave`);
+      console.log(`   ❌ Game ${gameId} is not complete (phase: ${room.gamePhase}) - cannot leave`);
       return;
     }
 
     // Remove from socket room
-    socket.leave(roomId);
+    socket.leave(gameId);
 
     // Mark player as released in database so getPlayerActiveGame won't return this game
     if (room && room.gameId) {
@@ -3342,47 +3342,47 @@ io.on('connection', (socket) => {
       }
     }
 
-    console.log(`   ✅ Player ${userId} released from completed game ${roomId}`);
-    socket.emit('leftRoom', { roomId });
+    console.log(`   ✅ Player ${userId} released from completed game ${gameId}`);
+    socket.emit('leftRoom', { gameId });
   });
 
-  socket.on('leaveGame', ({ roomId, userId, playerid }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('leaveGame', ({ gameId, userId, playerid }) => {
+    const room = globalState.rooms[gameId];
     if (!room) return;
     
     const id = userId || playerid;  // Support both userId (new) and playerid (legacy)
     delete room.players[id];
     room.readyPlayers = room.readyPlayers.filter(pid => pid !== id);
     
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     broadcastRoomList();
     saveState();
     
-    console.log(`Player ${id} left game in room ${roomId}`);
+    console.log(`Player ${id} left game in room ${gameId}`);
   });
   
   // Lightweight state request — superadmin polls every few seconds to stay in sync
   // without the full joinRoom async flow. Also refreshes room membership + registry.
-  socket.on('requestState', ({ roomId, userId }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('requestState', ({ gameId, userId }) => {
+    const room = globalState.rooms[gameId];
     if (!room) return;
 
     // Ensure socket is in the room for future push broadcasts
-    socket.join(roomId);
+    socket.join(gameId);
 
     // Update observer registry so next broadcast reaches this socket
-    if (userId && observerRegistry[roomId] && userId in observerRegistry[roomId]) {
-      observerRegistry[roomId][userId] = socket.id;
+    if (userId && observerRegistry[gameId] && userId in observerRegistry[gameId]) {
+      observerRegistry[gameId][userId] = socket.id;
     }
 
     socket.emit('stateUpdate', room);
   });
 
   // Set ready status
-  socket.on('setReady', async ({ roomId, userId, playerid, ready }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('setReady', async ({ gameId, userId, playerid, ready }) => {
+    const room = globalState.rooms[gameId];
     if (!room) {
-      console.log(`❌ setReady: room ${roomId} not found`);
+      console.log(`❌ setReady: room ${gameId} not found`);
       return;
     }
 
@@ -3409,8 +3409,8 @@ io.on('connection', (socket) => {
     }
 
     // Log who's in the socket.io room
-    const socketsInRoom = await io.in(roomId).allSockets();
-    console.log(`📡 Broadcasting to ${socketsInRoom.size} socket(s) in room ${roomId}:`, [...socketsInRoom]);
+    const socketsInRoom = await io.in(gameId).allSockets();
+    console.log(`📡 Broadcasting to ${socketsInRoom.size} socket(s) in room ${gameId}:`, [...socketsInRoom]);
 
     // Persist ready status to DB
     if (player?.id) {
@@ -3420,21 +3420,21 @@ io.on('connection', (socket) => {
       }).catch(err => console.error('Failed to persist ready status:', err.message));
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', async ({ roomId, playerId, playerid, userId, skipPhase1 }) => {
+  socket.on('startGame', async ({ gameId, playerId, playerid, userId, skipPhase1 }) => {
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
 
     console.log('=== START GAME REQUEST ===');
-    console.log('Room ID:', roomId);
+    console.log('Room ID:', gameId);
     console.log('User ID:', id);
     console.log('Skip Phase 1:', skipPhase1 || false);
 
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
     if (!room) {
       console.log('ERROR: Room not found');
       socket.emit('startGameResult', { success: false, message: 'Room not found' });
@@ -3496,7 +3496,7 @@ io.on('connection', (socket) => {
     // Check if skipping Phase 1
     if (skipPhase1) {
       console.log('🚀 Skipping Phase 1 - Starting directly in Phase 2');
-      initializePhase2(roomId);
+      initializePhase2(gameId);
       room.currentRound = 11; // Mark Phase 1 as "complete"
       console.log('✅ Phase 2 initialized - Economic management (1946-1952)');
     } else {
@@ -3507,21 +3507,21 @@ io.on('connection', (socket) => {
     
     console.log('SUCCESS: Game started!');
     socket.emit('startGameResult', { success: true });
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     broadcastRoomList();
     saveState();
-    saveGameToDatabase(roomId); // Save game state to database
+    saveGameToDatabase(gameId); // Save game state to database
     
-    console.log(`Game started in room ${roomId} by admin`);
+    console.log(`Game started in room ${gameId} by admin`);
     console.log('=========================');
   });
   
   // Vote on current issue
-  socket.on('vote', async ({ roomId, playerId, playerid, userId, choice }) => {
+  socket.on('vote', async ({ gameId, playerId, playerid, userId, choice }) => {
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
 
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
     if (!room || !room.gameStarted) {
       console.log('Vote rejected: room not found or game not started');
       return;
@@ -3544,7 +3544,7 @@ io.on('connection', (socket) => {
 
     // Store vote keyed by DB player_id
     room.votes[playerDbId] = choice;
-    console.log(`Vote received: userId=${id} player_id=${playerDbId} voted ${choice} in room ${roomId}`);
+    console.log(`Vote received: userId=${id} player_id=${playerDbId} voted ${choice} in room ${gameId}`);
 
     // Check if all players have voted
     const allVoted = Object.values(room.players).every(p => room.votes[p.id]);
@@ -3648,13 +3648,13 @@ io.on('connection', (socket) => {
              <strong>Result:</strong> ${room.roundOutcome}<br>
              <strong>Final Vote Tally:</strong> A: ${voteTally.a}, B: ${voteTally.b}, C: ${voteTally.c}<br><br>
              Please log in to advance to the next round.`,
-            roomId
+            gameId
           );
 
           // Save tie result to database
           try {
             const roundResultData = {
-              gameCode: roomId,
+              gameCode: gameId,
               game_id: room.gameId,
               round: room.currentRound,
               phase: 1, // Phase 1 voting
@@ -3673,10 +3673,10 @@ io.on('connection', (socket) => {
               console.error('⚠️ Failed to save tie result to database:', err);
             });
             console.log(`✅ Round ${room.currentRound} tie result saved to database`);
-            saveGameStateSnapshot(roomId, 'round_end');
+            saveGameStateSnapshot(gameId, 'round_end');
 
             // Save phase1_score to players table
-            savePlayerScoresToDB(roomId, 'phase1').catch(err => {
+            savePlayerScoresToDB(gameId, 'phase1').catch(err => {
               console.error('⚠️ Failed to save phase1 scores after tie:', err);
             });
           } catch (err) {
@@ -3812,7 +3812,7 @@ io.on('connection', (socket) => {
         // Save round result to database
         try {
           const roundResultData = {
-            gameCode: roomId,
+            gameCode: gameId,
             game_id: room.gameId,
             round: room.currentRound,
             phase: 1, // Phase 1 voting
@@ -3830,10 +3830,10 @@ io.on('connection', (socket) => {
           };
           await queryDatabase('saveRoundResult', roundResultData);
           console.log(`✅ Round ${room.currentRound} result saved to database`);
-          saveGameStateSnapshot(roomId, 'round_end');
+          saveGameStateSnapshot(gameId, 'round_end');
 
           // Save phase1_score to players table
-          await savePlayerScoresToDB(roomId, 'phase1');
+          await savePlayerScoresToDB(gameId, 'phase1');
         } catch (err) {
           console.error('⚠️ Failed to save round result to database:', err);
         }
@@ -3846,24 +3846,24 @@ io.on('connection', (socket) => {
            <strong>Result:</strong> ${room.roundOutcome}<br>
            <strong>Vote Tally:</strong> A: ${voteTally.a}, B: ${voteTally.b}, C: ${voteTally.c}<br><br>
            Please log in to advance to the next round.`,
-          roomId
+          gameId
         );
       }
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
   });
   
   // Advance to next round (admin only)
-  socket.on('advanceRound', async ({ roomId, playerId, playerid, userId }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('advanceRound', async ({ gameId, playerId, playerid, userId }) => {
+    const room = globalState.rooms[gameId];
     if (!room) return;
 
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
 
-    console.log('🔄 Advance round request:', { roomId, receivedId: id, hostUserId: room.hostUserId, hostId: room.hostId });
+    console.log('🔄 Advance round request:', { gameId, receivedId: id, hostUserId: room.hostUserId, hostId: room.hostId });
 
     // Check if user is superadmin by querying database using user_id
     let isSuperAdmin = false;
@@ -3910,21 +3910,21 @@ io.on('connection', (socket) => {
     
     // Check if Phase 1 is complete - start Phase 2
     if (room.currentRound > 10) {
-      initializePhase2(roomId);
+      initializePhase2(gameId);
       console.log('Phase 1 complete! Starting Phase 2: Post-war economic management');
     } else {
       room.gamePhase = 'voting';
       room.votes = {}; // Clear votes for new round
     }
     
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
-    saveGameToDatabase(roomId); // Save game state to database
+    saveGameToDatabase(gameId); // Save game state to database
   });
   
   // PHASE 2: Submit economic policy
-  socket.on('submitPolicy', async ({ roomId, playerid, policy }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('submitPolicy', async ({ gameId, playerid, policy }) => {
+    const room = globalState.rooms[gameId];
     if (!room || !room.phase2.active) return;
 
     const player = room.players[playerid];
@@ -4022,7 +4022,7 @@ io.on('connection', (socket) => {
       setTimeout(async () => {
         try {
           // Re-fetch room in case state changed
-          const currentRoom = globalState.rooms[roomId];
+          const currentRoom = globalState.rooms[gameId];
           if (!currentRoom || !currentRoom.phase2?.active) {
             console.log('⚠️ Room no longer active, skipping auto-advance');
             return;
@@ -4047,7 +4047,7 @@ io.on('connection', (socket) => {
             // Emit diplomatic stance requirement for each conflict zone
             conflictRegions.forEach(region => {
               const conflict = pendingConflicts[region];
-              io.to(roomId).emit('diplomaticStanceRequired', {
+              io.to(gameId).emit('diplomaticStanceRequired', {
                 region,
                 countries: conflict.countries,
                 deployments: conflict.deployments,
@@ -4057,7 +4057,7 @@ io.on('connection', (socket) => {
               console.log(`   📢 Sent diplomaticStanceRequired for ${region} to: ${conflict.countries.join(', ')}`);
             });
 
-            broadcastToRoom(roomId);
+            broadcastToRoom(gameId);
             saveState();
             return; // Don't advance year yet - wait for diplomatic phase to complete
           }
@@ -4074,21 +4074,21 @@ io.on('connection', (socket) => {
           // Check if we're already at the end (1952)
           if (currentYear >= 1952) {
             // Don't calculate more economics, just finalize
-            calculatePhase2Scores(roomId);
+            calculatePhase2Scores(gameId);
             currentRoom.gamePhase = 'complete';
             currentRoom.phase2.active = false;
             console.log('Phase 2 complete! Final scores calculated.');
-            saveGameStateSnapshot(roomId, 'game_complete');
+            saveGameStateSnapshot(gameId, 'game_complete');
 
-            broadcastToRoom(roomId);
+            broadcastToRoom(gameId);
             saveState();
-            saveGamePhase2State(roomId);
-            saveGameToDatabase(roomId); // Handles DB update with correct status
+            saveGamePhase2State(gameId);
+            saveGameToDatabase(gameId); // Handles DB update with correct status
             return;
           }
 
           // Calculate economics
-          calculateYearEconomics(roomId);
+          calculateYearEconomics(gameId);
 
           // Advance year and round
           currentRoom.phase2.currentYear++;
@@ -4096,39 +4096,39 @@ io.on('connection', (socket) => {
           currentRoom.readyPlayers = [];
 
           // Score this year's economic performance
-          calculateYearlyPhase2Score(roomId, currentRoom.phase2.currentYear);
+          calculateYearlyPhase2Score(gameId, currentRoom.phase2.currentYear);
 
           // Check for new crisis
-          triggerCrisisIfNeeded(roomId, currentRoom.phase2.currentYear);
+          triggerCrisisIfNeeded(gameId, currentRoom.phase2.currentYear);
 
           console.log(`✅ Auto-advanced to year ${currentRoom.phase2.currentYear}`);
-          saveGameStateSnapshot(roomId, 'year_end');
+          saveGameStateSnapshot(gameId, 'year_end');
 
           // Check if we've reached the final year
           if (currentRoom.phase2.currentYear >= 1952) {
             console.log('Reached final year 1952. Next advance will complete Phase 2.');
           }
 
-          broadcastToRoom(roomId);
+          broadcastToRoom(gameId);
           saveState();
-          saveGamePhase2State(roomId);
-          saveGameToDatabase(roomId); // Handles DB update
+          saveGamePhase2State(gameId);
+          saveGameToDatabase(gameId); // Handles DB update
         } catch (err) {
           console.error('❌ Auto-advance failed:', err);
         }
       }, 2000); // Wait 2 seconds to let everyone see the "all submitted" message
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
-    saveGamePhase2State(roomId);
-    saveGameToDatabase(roomId);
+    saveGamePhase2State(gameId);
+    saveGameToDatabase(gameId);
   });
 
   // PHASE 2: Advance to next year
   // PLAYER: Deploy troops
-  socket.on('deployTroops', ({ roomId, playerid, deployment }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('deployTroops', ({ gameId, playerid, deployment }) => {
+    const room = globalState.rooms[gameId];
     if (!room) return;
 
     const player = room.players[playerid];
@@ -4298,7 +4298,7 @@ io.on('connection', (socket) => {
       console.log(`⚠️ POTENTIAL CONFLICT: Multiple countries in ${region}: ${countriesInRegion.join(', ')}`);
 
       // Notify all players in the region about the tension (but no battle yet)
-      io.to(roomId).emit('tensionAlert', {
+      io.to(gameId).emit('tensionAlert', {
         region: region,
         countries: countriesInRegion,
         message: `Military tension rising in ${region}! Multiple nations have forces deployed.`
@@ -4309,20 +4309,20 @@ io.on('connection', (socket) => {
     // Only check if there are no active crises (don't stack mid-turn)
     const activeCrises = room.phase2.crises?.active || [];
     if (activeCrises.length === 0) {
-      triggerCrisisIfNeeded(roomId, room.phase2.currentYear, {
+      triggerCrisisIfNeeded(gameId, room.phase2.currentYear, {
         deploymentTriggered: { country, region, troops }
       });
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
-    saveGamePhase2State(roomId);
-    saveGameToDatabase(roomId);
+    saveGamePhase2State(gameId);
+    saveGameToDatabase(gameId);
   });
 
   // Handle battle decisions
-  socket.on('submitBattleDecision', ({ roomId, playerid, battleId, decision, region, year }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('submitBattleDecision', ({ gameId, playerid, battleId, decision, region, year }) => {
+    const room = globalState.rooms[gameId];
     if (!room || !room.phase2.active) return;
     
     const player = room.players[playerid];
@@ -4481,22 +4481,22 @@ io.on('connection', (socket) => {
       // Fallback: if no sockets were found (e.g., after server restart), broadcast to room
       if (!sentToAnySocket) {
         console.log(`⚠️ No valid sockets found - broadcasting battleResolved to entire room`);
-        io.to(roomId).emit('battleResolved', {
+        io.to(gameId).emit('battleResolved', {
           battleId,
           result: battleResult
         });
       }
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
-    saveGamePhase2State(roomId);
-    saveGameToDatabase(roomId);
+    saveGamePhase2State(gameId);
+    saveGameToDatabase(gameId);
   });
 
   // DIPLOMATIC STANCE: Submit stance for each country in conflict zone
-  socket.on('submitDiplomaticStance', ({ roomId, playerid, region, stances }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('submitDiplomaticStance', ({ gameId, playerid, region, stances }) => {
+    const room = globalState.rooms[gameId];
     if (!room || !room.phase2?.active) return;
 
     const player = room.players[playerid];
@@ -4556,7 +4556,7 @@ io.on('connection', (socket) => {
         room.phase2.activeConflicts.push(conflict);
 
         // Notify all countries in the conflict to select battle options
-        io.to(roomId).emit('battleOptionsRequired', {
+        io.to(gameId).emit('battleOptionsRequired', {
           battleId,
           region,
           countries: allCountries,
@@ -4569,7 +4569,7 @@ io.on('connection', (socket) => {
       }
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
   });
 
@@ -4626,8 +4626,8 @@ io.on('connection', (socket) => {
   }
 
   // BATTLE OPTIONS: Submit attack/retreat/negotiate after stance selection
-  socket.on('submitBattleOption', ({ roomId, playerid, battleId, option, region }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('submitBattleOption', ({ gameId, playerid, battleId, option, region }) => {
+    const room = globalState.rooms[gameId];
     if (!room || !room.phase2?.active) return;
 
     const player = room.players[playerid];
@@ -4666,10 +4666,10 @@ io.on('connection', (socket) => {
 
     if (allSubmitted) {
       console.log(`✅ All battle options submitted for ${battleId} - resolving battle`);
-      resolveBattleWithStances(room, roomId, battleId, conflict);
+      resolveBattleWithStances(room, gameId, battleId, conflict);
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
   });
 
@@ -4788,7 +4788,7 @@ io.on('connection', (socket) => {
   }
 
   // Resolve battle with diplomatic stances and battle options
-  function resolveBattleWithStances(room, roomId, battleId, conflict) {
+  function resolveBattleWithStances(room, gameId, battleId, conflict) {
     const options = room.phase2.battleOptions[battleId];
     const stances = conflict.stances;
     const deployments = room.phase2.cumulativeDeployments[conflict.region] || {};
@@ -4936,7 +4936,7 @@ io.on('connection', (socket) => {
     console.log('⚔️ Battle resolved:', JSON.stringify(battleResult, null, 2));
 
     // Notify all players of battle result
-    io.to(roomId).emit('battleResolved', {
+    io.to(gameId).emit('battleResolved', {
       battleId,
       result: battleResult
     });
@@ -4958,14 +4958,14 @@ io.on('connection', (socket) => {
 
         // Check if we're already at the end (1952)
         if (currentYear >= 1952) {
-          calculatePhase2Scores(roomId);
+          calculatePhase2Scores(gameId);
           room.gamePhase = 'complete';
           room.phase2.active = false;
           console.log('Phase 2 complete! Final scores calculated.');
-          saveGameStateSnapshot(roomId, 'game_complete');
+          saveGameStateSnapshot(gameId, 'game_complete');
         } else {
           // Calculate economics
-          calculateYearEconomics(roomId);
+          calculateYearEconomics(gameId);
 
           // Advance year and round
           room.phase2.currentYear++;
@@ -4973,30 +4973,30 @@ io.on('connection', (socket) => {
           room.readyPlayers = [];
 
           // Score this year's economic performance
-          calculateYearlyPhase2Score(roomId, room.phase2.currentYear);
+          calculateYearlyPhase2Score(gameId, room.phase2.currentYear);
 
           // Check for new crisis
-          triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+          triggerCrisisIfNeeded(gameId, room.phase2.currentYear);
 
           console.log(`✅ Advanced to year ${room.phase2.currentYear} after battle resolution`);
-          saveGameStateSnapshot(roomId, 'year_end');
+          saveGameStateSnapshot(gameId, 'year_end');
         }
 
-        broadcastToRoom(roomId);
+        broadcastToRoom(gameId);
       } catch (err) {
         console.error('❌ Post-battle year advance failed:', err);
       }
     }
 
     saveState();
-    saveGamePhase2State(roomId);
-    saveGameToDatabase(roomId);
+    saveGamePhase2State(gameId);
+    saveGameToDatabase(gameId);
   }
 
   // CRISIS: Submit response to active crisis
   // Now supports multiple active crises - crisisId identifies which one
-  socket.on('submitCrisisResponse', ({ roomId, playerid, choiceId, crisisId }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('submitCrisisResponse', ({ gameId, playerid, choiceId, crisisId }) => {
+    const room = globalState.rooms[gameId];
     if (!room || !room.phase2?.active) return;
 
     const player = room.players[playerid];
@@ -5115,19 +5115,19 @@ io.on('connection', (socket) => {
 
     if (allResponded) {
       console.log(`✅ All affected countries responded to "${crisis.title}" - auto-resolving`);
-      resolveCrisisEffects(roomId, crisis.id);
+      resolveCrisisEffects(gameId, crisis.id);
     }
 
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
-    saveGamePhase2State(roomId);
-    saveGameToDatabase(roomId);
+    saveGamePhase2State(gameId);
+    saveGameToDatabase(gameId);
   });
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
   // crisisId is optional - if not provided, resolves all active crises
-  socket.on('resolveCrisis', async ({ roomId, playerId, playerid, userId, crisisId }) => {
-    const room = globalState.rooms[roomId];
+  socket.on('resolveCrisis', async ({ gameId, playerId, playerid, userId, crisisId }) => {
+    const room = globalState.rooms[gameId];
     if (!room) return;
 
     // Support multiple parameter names - prefer userId, then playerId, then playerid
@@ -5184,24 +5184,24 @@ io.on('connection', (socket) => {
       console.log(`Admin manually resolving all ${activeCrises.length} active crisis(es)`);
     }
 
-    const success = resolveCrisisEffects(roomId, crisisId);
+    const success = resolveCrisisEffects(gameId, crisisId);
     if (success) {
-      broadcastToRoom(roomId);
+      broadcastToRoom(gameId);
       saveState();
-      saveGamePhase2State(roomId);
-      saveGameToDatabase(roomId);
+      saveGamePhase2State(gameId);
+      saveGameToDatabase(gameId);
     }
   });
 
-  socket.on('advanceYear', async ({ roomId, playerId, playerid, userId }) => {
+  socket.on('advanceYear', async ({ gameId, playerId, playerid, userId }) => {
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const checkId = userId || playerId || playerid;
 
     console.log('=== ADVANCE YEAR REQUEST ===');
-    console.log('Room ID:', roomId);
+    console.log('Room ID:', gameId);
     console.log('User ID:', checkId);
 
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
     if (!room) {
       console.log('ERROR: Room not found');
       return;
@@ -5295,23 +5295,23 @@ io.on('connection', (socket) => {
     // Check if we're already at the end
     if (room.phase2.currentYear >= 1952) {
       // Don't calculate more economics, just finalize
-      calculatePhase2Scores(roomId);
+      calculatePhase2Scores(gameId);
       room.gamePhase = 'complete';
       room.phase2.active = false;
       console.log('Phase 2 complete! Final scores calculated.');
-      saveGameStateSnapshot(roomId, 'game_complete');
+      saveGameStateSnapshot(gameId, 'game_complete');
 
-      broadcastToRoom(roomId);
+      broadcastToRoom(gameId);
       saveState();
-      saveGamePhase2State(roomId);
-      saveGameToDatabase(roomId); // Handles DB update with completed status
+      saveGamePhase2State(gameId);
+      saveGameToDatabase(gameId); // Handles DB update with completed status
       return;
     }
     
     // Calculate this year's economics (this creates data for next year)
     try {
       console.log('Calculating year economics...');
-      calculateYearEconomics(roomId);
+      calculateYearEconomics(gameId);
       console.log('✓ Economics calculated');
     } catch (err) {
       console.error('❌ Error calculating year economics:', err);
@@ -5328,13 +5328,13 @@ io.on('connection', (socket) => {
     room.phase2.deploymentsThisYear = {}; // Reset deployment limits for new year
 
     // Score this year's economic performance
-    calculateYearlyPhase2Score(roomId, room.phase2.currentYear);
+    calculateYearlyPhase2Score(gameId, room.phase2.currentYear);
 
     // Check for crisis events this year
-    triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
+    triggerCrisisIfNeeded(gameId, room.phase2.currentYear);
     
     console.log(`✅ Advanced to year ${room.phase2.currentYear}`);
-    saveGameStateSnapshot(roomId, 'year_end');
+    saveGameStateSnapshot(gameId, 'year_end');
 
     // Check if we've reached the final year
     if (room.phase2.currentYear >= 1952) {
@@ -5342,19 +5342,19 @@ io.on('connection', (socket) => {
     }
 
     console.log('Broadcasting updated game state...');
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     saveState();
-    saveGamePhase2State(roomId); // Save Phase 2 state to per-game file
-    saveGameToDatabase(roomId); // Save game state to database
+    saveGamePhase2State(gameId); // Save Phase 2 state to per-game file
+    saveGameToDatabase(gameId); // Save game state to database
     console.log('✅ Year advancement complete');
   });
 
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', async ({ roomId, playerId, playerid, userId }) => {
+  socket.on('resetRoom', async ({ gameId, playerId, playerid, userId }) => {
     // Support multiple parameter names
     const id = userId || playerId || playerid;
 
-    const room = globalState.rooms[roomId];
+    const room = globalState.rooms[gameId];
     if (!room) return;
 
     // Check if user is superadmin by querying database
@@ -5400,11 +5400,11 @@ io.on('connection', (socket) => {
     };
     
     socket.emit('resetRoomResult', { success: true });
-    broadcastToRoom(roomId);
+    broadcastToRoom(gameId);
     broadcastRoomList();
     saveState();
     
-    console.log(`Room ${roomId} reset by superadmin`);
+    console.log(`Room ${gameId} reset by superadmin`);
   });
   
   // SUPERADMIN ONLY: Clear all data
@@ -5467,7 +5467,7 @@ io.on('connection', (socket) => {
   });
 
   // SUPERADMIN ONLY: Delete any room
-  socket.on('adminDeleteRoom', async ({ roomId, playerId, playerid, userId }) => {
+  socket.on('adminDeleteRoom', async ({ gameId, playerId, playerid, userId }) => {
     // Support multiple parameter names
     const id = userId || playerId || playerid;
 
@@ -5493,22 +5493,22 @@ io.on('connection', (socket) => {
       return;
     }
     
-    if (!globalState.rooms[roomId]) {
+    if (!globalState.rooms[gameId]) {
       socket.emit('deleteRoomResult', { success: false, message: 'Room not found' });
       return;
     }
     
     // Notify all players in room
-    io.to(roomId).emit('roomDeleted', { roomId });
+    io.to(gameId).emit('roomDeleted', { gameId });
     
     // Delete room
-    delete globalState.rooms[roomId];
+    delete globalState.rooms[gameId];
     
     socket.emit('deleteRoomResult', { success: true });
     broadcastRoomList();
     saveState();
     
-    console.log(`Room ${roomId} deleted by superadmin`);
+    console.log(`Room ${gameId} deleted by superadmin`);
   });
   
   // Remove promote function - no one can be promoted
@@ -5563,7 +5563,7 @@ io.on('connection', (socket) => {
       .filter(room => room.gamePhase === 'lobby' && !room.gameStarted)
       .filter(room => Object.keys(room.players).length < 7)
       .map(room => ({
-        gameCode: room.gameCode || room.roomId,
+        gameCode: room.gameCode || room.gameId,
         gameId: room.gameId,
         playerCount: Object.keys(room.players).length,
         availableSlots: 7 - Object.keys(room.players).length,
@@ -5611,11 +5611,11 @@ io.on('connection', (socket) => {
     }
     /*
     // Also check for rooms in memory only
-    for (const [roomId, roomState] of Object.entries(globalState.rooms)) {
-      if (!activeGames.find(g => g.gameCode === roomId)) {
-        console.log(`  - Memory-only game: ${roomId}`);
+    for (const [gameId, roomState] of Object.entries(globalState.rooms)) {
+      if (!activeGames.find(g => g.gameCode === gameId)) {
+        console.log(`  - Memory-only game: ${gameId}`);
         activeGames.push({
-          gameCode: roomId,
+          gameCode: gameId,
           gameId: roomState.gameId,
           status: 'memory-only',
           currentRound: roomState.currentRound,
@@ -5640,17 +5640,17 @@ io.on('connection', (socket) => {
   
   socket.on('disconnect', () => {
     // Find rooms where this socket is a player or observer
-    Object.keys(globalState.rooms).forEach(roomId => {
-      const room = globalState.rooms[roomId];
+    Object.keys(globalState.rooms).forEach(gameId => {
+      const room = globalState.rooms[gameId];
 
       // Mark observer stale (null) in global registry — keeps the key so the
       // fast-update at the top of joinRoom re-registers the new socket ID on reconnect.
-      const roomObs = observerRegistry[roomId];
+      const roomObs = observerRegistry[gameId];
       if (roomObs) {
         for (const [uid, sid] of Object.entries(roomObs)) {
           if (sid === socket.id) {
             roomObs[uid] = null;
-            console.log(`Observer ${uid} disconnected from room ${roomId} (marked stale in registry)`);
+            console.log(`Observer ${uid} disconnected from room ${gameId} (marked stale in registry)`);
           }
         }
       }
@@ -5664,10 +5664,10 @@ io.on('connection', (socket) => {
         room.players[playerid].disconnectedAt = Date.now();
         room.readyPlayers = room.readyPlayers.filter(id => id !== playerid);
 
-        broadcastToRoom(roomId);
+        broadcastToRoom(gameId);
         saveState();
 
-        console.log(`Player ${playerid} disconnected from room ${roomId} - keeping in game`);
+        console.log(`Player ${playerid} disconnected from room ${gameId} - keeping in game`);
       }
     });
 
@@ -6109,9 +6109,9 @@ async function initializeFromDatabase() {
   if (Array.isArray(games)) {
     const dbGameCodes = new Set(games.map(g => g.game_code));
     let pruned = 0;
-    for (const roomId of Object.keys(globalState.rooms)) {
-      if (!dbGameCodes.has(roomId)) {
-        delete globalState.rooms[roomId];
+    for (const gameId of Object.keys(globalState.rooms)) {
+      if (!dbGameCodes.has(gameId)) {
+        delete globalState.rooms[gameId];
         pruned++;
       }
     }
@@ -6130,10 +6130,10 @@ function gracefulShutdown(signal) {
   try {
     saveState();
     // Save Phase 2 state for every active room
-    Object.keys(globalState.rooms).forEach(roomId => {
-      const room = globalState.rooms[roomId];
+    Object.keys(globalState.rooms).forEach(gameId => {
+      const room = globalState.rooms[gameId];
       if (room && room.phase2 && room.phase2.yearlyData) {
-        saveGamePhase2State(roomId);
+        saveGamePhase2State(gameId);
       }
     });
     console.log('✅ All state saved. Shutting down.');
@@ -6152,10 +6152,10 @@ process.on('uncaughtException', (err) => {
   console.error('💥 Uncaught exception - saving state before crash:', err);
   try {
     saveState();
-    Object.keys(globalState.rooms).forEach(roomId => {
-      const room = globalState.rooms[roomId];
+    Object.keys(globalState.rooms).forEach(gameId => {
+      const room = globalState.rooms[gameId];
       if (room && room.phase2 && room.phase2.yearlyData) {
-        saveGamePhase2State(roomId);
+        saveGamePhase2State(gameId);
       }
     });
     console.log('✅ Emergency state save complete.');
@@ -6170,10 +6170,10 @@ process.on('unhandledRejection', (reason, promise) => {
   // Don't exit - just log. Save state as precaution.
   try {
     saveState();
-    Object.keys(globalState.rooms).forEach(roomId => {
-      const room = globalState.rooms[roomId];
+    Object.keys(globalState.rooms).forEach(gameId => {
+      const room = globalState.rooms[gameId];
       if (room && room.phase2 && room.phase2.yearlyData) {
-        saveGamePhase2State(roomId);
+        saveGamePhase2State(gameId);
       }
     });
   } catch (err) {
@@ -6189,10 +6189,10 @@ process.on('unhandledRejection', (reason, promise) => {
   setInterval(() => {
     try {
       saveState();
-      Object.keys(globalState.rooms).forEach(roomId => {
-        const room = globalState.rooms[roomId];
+      Object.keys(globalState.rooms).forEach(gameId => {
+        const room = globalState.rooms[gameId];
         if (room && room.phase2 && room.phase2.yearlyData) {
-          saveGamePhase2State(roomId);
+          saveGamePhase2State(gameId);
         }
       });
     } catch (err) {
