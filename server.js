@@ -791,24 +791,32 @@ function broadcastToRoom(roomId) {
     }
   }
 
-  // Emit to all players in the room
+  // Emit to all sockets in the game room (players + anyone who joined)
   io.to(roomId).emit('stateUpdate', room);
-
-  // Emit to all observers via their dedicated Socket.IO room.
-  // This is authoritative — the observer socket.io room is managed directly by
-  // Socket.IO and survives observerRegistry quirks/bugs.
+  // Emit to dedicated observer Socket.IO room (belt-and-suspenders)
   io.to(`observers:${roomId}`).emit('stateUpdate', room);
 
-  // Registry-based count for logging only
-  const roomObservers = observerRegistry[roomId] || {};
-  const activeObservers = Object.entries(roomObservers).filter(([, sid]) => sid);
-  const staleCount = Object.keys(roomObservers).length - activeObservers.length;
-
-  io.in(roomId).allSockets().then(roomSockets => {
-    io.in(`observers:${roomId}`).allSockets().then(obsSockets => {
-      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} socket(s), observers=${obsSockets.size} (registry: ${activeObservers.length} active/${staleCount} stale)`);
+  // Last-resort: find the admin's socket by userId directly via fetchSockets().
+  // This works even if their socket was never in the game/observer room
+  // (e.g. after a rapid restart where room membership was lost).
+  const adminUserId = String(room.hostId || room.hostUserId || '');
+  if (adminUserId) {
+    io.fetchSockets().then(allSockets => {
+      const adminSock = allSockets.find(s => String(s.userId) === adminUserId);
+      if (adminSock) {
+        adminSock.emit('stateUpdate', room);
+      }
+      io.in(roomId).allSockets().then(roomSockets => {
+        io.in(`observers:${roomId}`).allSockets().then(obsSockets => {
+          console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size}, obsRoom=${obsSockets.size}, adminFound=${!!adminSock}`);
+        });
+      });
     });
-  });
+  } else {
+    io.in(roomId).allSockets().then(roomSockets => {
+      console.log(`📡 Broadcast to ${roomId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} (no hostId)`);
+    });
+  }
 }
 
 // Broadcast room list to lobby
@@ -2832,18 +2840,21 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', async ({ roomId, userId }) => {
     console.log(`📥 joinRoom request: roomId=${roomId}, userId=${userId}`);
 
+    // Set userId on socket NOW so fetchSockets() can find this socket by userId
+    // even during async DB calls below
+    socket.userId = userId;
+
     // Join the socket.io room immediately before any async operations
     // so the socket is in the room even if async DB calls take time
     socket.join(roomId);
     console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId}`);
 
-    // If this user was a known observer, update their socket ID RIGHT NOW before
-    // any async calls — handles the reconnect race where a broadcast fires during
-    // the getAllUsers DB query and the old socket ID is stale.
-    // Uses the global observerRegistry (immune to room object replacements).
+    // If this user was a known observer, re-join the observer room and update
+    // registry BEFORE any async DB calls, so broadcasts during the DB query reach them.
     if (observerRegistry[roomId] && userId in observerRegistry[roomId]) {
       observerRegistry[roomId][userId] = socket.id;
-      console.log(`🔭 Fast-updated observer socket for ${userId}: ${socket.id}`);
+      socket.join(`observers:${roomId}`);
+      console.log(`🔭 Fast-updated observer socket for ${userId}: ${socket.id} (rejoined observers:${roomId})`);
     }
 
     // If room not in memory, try to reconstruct from database + saved state
