@@ -5728,7 +5728,7 @@ async function initializeFromDatabase() {
         // ALWAYS check DB snapshot for more recent state — the file might be stale
         // (on Render, the file might be from an older deploy or process restart)
         try {
-          const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
+          const snapshots = await queryDatabase('getGameStateSnapshots', { game_id: game.game_id });
           if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
             // Find snapshot with highest round_or_year (most progress), not just newest by timestamp
             let bestSnap = snapshots[0];
@@ -5882,7 +5882,7 @@ async function initializeFromDatabase() {
       // The bug that reset games to 1946 also saved new phase_transition snapshots,
       // burying the real year_end snapshots. Pick the snapshot with the HIGHEST year/round.
       try {
-        const snapshots = await queryDatabase('getGameStateSnapshots', { game_code: gameCode });
+        const snapshots = await queryDatabase('getGameStateSnapshots', { game_id: game.game_id });
         if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
           // Find the snapshot with the highest round_or_year (most game progress)
           // rather than just the most recent by timestamp
