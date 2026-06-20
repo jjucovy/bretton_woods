@@ -296,7 +296,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
               // Fall back to window.actualRoomId so admin/observer re-joins even when
               // sessionStorage wasn't set (e.g. joined via createRoom before this fix)
-              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom') || window.actualRoomId;
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom') || window.actualRoomId || localStorage.getItem('brettonWoodsGameRoom');
 
               // Only fetch lobby on reconnect if user has a saved session
               // (page refresh scenario - fresh login is handled by handleLogin)
@@ -383,7 +383,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('📊 Scores received:', state.scores);
               console.log('📊 Round scores received:', state.roundScores);
               console.log('🗳️ Votes:', state.votes);
-              console.log('🗳️ My vote:', state.votes?.[playerId]);
+              console.log('🗳️ My vote (playerId lookup):', state.votes?.[playerId], '(will use myPlayerDbId in render)');
               console.log('🗳️ Is tie:', state.isTie, 'Revote count:', state.revoteCount);
               
               setGameState(state);
@@ -446,6 +446,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   // Ensure game room is persisted so reconnect works
                   if (roomId && !sessionStorage.getItem('brettonWoodsGameRoom')) {
                     sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+                    localStorage.setItem('brettonWoodsGameRoom', roomId);
                   }
                 }
               } else {
@@ -479,9 +480,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   setPlayerCountry(country);
                   sessionStorage.setItem('brettonWoodsCountry', country);
                 }
-                // Save game room to session for auto-rejoin on refresh
+                // Save game room to session+local for auto-rejoin on refresh/tab-close
                 if (window.actualRoomId) {
                   sessionStorage.setItem('brettonWoodsGameRoom', window.actualRoomId);
+                  localStorage.setItem('brettonWoodsGameRoom', window.actualRoomId);
                   console.log('   Saved game room to session:', window.actualRoomId);
                 }
               }
@@ -706,6 +708,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             // Set the room ID
             window.actualRoomId = gameCode;
             sessionStorage.setItem('brettonWoodsGameRoom', gameCode);
+            localStorage.setItem('brettonWoodsGameRoom', gameCode);
             setCurrentRoomId(gameCode);
             
             // Join the selected room
@@ -841,6 +844,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 window.actualRoomId = roomId;
                                 setCurrentRoomId(roomId);
                                 sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+                                localStorage.setItem('brettonWoodsGameRoom', roomId);
                                 setShowGameSelection(false);
 
                                 // Also emit joinRoom so the admin is officially in the socket room
@@ -1371,6 +1375,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
           // Main Game View
           const playerList = gameState?.players ? Object.values(gameState.players) : [];
+          // Find current user's DB player_id (votes are keyed by this, not userId)
+          const myPlayerDbId = playerList.find(p => String(p.userId) === String(playerId))?.id;
           console.log('🎮 Player list for filtering:', playerList.map(p => ({ id: p.id, country: p.country })));
           console.log('🎮 Countries keys:', Object.keys(countries));
           const availableCountries = Object.keys(countries).filter(
@@ -1440,6 +1446,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           const roomToLeave = gameState?.roomId || currentRoomId;
                           socket.emit('leaveRoom', { roomId: roomToLeave });
                           sessionStorage.removeItem('brettonWoodsGameRoom');
+                          localStorage.removeItem('brettonWoodsGameRoom');
                           sessionStorage.removeItem('brettonWoodsCountry');
                           window.actualRoomId = null;
                           setCurrentRoomId(null);
@@ -2144,7 +2151,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
 
                             {/* Voting Buttons */}
-                            {!gameState.votes?.[playerId] ? (
+                            {!gameState.votes?.[myPlayerDbId] ? (
                               <div style={{ marginBottom: '20px' }}>
                                 <h4 style={{ 
                                   fontSize: '1rem',
@@ -2272,7 +2279,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     borderRadius: '6px',
                                     marginLeft: '8px'
                                   }}>
-                                    Option {gameState.votes[playerId].toUpperCase()}
+                                    Option {gameState.votes[myPlayerDbId].toUpperCase()}
                                   </strong>
                                 </p>
                                 <p style={{ color: '#166534', marginTop: '15px', fontSize: '0.875rem' }}>
@@ -3709,6 +3716,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 userId: playerId
                               });
                               sessionStorage.removeItem('brettonWoodsGameRoom');
+                          localStorage.removeItem('brettonWoodsGameRoom');
                               sessionStorage.removeItem('brettonWoodsCountry');
                               window.actualRoomId = null;
                               setCurrentRoomId(null);
