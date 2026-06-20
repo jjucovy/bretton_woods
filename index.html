@@ -451,6 +451,32 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 }
               } else {
                 console.error('Failed to join room:', message);
+                // Clear the stale game room so reconnects don't keep looping
+                sessionStorage.removeItem('brettonWoodsGameRoom');
+                localStorage.removeItem('brettonWoodsGameRoom');
+                window.actualRoomId = null;
+                setCurrentRoomId(null);
+                setGameState(null);
+                // Show game selection so user can pick/create a game
+                setShowGameSelection(true);
+                setLoadingGames(true);
+                const savedRole = sessionStorage.getItem('brettonWoodsUserRole');
+                const savedPid = sessionStorage.getItem('brettonWoodsPlayerId');
+                if (savedRole === 'superadmin') {
+                  socket.emit('getActiveGames', { playerId: savedPid });
+                  socket.once('activeGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) setAvailableGames(games || []);
+                  });
+                } else {
+                  socket.emit('getAvailableGames', { playerId: savedPid });
+                  socket.emit('getPlayerActiveGames', { playerId: savedPid });
+                  socket.once('availableGamesResult', ({ success, games }) => { if (success) setAvailableGames(games || []); });
+                  socket.once('playerActiveGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) setMyActiveGames(games || []);
+                  });
+                }
               }
             });
             
