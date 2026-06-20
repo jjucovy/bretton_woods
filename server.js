@@ -5546,7 +5546,7 @@ io.on('connection', (socket) => {
     const availableGames = Object.values(globalState.rooms)
       .filter(room => Object.keys(room.players).length < 7)
       .filter(room => room.gamePhase === 'lobby' && !room.gameStarted)
-      .filter(room => globalState.rooms[game.game_code])
+      .filter(room => !globalState.rooms[game.game_code])
       .map(room => ({
         gameCode: room.gameCode || room.roomId,
         gameId: room.gameId,
