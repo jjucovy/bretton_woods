@@ -1865,9 +1865,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     {playerList.map((player) => (
                                       <div key={player.id} style={{
                                         padding: '10px',
-                                        background: gameState.votes?.[player.userId] ? '#dcfce7' : '#f8fafc',
+                                        background: gameState.votes?.[player.id] ? '#dcfce7' : '#f8fafc',
                                         borderRadius: '6px',
-                                        borderLeft: '4px solid ' + (gameState.votes?.[player.userId] ? '#16a34a' : '#cbd5e1')
+                                        borderLeft: '4px solid ' + (gameState.votes?.[player.id] ? '#16a34a' : '#cbd5e1')
                                       }}>
                                         <span style={{ fontSize: '1.1rem', marginRight: '6px' }}>
                                           {countries[player.country]?.flag || ''}
@@ -1877,10 +1877,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         </span>
                                         <span style={{
                                           marginLeft: '10px',
-                                          color: gameState.votes?.[player.userId] ? '#16a34a' : '#64748b',
+                                          color: gameState.votes?.[player.id] ? '#16a34a' : '#64748b',
                                           fontSize: '0.875rem'
                                         }}>
-                                          {gameState.votes?.[player.userId] ? '✓ Voted' : '⏳ Waiting...'}
+                                          {gameState.votes?.[player.id] ? '✓ Voted' : '⏳ Waiting...'}
                                         </span>
                                       </div>
                                     ))}

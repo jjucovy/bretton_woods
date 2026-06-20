@@ -3519,19 +3519,21 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Get the DB player_id (e.g. "36") — votes are keyed by this, not userId
+    const playerDbId = room.players[id].id;
+
     // Check if player has already voted this round (prevent double-voting on tie revotes)
-    if (room.votes[id]) {
-      console.log(`Vote rejected: player ${id} has already voted this round`);
+    if (room.votes[playerDbId]) {
+      console.log(`Vote rejected: player ${id} (player_id=${playerDbId}) has already voted this round`);
       return;
     }
 
-    // Store vote
-    room.votes[id] = choice;
-    console.log(`Vote received: ${id} voted ${choice} in room ${roomId}`);
-    
+    // Store vote keyed by DB player_id
+    room.votes[playerDbId] = choice;
+    console.log(`Vote received: userId=${id} player_id=${playerDbId} voted ${choice} in room ${roomId}`);
+
     // Check if all players have voted
-    const playerids = Object.keys(room.players);
-    const allVoted = playerids.every(id => room.votes[id]);
+    const allVoted = Object.values(room.players).every(p => room.votes[p.id]);
     
     if (allVoted) {
       console.log('All players voted, calculating results...');
@@ -3609,7 +3611,7 @@ io.on('connection', (socket) => {
             if (ci) tieIssueTitle = ci.title;
           } catch (e) {}
           Object.entries(room.players).forEach(([id, player]) => {
-            const vote = room.votes[id]?.toLowerCase();
+            const vote = room.votes[player.id]?.toLowerCase();
             if (!vote) return;
             const country = normalizeCountryName(player.country) || player.country;
             queryDatabase('saveGameVote', {
@@ -3698,7 +3700,7 @@ io.on('connection', (socket) => {
         const roundScores = {};
         Object.entries(room.players).forEach(([id, player]) => {
           const country = normalizeCountryName(player.country) || player.country;
-          const vote = room.votes[id].toLowerCase();
+          const vote = room.votes[player.id].toLowerCase();
 
           let points = 0;
 
@@ -3776,7 +3778,7 @@ io.on('connection', (socket) => {
 
         // Save individual votes to game_votes table
         Object.entries(room.players).forEach(([id, player]) => {
-          const vote = room.votes[id]?.toLowerCase();
+          const vote = room.votes[player.id]?.toLowerCase();
           if (!vote) return;
           const country = normalizeCountryName(player.country) || player.country;
           const optIdx = vote === 'a' ? 0 : vote === 'b' ? 1 : vote === 'c' ? 2 : 3;
