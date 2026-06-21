@@ -422,15 +422,25 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('State updated in React');
             });
 
-            socket.on('joinRoomResult', ({ success, roomId, message, role, isHost, reconnected, country, needsCountrySelection }) => {
+            socket.on('joinRoomResult', ({ success, roomId: _rId, gameId: _gId, message, role, isHost, reconnected, country, needsCountrySelection }) => {
               if (success) {
+                // Server sends gameId (numeric); fall back to roomId for legacy
+                const roomId = _gId || _rId;
                 console.log('Joined room:', roomId);
                 console.log('Role:', role);
                 console.log('Is host:', isHost);
                 console.log('Reconnected:', reconnected);
                 console.log('Country:', country);
                 console.log('Needs country selection:', needsCountrySelection);
-                
+
+                // Always sync currentRoomId to the canonical numeric game_id the server confirmed
+                if (roomId) {
+                  setCurrentRoomId(roomId);
+                  window.actualRoomId = roomId;
+                  sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+                  localStorage.setItem('brettonWoodsGameRoom', roomId);
+                }
+
                 setIsRoomHost(!!isHost);
 
                 // If reconnected with country, set it
@@ -438,16 +448,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   setPlayerCountry(country);
                   sessionStorage.setItem('brettonWoodsCountry', country);
                 }
-                
+
                 // If superadmin, they are observing and should not select a country
                 if (role === 'superadmin') {
                   console.log('✓ Joined as superadmin/observer');
                   setPlayerCountry(null); // Superadmin does not have a country
-                  // Ensure game room is persisted so reconnect works
-                  if (roomId && !sessionStorage.getItem('brettonWoodsGameRoom')) {
-                    sessionStorage.setItem('brettonWoodsGameRoom', roomId);
-                    localStorage.setItem('brettonWoodsGameRoom', roomId);
-                  }
                 }
               } else {
                 console.error('Failed to join room:', message);

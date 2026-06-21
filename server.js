@@ -3440,11 +3440,16 @@ io.on('connection', (socket) => {
   });
 
   // Set ready status
-  socket.on('setReady', async ({ gameId, userId, playerid, ready }) => {
-    const room = globalState.games[gameId];
+  socket.on('setReady', async ({ gameId: rawGameId, userId, playerid, ready }) => {
+    let gameId = rawGameId;
+    let room = globalState.games[gameId];
     if (!room) {
-      console.log(`❌ setReady: room ${gameId} not found`);
-      return;
+      const entry = Object.entries(globalState.games).find(([, r]) => r.game_code === rawGameId);
+      if (!entry) {
+        console.log(`❌ setReady: room ${rawGameId} not found`);
+        return;
+      }
+      [gameId, room] = entry;
     }
 
     const socketUserId = userId || playerid;
