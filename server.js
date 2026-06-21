@@ -2676,8 +2676,12 @@ io.on('connection', (socket) => {
         const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
         for (const game of games) {
           if (game && game.game_code) {
+            // PHP may omit game_id — derive it from in-memory room keyed by game_code
+            const resolvedGameId = game.game_id
+              ? String(game.game_id)
+              : Object.keys(globalState.games).find(k => globalState.games[k].game_code === game.game_code);
 
-            const roomState = globalState.games[String(game.game_id)] || globalState.games[game.game_code];
+            const roomState = globalState.games[resolvedGameId] || globalState.games[game.game_code];
             const isCompleted = game.status === 'completed' ||
               game.game_status === 'completed' ||
               (roomState && roomState.gamePhase === 'complete');
@@ -2687,9 +2691,9 @@ io.on('connection', (socket) => {
             } else {
 
               myActiveGames.push({
-                game_id: game.game_id,
+                game_id: resolvedGameId,
                 gameCode: game.game_code,
-                gameId: String(game.game_id),
+                gameId: resolvedGameId,
                 country_id: game.country_id,
                 country_code: game.country_code,
                 status: game.status,
@@ -5540,16 +5544,20 @@ io.on('connection', (socket) => {
 
       for (const game of games) {
         if (game && game.game_code) {
-          const roomState = globalState.games[String(game.game_id)] || globalState.games[game.game_code];
+          const resolvedGameId = game.game_id
+            ? String(game.game_id)
+            : Object.keys(globalState.games).find(k => globalState.games[k].game_code === game.game_code);
+
+          const roomState = globalState.games[resolvedGameId] || globalState.games[game.game_code];
           const isCompleted = game.status === 'completed' ||
             game.game_status === 'completed' ||
             (roomState && roomState.gamePhase === 'complete');
 
           if (!isCompleted) {
             myActiveGames.push({
-              game_id: game.game_id,
+              game_id: resolvedGameId,
               gameCode: game.game_code,
-              gameId: String(game.game_id),
+              gameId: resolvedGameId,
               country_id: game.country_id,
               country_code: game.country_code,
               status: game.status,
@@ -5723,7 +5731,7 @@ async function initializeFromDatabase() {
         // ALWAYS check DB snapshot for more recent state — the file might be stale
         // (on Render, the file might be from an older deploy or process restart)
         try {
-          const snapshots = await queryDatabase('getGameStateSnapshots', { game_id: game.game_id });
+          const snapshots = await queryDatabase('getGameStateSnapshots', { game_id: game.game_id, game_code: game.game_code });
           if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
             // Find snapshot with highest round_or_year (most progress), not just newest by timestamp
             let bestSnap = snapshots[0];
@@ -5877,7 +5885,7 @@ async function initializeFromDatabase() {
       // The bug that reset games to 1946 also saved new phase_transition snapshots,
       // burying the real year_end snapshots. Pick the snapshot with the HIGHEST year/round.
       try {
-        const snapshots = await queryDatabase('getGameStateSnapshots', { game_id: game.game_id });
+        const snapshots = await queryDatabase('getGameStateSnapshots', { game_id: game.game_id, game_code: game.game_code });
         if (snapshots && Array.isArray(snapshots) && snapshots.length > 0) {
           // Find the snapshot with the highest round_or_year (most game progress)
           // rather than just the most recent by timestamp
