@@ -2586,6 +2586,20 @@ io.on('connection', (socket) => {
     socket.userId = String(authUserId);
     registerUserSocket(socket.userId, socket.id);
     console.log(`🔑 Auth userId=${socket.userId} pre-registered on connect (socket ${socket.id})`);
+
+    // Pre-join admin to all their game rooms so io.to(gameId) reaches them immediately,
+    // without waiting for the first requestState poll (up to 3s later).
+    for (const [gameId, room] of Object.entries(globalState.games)) {
+      const isRoomHost = String(room.hostUserId) === socket.userId || String(room.hostId) === socket.userId;
+      if (isRoomHost) {
+        socket.join(gameId);
+        socket.join(`observers:${gameId}`);
+        room.hostSocketId = socket.id;
+        if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+        observerRegistry[gameId][socket.userId] = socket.id;
+        console.log(`🔑 Auth: pre-joined userId=${socket.userId} to rooms ${gameId} + observers:${gameId}`);
+      }
+    }
   }
 
   // Register new user
