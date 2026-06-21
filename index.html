@@ -1469,14 +1469,14 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         👁️ Observing Game
                       </h3>
                       <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
-                        Room: {gameState?.roomId || currentRoomId || 'Loading...'}
+                        Room: {gameState?.game_id || currentRoomId || 'Loading...'}
                       </p>
                     </div>
                     <button
                       onClick={() => {
                         if (confirm('Leave this game and return to game selection?')) {
                           console.log('🚪 Leaving game...');
-                          const roomToLeave = gameState?.roomId || currentRoomId;
+                          const roomToLeave = gameState?.game_id || currentRoomId;
                           socket.emit('leaveRoom', { gameId: roomToLeave });
                           sessionStorage.removeItem('brettonWoodsGameRoom');
                           localStorage.removeItem('brettonWoodsGameRoom');
@@ -1521,7 +1521,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   <button
                     onClick={() => {
                       console.log('🚪 Returning to lobby...');
-                      const roomToLeave = gameState?.roomId || currentRoomId;
+                      const roomToLeave = gameState?.game_id || currentRoomId;
                       socket.emit('leaveRoom', { gameId: roomToLeave });
                       sessionStorage.removeItem('brettonWoodsGameRoom');
                       sessionStorage.removeItem('brettonWoodsCountry');
@@ -3743,7 +3743,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           <button
                             onClick={() => {
                               console.log('🚪 Leaving completed game...');
-                              const roomToLeave = gameState?.roomId || currentRoomId;
+                              const roomToLeave = gameState?.game_id || currentRoomId;
                               socket.emit('leaveCompletedGame', {
                                 gameId: roomToLeave,
                                 userId: playerId
