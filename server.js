@@ -795,45 +795,17 @@ function broadcastToRoom(gameId) {
   // Emit to dedicated observer Socket.IO room (belt-and-suspenders)
   io.to(`observers:${gameId}`).emit('stateUpdate', room);
 
-  // Last-resort: find the admin's socket by host_user_id via fetchSockets().
-  // This works even if their socket was never in the game/observer room
-  // (e.g. after a rapid restart where room membership was lost).
+  // Direct emit to host socket stored on room — survives registry/room-membership loss after restarts
   const adminUserId = String(room.hostUserId || room.hostId || '');
   if (adminUserId) {
-    io.fetchSockets().then(allSockets => {
-      const adminSock = allSockets.find(s => String(s.userId) === adminUserId);
-      if (adminSock) {
-        adminSock.emit('stateUpdate', room);
-        // Ensure admin is in observer room for future broadcasts
-        adminSock.join(`observers:${gameId}`);
-        if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
-        observerRegistry[gameId][adminUserId] = adminSock.id;
-      } else {
-        // Admin not yet reconnected after restart — retry in 3s
-        setTimeout(() => {
-          if (!globalState.games[gameId]) return;
-          io.fetchSockets().then(sockets => {
-            const sock = sockets.find(s => String(s.userId) === adminUserId);
-            if (sock) {
-              sock.emit('stateUpdate', globalState.games[gameId]);
-              sock.join(`observers:${gameId}`);
-              if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
-              observerRegistry[gameId][adminUserId] = sock.id;
-              console.log(`📡 Delayed broadcast reached admin ${adminUserId} for game ${gameId}`);
-            }
-          });
-        }, 3000);
-      }
-      io.in(gameId).allSockets().then(roomSockets => {
-        io.in(`observers:${gameId}`).allSockets().then(obsSockets => {
-          console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size}, obsRoom=${obsSockets.size}, adminFound=${!!adminSock}`);
-        });
-      });
-    });
+    const hostSocketId = room.hostSocketId;
+    const hostSock = hostSocketId ? io.sockets.sockets.get(hostSocketId) : null;
+    if (hostSock) {
+      hostSock.emit('stateUpdate', room);
+    }
+    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), hostSocket=${hostSocketId || 'none'}, hostAlive=${!!hostSock}`);
   } else {
-    io.in(gameId).allSockets().then(roomSockets => {
-      console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), room=${roomSockets.size} (no hostId)`);
-    });
+    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s) (no host)`);
   }
 }
 
@@ -3056,6 +3028,7 @@ io.on('connection', (socket) => {
         if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
         observerRegistry[gameId][userId] = socket.id;
         socket.join(`observers:${gameId}`);
+        if (isHost) room.hostSocketId = socket.id;
         console.log(`🔭 Registered observer ${userId} in global registry + observers:${gameId} room (socket ${socket.id})`);
 
         socket.emit('joinRoomResult', {
@@ -3440,6 +3413,7 @@ io.on('connection', (socket) => {
       const changed = observerRegistry[gameId][userId] !== socket.id;
       observerRegistry[gameId][userId] = socket.id;
       socket.join(`observers:${gameId}`);
+      if (isHost) room.hostSocketId = socket.id;
       if (isHost && changed) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${gameId}`);
     }
 
