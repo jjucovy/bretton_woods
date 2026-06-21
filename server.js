@@ -3189,7 +3189,7 @@ io.on('connection', (socket) => {
   
   // Join game in room
   socket.on('joinGame', async ({ gameId: _gId, roomId: _rId, userId, playerid, country }) => {
-    const gameId = _gId || _rId;
+    let gameId = _gId || _rId;
     // Support both userId (new) and playerid (legacy), fall back to socket.userId from joinRoom
     const id = userId || playerid || socket.userId;
     console.log(`🎮 Join game request: gameId=${gameId}, userId=${userId}, playerid=${playerid}, socket.userId=${socket.userId}, resolved id=${id}, country=${country}`);
@@ -3201,14 +3201,23 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const room = globalState.games[gameId];
+    let room = globalState.games[gameId];
+
+    // Fall back to game_code lookup if client has stale room key
+    if (!room) {
+      const entry = Object.entries(globalState.games).find(([, r]) => r.game_code === gameId);
+      if (entry) {
+        [gameId, room] = entry;
+        console.log(`🔍 joinGame: resolved stale key to gameId=${gameId}`);
+      }
+    }
 
     if (!room) {
       console.error(`❌ Room not found: ${gameId}`);
       console.error(`   Available rooms:`, Object.keys(globalState.games));
-      socket.emit('joinResult', { 
-        success: false, 
-        message: `Room not found: ${gameId}. Available rooms: ${Object.keys(globalState.games).join(', ') || 'none'}` 
+      socket.emit('joinResult', {
+        success: false,
+        message: `Room not found: ${gameId}. Available rooms: ${Object.keys(globalState.games).join(', ') || 'none'}`
       });
       return;
     }
@@ -3313,9 +3322,13 @@ io.on('connection', (socket) => {
   });
   
   // Rejoin game after disconnect/reconnect
-  socket.on('rejoinGame', ({ gameId, playerid, country }) => {
-    const room = globalState.games[gameId];
-    
+  socket.on('rejoinGame', ({ gameId: rawGameId, playerid, country }) => {
+    let gameId = rawGameId;
+    let room = globalState.games[gameId];
+    if (!room) {
+      const entry = Object.entries(globalState.games).find(([, r]) => r.game_code === rawGameId);
+      if (entry) [gameId, room] = entry;
+    }
     if (!room) {
       socket.emit('rejoinResult', { success: false, message: 'Room not found' });
       return;
