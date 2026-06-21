@@ -201,7 +201,14 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
         // Start loading
         loadGameData();
 
-        const socket = io();
+        const socket = io({
+          auth: (cb) => {
+            // Called on every connect/reconnect — picks up userId after login
+            const userId = sessionStorage.getItem('brettonWoodsPlayerId') ||
+                           localStorage.getItem('brettonWoodsPlayerId');
+            cb({ userId: userId || undefined });
+          }
+        });
         const { useState, useEffect } = React;
 
         // MilitaryMap, TroopDeploymentInterface, CommandEconomyPolicyForm,
