@@ -5912,9 +5912,14 @@ async function initializeFromDatabase() {
 
       if (players && Array.isArray(players) && players.length > 0) {
         console.log(`   Found ${players.length} player(s) in database`);
+        // savedRoom has the pre-restart state (loaded by loadState() before this function runs)
+        const savedRoom = globalState.games[gameId];
         for (const player of players) {
           // Key by userId for consistency (so client can find them by userId)
-          const isReady = player.is_ready === 1 || player.is_ready === '1';
+          const isReadyFromDB = player.is_ready === 1 || player.is_ready === '1';
+          // PHP getPlayers doesn't return is_ready, so preserve ready from saved JSON
+          const savedReady = !!(savedRoom?.players?.[player.user_id]?.ready);
+          const isReady = isReadyFromDB || savedReady;
           roomState.players[player.user_id] = {
             id: player.player_id,
             userId: player.user_id,
@@ -5928,7 +5933,7 @@ async function initializeFromDatabase() {
           if (isReady && !roomState.readyPlayers.includes(player.player_id)) {
             roomState.readyPlayers.push(player.player_id);
           }
-          console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}, ready=${isReady}`);
+          console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}, ready=${isReady} (db=${isReadyFromDB}, saved=${savedReady})`);
         }
       } else {
         console.log(`   No players found for game ${game_code}`);
