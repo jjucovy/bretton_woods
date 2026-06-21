@@ -2840,14 +2840,16 @@ io.on('connection', (socket) => {
     // Create room state keyed by game_id
     const room = createGameState(gameId, roomName || game_code, creatorId);
     room.hostUserId = creatorId;
+    room.hostSocketId = socket.id;
     room.hostIsSuperAdmin = isSuperAdmin;
     room.game_code = game_code;
     room.gameId = dbGameId;
     room.game_id = gameId;
     if (game_code.startsWith('game_')) room.status = 'active';
     globalState.games[gameId] = room;
+    registerUserSocket(creatorId, socket.id);
 
-    console.log(`   Room host set to userId: ${creatorId} (superadmin: ${isSuperAdmin})`);
+    console.log(`   Room host set to userId: ${creatorId}, hostSocketId: ${socket.id} (superadmin: ${isSuperAdmin})`);
 
     // Register creator as observer in global registry + dedicated Socket.IO room
     if (isSuperAdmin) {
