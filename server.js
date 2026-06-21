@@ -3415,11 +3415,13 @@ io.on('connection', (socket) => {
       String(room.hostUserId) === String(userId) ||
       String(room.hostId) === String(userId)
     );
-    if (isHost || (userId && observerRegistry[gameId] && userId in observerRegistry[gameId])) {
+    const wasAlreadyRegistered = userId && observerRegistry[gameId] && userId in observerRegistry[gameId];
+    if (isHost || wasAlreadyRegistered) {
       if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+      const changed = observerRegistry[gameId][userId] !== socket.id;
       observerRegistry[gameId][userId] = socket.id;
       socket.join(`observers:${gameId}`);
-      if (isHost) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${gameId}`);
+      if (isHost && changed) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${gameId}`);
     }
 
     socket.emit('stateUpdate', room);
