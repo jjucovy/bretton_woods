@@ -803,32 +803,40 @@ function broadcastToRoom(gameId) {
   // Emit to dedicated observer Socket.IO room (belt-and-suspenders)
   io.to(`observers:${gameId}`).emit('stateUpdate', room);
 
-  // Direct emit to host socket stored on room — survives registry/room-membership loss after restarts
+  // Direct emit to host. Strategy:
+  //   1. Try room.hostSocketId (cached from last login/requestState/createRoom)
+  //   2. Try userSocketMap[hostUserId] (updated on every login/joinRoom/requestState)
+  //   3. Scan all connected sockets for socket.userId === hostUserId (reliable fallback)
+  //      When found, cache in both room.hostSocketId and userSocketMap.
   const adminUserId = String(room.hostUserId || room.hostId || '');
   if (adminUserId) {
-    const hostSocketId = room.hostSocketId;
-    const hostSock = hostSocketId ? io.sockets.sockets.get(hostSocketId) : null;
+    let hostSock = room.hostSocketId ? io.sockets.sockets.get(room.hostSocketId) : null;
+
+    if (!hostSock) {
+      const mapSockId = userSocketMap[adminUserId];
+      if (mapSockId) hostSock = io.sockets.sockets.get(mapSockId) || null;
+    }
+
+    if (!hostSock) {
+      // Scan all connected sockets — O(n) but n is tiny (< 20 sockets in a game)
+      for (const [, s] of io.sockets.sockets) {
+        if (String(s.userId) === adminUserId) {
+          hostSock = s;
+          // Cache for next time
+          room.hostSocketId = s.id;
+          registerUserSocket(adminUserId, s.id);
+          console.log(`🔍 broadcastToRoom: found host socket by scan for userId=${adminUserId}, caching ${s.id}`);
+          break;
+        }
+      }
+    }
+
     if (hostSock) {
       hostSock.emit('stateUpdate', room);
     }
-    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), hostSocket=${hostSocketId || 'none'}, hostAlive=${!!hostSock}`);
+    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), hostSocket=${room.hostSocketId || 'none'}, hostAlive=${!!hostSock}`);
   } else {
-    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s) (no host)`);
-  }
-
-  // Always deliver to user_id=1 (superadmin) via global socket map regardless of room membership
-  const adminSockId = userSocketMap['1'];
-  if (adminSockId) {
-    const adminSock = io.sockets.sockets.get(adminSockId);
-    if (adminSock) {
-      adminSock.emit('stateUpdate', room);
-      console.log(`📡 userSocketMap: delivered to user_id=1 socket=${adminSockId}`);
-    } else {
-      console.log(`📡 userSocketMap: user_id=1 socket=${adminSockId} is dead, clearing`);
-      delete userSocketMap['1'];
-    }
-  } else {
-    console.log(`📡 userSocketMap: no socket for user_id=1 (not yet logged in?)`);
+    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s) (no host userId on room)`);
   }
 }
 
@@ -5909,6 +5917,14 @@ async function initializeFromDatabase() {
           }
         } catch (err) {
           console.log(`   ⚠️ Could not check snapshot for ${game_code}: ${err.message}`);
+        }
+
+        // Ensure hostUserId is set from DB (may be missing from older save files)
+        if (!existingRoom.hostUserId && game.host_user_id) {
+          existingRoom.hostUserId = game.host_user_id;
+        }
+        if (!existingRoom.hostId && game.host_user_id) {
+          existingRoom.hostId = game.host_user_id;
         }
 
         // Update players from database in case they changed
