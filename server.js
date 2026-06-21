@@ -803,41 +803,30 @@ function broadcastToRoom(gameId) {
   // Emit to dedicated observer Socket.IO room (belt-and-suspenders)
   io.to(`observers:${gameId}`).emit('stateUpdate', room);
 
-  // Direct emit to host. Strategy:
-  //   1. Try room.hostSocketId (cached from last login/requestState/createRoom)
-  //   2. Try userSocketMap[hostUserId] (updated on every login/joinRoom/requestState)
-  //   3. Scan all connected sockets for socket.userId === hostUserId (reliable fallback)
-  //      When found, cache in both room.hostSocketId and userSocketMap.
-  const adminUserId = String(room.hostUserId || room.hostId || '');
-  if (adminUserId) {
-    let hostSock = room.hostSocketId ? io.sockets.sockets.get(room.hostSocketId) : null;
-
-    if (!hostSock) {
-      const mapSockId = userSocketMap[adminUserId];
-      if (mapSockId) hostSock = io.sockets.sockets.get(mapSockId) || null;
-    }
-
-    if (!hostSock) {
-      // Scan all connected sockets — O(n) but n is tiny (< 20 sockets in a game)
-      for (const [, s] of io.sockets.sockets) {
-        if (String(s.userId) === adminUserId) {
-          hostSock = s;
-          // Cache for next time
-          room.hostSocketId = s.id;
-          registerUserSocket(adminUserId, s.id);
-          console.log(`🔍 broadcastToRoom: found host socket by scan for userId=${adminUserId}, caching ${s.id}`);
-          break;
-        }
+  // Always deliver directly to the superadmin (user_id=1).
+  // Don't rely on room.hostUserId/hostId — those can be undefined after restarts.
+  // Priority: userSocketMap['1'] → scan all sockets for socket.userId==='1'.
+  let adminSock = null;
+  const cachedAdminSockId = userSocketMap['1'];
+  if (cachedAdminSockId) {
+    adminSock = io.sockets.sockets.get(cachedAdminSockId) || null;
+    if (!adminSock) delete userSocketMap['1'];
+  }
+  if (!adminSock) {
+    for (const [, s] of io.sockets.sockets) {
+      if (String(s.userId) === '1') {
+        adminSock = s;
+        registerUserSocket('1', s.id);
+        room.hostSocketId = s.id;
+        console.log(`🔍 broadcastToRoom: found admin socket by scan, caching ${s.id}`);
+        break;
       }
     }
-
-    if (hostSock) {
-      hostSock.emit('stateUpdate', room);
-    }
-    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), hostSocket=${room.hostSocketId || 'none'}, hostAlive=${!!hostSock}`);
-  } else {
-    console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s) (no host userId on room)`);
   }
+  if (adminSock) {
+    adminSock.emit('stateUpdate', room);
+  }
+  console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), adminAlive=${!!adminSock}`);
 }
 
 // Broadcast room list to lobby
