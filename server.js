@@ -804,6 +804,25 @@ function broadcastToRoom(gameId) {
       const adminSock = allSockets.find(s => String(s.userId) === adminUserId);
       if (adminSock) {
         adminSock.emit('stateUpdate', room);
+        // Ensure admin is in observer room for future broadcasts
+        adminSock.join(`observers:${gameId}`);
+        if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+        observerRegistry[gameId][adminUserId] = adminSock.id;
+      } else {
+        // Admin not yet reconnected after restart — retry in 3s
+        setTimeout(() => {
+          if (!globalState.games[gameId]) return;
+          io.fetchSockets().then(sockets => {
+            const sock = sockets.find(s => String(s.userId) === adminUserId);
+            if (sock) {
+              sock.emit('stateUpdate', globalState.games[gameId]);
+              sock.join(`observers:${gameId}`);
+              if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+              observerRegistry[gameId][adminUserId] = sock.id;
+              console.log(`📡 Delayed broadcast reached admin ${adminUserId} for game ${gameId}`);
+            }
+          });
+        }, 3000);
       }
       io.in(gameId).allSockets().then(roomSockets => {
         io.in(`observers:${gameId}`).allSockets().then(obsSockets => {
