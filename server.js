@@ -121,7 +121,7 @@ app.get('/admin/clear-memory-games', (req, res) => {
 app.get('/debug/rooms', (req, res) => {
   const rooms = Object.entries(globalState.games).map(([gameId, room]) => ({
     gameId,
-    gameCode: room.gameCode,
+    gameCode: room.game_code,
     gameId: room.gameId,
     gamePhase: room.gamePhase,
     gameStarted: room.gameStarted,
@@ -195,7 +195,6 @@ app.get('/api/active-games', async (req, res) => {
       const roomState = globalState.games[String(game.game_id)] || globalState.games[game.game_code];
       activeGames.push({
         gameCode: game.game_code,
-        gameId: game.game_id,
         gameId: String(game.game_id),
         status: game.status,
         currentRound: game.current_round,
@@ -215,8 +214,7 @@ app.get('/api/active-games', async (req, res) => {
   for (const [gameId, roomState] of Object.entries(globalState.games)) {
     if (!activeGames.find(g => String(g.gameId) === gameId)) {
       activeGames.push({
-        gameCode: roomState.gameCode || gameId,
-        gameId: roomState.gameId,
+        gameCode: roomState.game_code || gameId,
         gameId: gameId,
         status: 'memory-only',
         currentRound: roomState.currentRound,
@@ -462,7 +460,6 @@ async function savePlayerScoresToDB(gameId, phase) {
   const room = globalState.games[gameId];
   if (!room || !room.gameId) return;
 
-  const gameCode = gameId;
   for (const [userId, player] of Object.entries(room.players)) {
     const country = normalizeCountryName(player.country) || player.country;
     const score = room.scores?.[country] || 0;
@@ -470,7 +467,7 @@ async function savePlayerScoresToDB(gameId, phase) {
 
     try {
       await queryDatabase('updatePlayerPoints', {
-        gameCode,
+        gameCode: gameId,
         userId: userId,
         points: score,
         phase: phase
@@ -1234,7 +1231,7 @@ function calculateExchangeRate(country, currentYear, policy, previousData, room)
   }
   
   // Phase 1 exchange rate system affects band width and volatility
-  const phase1 = getPhase1Outcomes(room.roomId || '');
+  const phase1 = getPhase1Outcomes(room.game_id || '');
   let bandWidth = 1; // Default Bretton Woods ±1% band
   if (phase1.exchangeRateSystem === 'adjustable') {
     bandWidth = 5; // Adjustable pegs allow ±5% before intervention
@@ -2720,9 +2717,8 @@ io.on('connection', (socket) => {
           return true;
         });
         availableGames = lobbyGames.map(room => ({
-          gameId: room.roomId,
-          gameCode: room.gameCode || room.roomId,
-          gameId: room.gameId,
+          gameId: room.game_id,
+          gameCode: room.game_code || room.game_id,
           playerCount: Object.keys(room.players).length,
           maxPlayers: 7,
           availableSlots: 7 - Object.keys(room.players).length,
@@ -2755,10 +2751,10 @@ io.on('connection', (socket) => {
   
   // Create new room
   socket.on('createRoom', async ({ playerId, roomName, userId }) => {
-    const gameCode = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const game_code = roomName || `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const creatorId = userId || playerId; // Use userId if provided, otherwise playerId
 
-    console.log(`📝 Creating room: ${gameCode} for user ${creatorId}`);
+    console.log(`📝 Creating room: ${game_code} for user ${creatorId}`);
 
     // Check if creator is superadmin
     let isSuperAdmin = false;
@@ -2777,41 +2773,41 @@ io.on('connection', (socket) => {
 
     // Persist to DB first and get game_id — that becomes the primary room key
     let dbGameId = null;
-    if (gameCode.startsWith('game_')) {
+    if (game_code.startsWith('game_')) {
       try {
         const created = await queryDatabase('createNewGame', {
-          gameCode: gameCode,
+          gameCode: game_code,
           createdBy: creatorId,
         });
         console.log(`   createNewGame result:`, JSON.stringify(created));
 
         if (created && created.game_id) {
           dbGameId = created.game_id;
-          console.log(`✅ Game created in DB: game_id=${dbGameId} code=${gameCode}`);
+          console.log(`✅ Game created in DB: game_id=${dbGameId} code=${game_code}`);
           await queryDatabase('updateGame', { game_id: dbGameId, status: 'active', current_round: 0 });
         } else {
-          console.error(`❌ Game ${gameCode} not persisted to DB — createNewGame returned:`, JSON.stringify(created));
+          console.error(`❌ Game ${game_code} not persisted to DB — createNewGame returned:`, JSON.stringify(created));
         }
       } catch (err) {
         console.error('Error persisting game to DB:', err);
       }
     }
 
-    // Use DB game_id as the primary room key; fall back to gameCode if DB failed
-    const gameId = dbGameId ? String(dbGameId) : gameCode;
+    // Use DB game_id as the primary room key; fall back to game_code if DB failed
+    const gameId = dbGameId ? String(dbGameId) : game_code;
 
     // Join the socket.io room using the new gameId
     socket.join(gameId);
     console.log(`🔌 socket.join: socket ${socket.id} → room ${gameId} (createRoom)`);
 
     // Create room state keyed by game_id
-    const room = createGameState(gameId, roomName || gameCode, creatorId);
+    const room = createGameState(gameId, roomName || game_code, creatorId);
     room.hostUserId = creatorId;
     room.hostIsSuperAdmin = isSuperAdmin;
-    room.gameCode = gameCode;
+    room.game_code = game_code;
     room.gameId = dbGameId;
-    room.roomId = gameId;
-    if (gameCode.startsWith('game_')) room.status = 'active';
+    room.game_id = gameId;
+    if (game_code.startsWith('game_')) room.status = 'active';
     globalState.games[gameId] = room;
 
     console.log(`   Room host set to userId: ${creatorId} (superadmin: ${isSuperAdmin})`);
@@ -2828,14 +2824,14 @@ io.on('connection', (socket) => {
       success: true,
       gameId: gameId,
       gameId: gameId,
-      roomName: roomName || gameCode,
+      roomName: roomName || game_code,
       hostId: creatorId
     });
 
     broadcastRoomList();
     saveState();
 
-    console.log(`✅ Room created: gameId=${gameId} gameCode=${gameCode} by ${creatorId} as ${isSuperAdmin ? 'HOST (superadmin)' : 'player'}`);
+    console.log(`✅ Room created: gameId=${gameId} game_code=${game_code} by ${creatorId} as ${isSuperAdmin ? 'HOST (superadmin)' : 'player'}`);
   });
   
   // Join existing room
@@ -2878,8 +2874,8 @@ io.on('connection', (socket) => {
           // 2. Create room state from database info
           const restoredRoom = createGameState(gameId, gameData.game_code, gameData.host_user_id);
           restoredRoom.gameId = gameData.game_id;
-          restoredRoom.gameCode = gameData.game_code;
-          restoredRoom.roomId = gameId;
+          restoredRoom.game_code = gameData.game_code;
+          restoredRoom.game_id = gameId;
           restoredRoom.hostUserId = gameData.host_user_id;
           restoredRoom.gameStarted = gameData.status === 'active' || gameData.status === 'phase2';
           restoredRoom.gamePhase = gameData.status === 'phase2' ? 'phase2' : (gameData.status === 'active' ? 'phase1' : 'lobby');
@@ -2951,7 +2947,7 @@ io.on('connection', (socket) => {
         const gameData = await queryDatabase('getGame', { game_id: parseInt(gameId) || undefined });
         if (gameData && gameData.game_id) {
           room.gameId = gameData.game_id;
-          room.gameCode = room.gameCode || gameData.game_code;
+          room.game_code = room.game_code || gameData.game_code;
           console.log(`   Updated gameId from database: ${gameData.game_id}`);
         }
       } catch (err) {
@@ -3251,7 +3247,7 @@ io.on('connection', (socket) => {
           }).catch(() => null);
           assignedPlayerId = fetched?.player_id || `player_${Date.now()}`;
         }
-        console.log(`   Created player assignment in database: userId=${id}, gameCode=${gameId}, country=${country}, player_id=${assignedPlayerId}`);
+        console.log(`   Created player assignment in database: userId=${id}, game_id=${gameId}, country=${country}, player_id=${assignedPlayerId}`);
       }
     } catch (err) {
       console.error('Error managing player assignment:', err);
@@ -5581,9 +5577,8 @@ io.on('connection', (socket) => {
       .filter(room => room.gamePhase === 'lobby' && !room.gameStarted)
       .filter(room => Object.keys(room.players).length < 7)
       .map(room => ({
-        gameCode: room.gameCode || room.roomId,
-        gameId: room.gameId,
-        gameId: room.roomId,
+        gameCode: room.game_code || room.game_id,
+        gameId: room.game_id,
         playerCount: Object.keys(room.players).length,
         availableSlots: 7 - Object.keys(room.players).length,
         hostUserId: room.hostUserId || room.hostId,
@@ -5635,8 +5630,7 @@ io.on('connection', (socket) => {
       if (!activeGames.find(g => String(g.gameId) === gameId)) {
         console.log(`  - Memory-only game: ${gameId}`);
         activeGames.push({
-          gameCode: roomState.gameCode || gameId,
-          gameId: roomState.gameId,
+          gameCode: roomState.game_code || gameId,
           gameId: gameId,
           status: 'memory-only',
           currentRound: roomState.currentRound,
@@ -5707,21 +5701,21 @@ async function initializeFromDatabase() {
 
     // Convert DB games to room state
     for (const game of games) {
-      const gameCode = game.game_code; // e.g., "game_39"
+      const game_code = game.game_code; // e.g., "game_39"
       const gameId = String(game.game_id); // primary key is now game_id (e.g. "35")
 
-      console.log(`📋 Loading game: ${gameCode} (game_id=${game.game_id}, gameId=${gameId})`);
+      console.log(`📋 Loading game: ${game_code} (game_id=${game.game_id}, gameId=${gameId})`);
 
       // Check if we already have this room from the main state file (with yearlyData etc.)
-      // Accept either new game_id key or legacy gameCode key (migrate if needed)
+      // Accept either new game_id key or legacy game_code key (migrate if needed)
       let existingRoom = globalState.games[gameId];
-      if (!existingRoom && globalState.games[gameCode]) {
-        existingRoom = globalState.games[gameCode];
+      if (!existingRoom && globalState.games[game_code]) {
+        existingRoom = globalState.games[game_code];
         globalState.games[gameId] = existingRoom;
-        delete globalState.games[gameCode];
-        existingRoom.roomId = gameId;
-        existingRoom.gameCode = gameCode;
-        console.log(`   📦 Migrated room key '${gameCode}' → '${gameId}'`);
+        delete globalState.games[game_code];
+        existingRoom.game_id = gameId;
+        existingRoom.game_code = game_code;
+        console.log(`   📦 Migrated room key '${game_code}' → '${gameId}'`);
       }
       if (existingRoom && existingRoom.phase2?.yearlyData && Object.keys(existingRoom.phase2.yearlyData).length > 0) {
         console.log(`   📂 Found existing state from file (yearlyData years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')}, currentYear: ${existingRoom.phase2.currentYear})`);
@@ -5781,7 +5775,7 @@ async function initializeFromDatabase() {
             }
           }
         } catch (err) {
-          console.log(`   ⚠️ Could not check snapshot for ${gameCode}: ${err.message}`);
+          console.log(`   ⚠️ Could not check snapshot for ${game_code}: ${err.message}`);
         }
 
         // Update players from database in case they changed
@@ -5808,9 +5802,9 @@ async function initializeFromDatabase() {
       }
 
       // Create room state from database game (no existing state found)
-      const roomState = createGameState(gameId, `Game ${gameCode}`, game.host_user_id);
-      roomState.roomId = gameId;
-      roomState.gameCode = gameCode;
+      const roomState = createGameState(gameId, `Game ${game_code}`, game.host_user_id);
+      roomState.game_id = gameId;
+      roomState.game_code = game_code;
       roomState.gameId = game.game_id;
       roomState.hostUserId = game.host_user_id;
       roomState.status = game.status;
@@ -5865,7 +5859,7 @@ async function initializeFromDatabase() {
           console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}, ready=${isReady}`);
         }
       } else {
-        console.log(`   No players found for game ${gameCode}`);
+        console.log(`   No players found for game ${game_code}`);
       }
 
       // Rebuild room.scores from player data (fallback - always available)
@@ -6076,10 +6070,10 @@ async function initializeFromDatabase() {
             }
           }
         } else {
-          console.log(`   ⚠️ No game state snapshots found for ${gameCode}`);
+          console.log(`   ⚠️ No game state snapshots found for ${game_code}`);
         }
       } catch (snapshotErr) {
-        console.error(`   ⚠️ Failed to load snapshots for ${gameCode}:`, snapshotErr);
+        console.error(`   ⚠️ Failed to load snapshots for ${game_code}:`, snapshotErr);
       }
 
       globalState.games[gameId] = roomState;
@@ -6090,7 +6084,7 @@ async function initializeFromDatabase() {
       const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
 
       if (wasInPhase2) {
-        const savedPhase2State = loadGamePhase2State(gameCode);
+        const savedPhase2State = loadGamePhase2State(gameId);
         if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
           // Per-game file exists (local dev or non-ephemeral FS) — use it if it has more data than snapshot
           const fileYears = Object.keys(savedPhase2State.yearlyData).length;
@@ -6129,7 +6123,7 @@ async function initializeFromDatabase() {
         }
       }
 
-      console.log(`  ✅ Loaded game: ${gameCode} (gameId=${gameId}) with ${Object.keys(roomState.players).length} player(s)`);
+      console.log(`  ✅ Loaded game: ${game_code} (gameId=${gameId}) with ${Object.keys(roomState.players).length} player(s)`);
     }
   } else {
     console.log('ℹ️  No active games found in database');
