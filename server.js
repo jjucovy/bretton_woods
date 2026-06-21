@@ -3399,12 +3399,16 @@ io.on('connection', (socket) => {
     const room = globalState.games[gameId];
     if (!room) return;
 
-    // Ensure socket is in the room for future push broadcasts
+    // Tag socket so fetchSockets() can find admin by userId
+    if (userId) socket.userId = userId;
+
+    // Ensure socket is in the game room for future push broadcasts
     socket.join(gameId);
 
-    // Update observer registry so next broadcast reaches this socket
+    // Re-join observer room and update registry
     if (userId && observerRegistry[gameId] && userId in observerRegistry[gameId]) {
       observerRegistry[gameId][userId] = socket.id;
+      socket.join(`observers:${gameId}`);
     }
 
     socket.emit('stateUpdate', room);
