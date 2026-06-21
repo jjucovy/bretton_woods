@@ -3405,10 +3405,18 @@ io.on('connection', (socket) => {
     // Ensure socket is in the game room for future push broadcasts
     socket.join(gameId);
 
-    // Re-join observer room and update registry
-    if (userId && observerRegistry[gameId] && userId in observerRegistry[gameId]) {
+    // Register as observer if: already in registry OR is the room host.
+    // The registry is empty after a server restart, so hosts must be re-registered
+    // here without requiring them to re-call joinRoom.
+    const isHost = userId && (
+      String(room.hostUserId) === String(userId) ||
+      String(room.hostId) === String(userId)
+    );
+    if (isHost || (userId && observerRegistry[gameId] && userId in observerRegistry[gameId])) {
+      if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
       observerRegistry[gameId][userId] = socket.id;
       socket.join(`observers:${gameId}`);
+      if (isHost) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${gameId}`);
     }
 
     socket.emit('stateUpdate', room);
