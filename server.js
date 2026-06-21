@@ -822,9 +822,13 @@ function broadcastToRoom(gameId) {
     const adminSock = io.sockets.sockets.get(adminSockId);
     if (adminSock) {
       adminSock.emit('stateUpdate', room);
+      console.log(`📡 userSocketMap: delivered to user_id=1 socket=${adminSockId}`);
     } else {
+      console.log(`📡 userSocketMap: user_id=1 socket=${adminSockId} is dead, clearing`);
       delete userSocketMap['1'];
     }
+  } else {
+    console.log(`📡 userSocketMap: no socket for user_id=1 (not yet logged in?)`);
   }
 }
 
@@ -3462,13 +3466,14 @@ io.on('connection', (socket) => {
       String(room.hostId) === String(userId)
     );
     const wasAlreadyRegistered = userId && observerRegistry[resolvedGameId] && userId in observerRegistry[resolvedGameId];
+    console.log(`🔭 requestState: userId=${userId}, resolvedGameId=${resolvedGameId}, room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, isHost=${isHost}, wasRegistered=${wasAlreadyRegistered}`);
     if (isHost || wasAlreadyRegistered) {
       if (!observerRegistry[resolvedGameId]) observerRegistry[resolvedGameId] = {};
       const changed = observerRegistry[resolvedGameId][userId] !== socket.id;
       observerRegistry[resolvedGameId][userId] = socket.id;
       socket.join(`observers:${resolvedGameId}`);
       if (isHost) room.hostSocketId = socket.id;
-      if (isHost && changed) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${resolvedGameId}`);
+      if (changed) console.log(`🔭 requestState: registered socket ${socket.id} for userId=${userId} in game ${resolvedGameId} (host=${isHost})`);
     }
 
     socket.emit('stateUpdate', room);
