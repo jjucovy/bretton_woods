@@ -2801,11 +2801,11 @@ io.on('connection', (socket) => {
     const roomId = gameId ? String(gameId) : gameCode;
 
     // Join the socket.io room using the new roomId
-    socket.join(roomId);
-    console.log(`🔌 socket.join: socket ${socket.id} → room ${roomId} (createRoom)`);
+    socket.join(gameId);
+    console.log(`🔌 socket.join: socket ${socket.id} → room ${gameId} (createRoom)`);
 
     // Create room state keyed by game_id
-    const room = createGameState(roomId, roomName || gameCode, creatorId);
+    const room = createGameState(gameId, roomName || gameCode, creatorId);
     room.hostUserId = creatorId;
     room.hostIsSuperAdmin = isSuperAdmin;
     room.gameCode = gameCode;
@@ -2826,7 +2826,7 @@ io.on('connection', (socket) => {
 
     socket.emit('roomCreated', {
       success: true,
-      gameId: roomId,
+      gameId: gameId,
       roomId: roomId,
       roomName: roomName || gameCode,
       hostId: creatorId
