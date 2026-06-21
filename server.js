@@ -3514,12 +3514,36 @@ io.on('connection', (socket) => {
     console.log(`📡 Broadcasting to ${socketsInRoom.size} socket(s) in room ${gameId}:`, [...socketsInRoom]);
 
     // Persist ready status to DB
-    if (player?.id) {
-      queryDatabase('updatePlayerReady', {
-        player_id: player.id,
-        is_ready: ready ? 1 : 0
-      }).catch(err => console.error('Failed to persist ready status:', err.message));
-    }
+    // player.id may be a temp string (player_<timestamp>_<rand>) if addPlayer previously failed.
+    // Resolve to a real numeric player_id before calling updatePlayerReady.
+    (async () => {
+      let dbPlayerId = player?.id;
+      if (dbPlayerId && !/^\d+$/.test(String(dbPlayerId))) {
+        // Not numeric — look up real player_id from DB by user_id
+        try {
+          const allPlayers = await queryDatabase('getPlayers', { game_id: String(gameId) });
+          const dbRow = Array.isArray(allPlayers) && allPlayers.find(p => String(p.user_id) === String(socketUserId));
+          if (dbRow?.player_id) {
+            dbPlayerId = dbRow.player_id;
+            // Fix it in memory so future setReady calls don't re-fetch
+            if (player) { player.id = dbPlayerId; player.playerId = dbPlayerId; }
+            console.log(`🔧 setReady: resolved temp id → real player_id=${dbPlayerId}`);
+          } else {
+            console.log(`⚠️ setReady: could not resolve real player_id for userId=${socketUserId}`);
+            return;
+          }
+        } catch (err) {
+          console.error('setReady: DB lookup for player_id failed:', err.message);
+          return;
+        }
+      }
+      if (dbPlayerId) {
+        queryDatabase('updatePlayerReady', {
+          player_id: dbPlayerId,
+          is_ready: ready ? 1 : 0
+        }).catch(err => console.error('Failed to persist ready status:', err.message));
+      }
+    })();
 
     broadcastToRoom(gameId);
     saveState();
