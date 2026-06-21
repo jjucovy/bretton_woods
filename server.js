@@ -798,7 +798,7 @@ function broadcastToRoom(gameId) {
   // Direct emit to host socket stored on room — survives registry/room-membership loss after restarts
   const adminUserId = String(room.hostUserId || room.hostId || '');
   if (adminUserId) {
-    const hostSocketId = room.hostSocketId;
+    const hostSocketId = room.socketId;
     const hostSock = hostSocketId ? io.sockets.sockets.get(hostSocketId) : null;
     if (hostSock) {
       hostSock.emit('stateUpdate', room);
