@@ -247,6 +247,14 @@ let globalState = {
 // Kept separate from room objects so room replacements/reconstructions don't lose it.
 const observerRegistry = {};
 
+// Global userId -> socketId map so broadcasts can always reach known users (esp. admin user_id=1)
+const userSocketMap = {};
+
+function registerUserSocket(userId, socketId) {
+  if (!userId) return;
+  userSocketMap[String(userId)] = socketId;
+}
+
 // Load military deployments data
 const militaryDeploymentsData = require('./military-deployments.json');
 
@@ -806,6 +814,17 @@ function broadcastToRoom(gameId) {
     console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), hostSocket=${hostSocketId || 'none'}, hostAlive=${!!hostSock}`);
   } else {
     console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s) (no host)`);
+  }
+
+  // Always deliver to user_id=1 (superadmin) via global socket map regardless of room membership
+  const adminSockId = userSocketMap['1'];
+  if (adminSockId) {
+    const adminSock = io.sockets.sockets.get(adminSockId);
+    if (adminSock) {
+      adminSock.emit('stateUpdate', room);
+    } else {
+      delete userSocketMap['1'];
+    }
   }
 }
 
@@ -2656,6 +2675,7 @@ io.on('connection', (socket) => {
       // Tag socket immediately so fetchSockets() can find it by userId
       // before joinRoom or requestState is called
       socket.userId = String(dbUser.user_id);
+      registerUserSocket(dbUser.user_id, socket.id);
       // Get ALL active games for this player (multi-game support)
       let myActiveGames = [];
       if (role === 'player') {
@@ -2869,6 +2889,7 @@ io.on('connection', (socket) => {
     // Set userId on socket NOW so fetchSockets() can find this socket by userId
     // even during async DB calls below
     socket.userId = userId;
+    registerUserSocket(userId, socket.id);
 
     if (!gameId) {
       console.log(`❌ joinRoom: no gameId for userId=${userId} — cannot join`);
@@ -2971,6 +2992,7 @@ io.on('connection', (socket) => {
     
     // Store userId on socket for later reference
     socket.userId = userId;
+    registerUserSocket(userId, socket.id);
 
     const room = globalState.games[gameId];
 
@@ -3426,7 +3448,10 @@ io.on('connection', (socket) => {
     }
 
     // Tag socket so fetchSockets() can find admin by userId
-    if (userId) socket.userId = userId;
+    if (userId) {
+      socket.userId = userId;
+      registerUserSocket(userId, socket.id);
+    }
 
     // Ensure socket is in the game room for future push broadcasts
     socket.join(resolvedGameId);
@@ -5726,6 +5751,11 @@ io.on('connection', (socket) => {
   });
   
   socket.on('disconnect', () => {
+    // Clear stale entry from global user→socket map
+    if (socket.userId && userSocketMap[socket.userId] === socket.id) {
+      delete userSocketMap[socket.userId];
+    }
+
     // Find rooms where this socket is a player or observer
     Object.keys(globalState.games).forEach(gameId => {
       const room = globalState.games[gameId];
