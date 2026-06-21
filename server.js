@@ -3061,8 +3061,8 @@ io.on('connection', (socket) => {
       console.log(`   Room has ${Object.keys(room.players).length} players`);
       console.log(`   Player keys:`, Object.keys(room.players));
       
-      // SUPERADMIN: Join as host/observer, NOT as player
-      if (isSuperAdmin) {
+      // SUPERADMIN: Join as host/observer, UNLESS they also have a player record in this game.
+      if (isSuperAdmin && !room.players[userId]) {
         // Check if this superadmin is the host
         // First check memory, then check database
         let isHost = room.hostUserId === userId || room.hostId === userId;
@@ -3270,12 +3270,14 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check if user is superadmin - they should NEVER join as a player
+    // Check if user is superadmin with NO existing player record in this game.
+    // A superadmin who already has a player_id in this game (e.g. is also playing)
+    // must be allowed through — block only pure observers with no player record.
     let isSuperAdmin = false;
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === id);
+        const dbUser = dbUsers.find(u => String(u.user_id) === String(id));
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3283,14 +3285,25 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
+
     if (isSuperAdmin) {
-      console.log(`❌ Superadmin ${id} attempted to join as player - blocked`);
-      socket.emit('joinResult', { 
-        success: false, 
-        message: 'Administrators cannot join as players. You are an observer only.' 
-      });
-      return;
+      // Allow if they already have a player record in this game
+      let hasPlayerRecord = !!(room.players[id]?.id && /^\d+$/.test(String(room.players[id].id)));
+      if (!hasPlayerRecord) {
+        try {
+          const allPlayers = await queryDatabase('getPlayers', { game_id: String(gameId) });
+          hasPlayerRecord = Array.isArray(allPlayers) && allPlayers.some(p => String(p.user_id) === String(id));
+        } catch (e) { /* ignore */ }
+      }
+      if (!hasPlayerRecord) {
+        console.log(`❌ Superadmin ${id} attempted to join as player with no player record - blocked`);
+        socket.emit('joinResult', {
+          success: false,
+          message: 'Administrators cannot join as players. You are an observer only.'
+        });
+        return;
+      }
+      console.log(`✅ Superadmin ${id} has player record in game ${gameId} - allowing join as player`);
     }
     
     // Check if country is already taken
