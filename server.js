@@ -2839,13 +2839,33 @@ io.on('connection', (socket) => {
   });
   
   // Join existing room
-  socket.on('joinRoom', async ({ gameId: _gameId, gameId: _roomId, userId }) => {
-    const gameId = _gameId || _roomId; // accept both new gameId and legacy gameId
+  socket.on('joinRoom', async ({ gameId: _gameId, roomId: _roomId, userId }) => {
+    let gameId = _gameId || _roomId;
+
+    // If gameId is absent/undefined, look up the player's active game by userId
+    if (!gameId && userId) {
+      const activeResult = await queryDatabase('getPlayerActiveGame', { userId });
+      const activeGames = Array.isArray(activeResult) ? activeResult : (activeResult ? [activeResult] : []);
+      if (activeGames.length > 0 && activeGames[0].game_code) {
+        const ag = activeGames[0];
+        gameId = ag.game_id
+          ? String(ag.game_id)
+          : Object.keys(globalState.games).find(k => globalState.games[k].game_code === ag.game_code);
+        console.log(`🔍 joinRoom: resolved gameId=${gameId} for userId=${userId} via active game lookup`);
+      }
+    }
+
     console.log(`📥 joinRoom request: gameId=${gameId}, userId=${userId}`);
 
     // Set userId on socket NOW so fetchSockets() can find this socket by userId
     // even during async DB calls below
     socket.userId = userId;
+
+    if (!gameId) {
+      console.log(`❌ joinRoom: no gameId for userId=${userId} — cannot join`);
+      socket.emit('joinError', { message: 'No active game found' });
+      return;
+    }
 
     // Join the socket.io room immediately before any async operations
     // so the socket is in the room even if async DB calls take time
@@ -3118,7 +3138,7 @@ io.on('connection', (socket) => {
   });
   
   // Leave room
-  socket.on('leaveRoom', ({ gameId: _gId, gameId: _rId }) => {
+  socket.on('leaveRoom', ({ gameId: _gId, roomId: _rId }) => {
     const gameId = _gId || _rId;
     socket.leave(gameId);
     socket.emit('leftRoom', { gameId });
@@ -3126,7 +3146,7 @@ io.on('connection', (socket) => {
   });
   
   // Delete room (host only)
-  socket.on('deleteRoom', ({ gameId: _gId, gameId: _rId, playerId, playerid, userId }) => {
+  socket.on('deleteRoom', ({ gameId: _gId, roomId: _rId, playerId, playerid, userId }) => {
     const gameId = _gId || _rId;
     // Support multiple parameter names
     const id = userId || playerId || playerid;
@@ -3158,7 +3178,7 @@ io.on('connection', (socket) => {
   });
   
   // Join game in room
-  socket.on('joinGame', async ({ gameId: _gId, gameId: _rId, userId, playerid, country }) => {
+  socket.on('joinGame', async ({ gameId: _gId, roomId: _rId, userId, playerid, country }) => {
     const gameId = _gId || _rId;
     // Support both userId (new) and playerid (legacy), fall back to socket.userId from joinRoom
     const id = userId || playerid || socket.userId;
@@ -3437,7 +3457,7 @@ io.on('connection', (socket) => {
   });
   
   // SUPERADMIN ONLY: Start game in room
-  socket.on('startGame', async ({ gameId: _gId, gameId: _rId, playerId, playerid, userId, skipPhase1 }) => {
+  socket.on('startGame', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId, skipPhase1 }) => {
     const gameId = _gId || _rId;
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
@@ -3530,7 +3550,7 @@ io.on('connection', (socket) => {
   });
   
   // Vote on current issue
-  socket.on('vote', async ({ gameId: _gId, gameId: _rId, playerId, playerid, userId, choice }) => {
+  socket.on('vote', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId, choice }) => {
     const gameId = _gId || _rId;
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
@@ -5207,7 +5227,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('advanceYear', async ({ gameId: _gId, gameId: _rId, playerId, playerid, userId }) => {
+  socket.on('advanceYear', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId }) => {
     const gameId = _gId || _rId;
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const checkId = userId || playerId || playerid;
@@ -5365,7 +5385,7 @@ io.on('connection', (socket) => {
   });
 
   // ADMIN: Reset room (room host or superadmin)
-  socket.on('resetRoom', async ({ gameId: _gId, gameId: _rId, playerId, playerid, userId }) => {
+  socket.on('resetRoom', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId }) => {
     const gameId = _gId || _rId;
     // Support multiple parameter names
     const id = userId || playerId || playerid;
@@ -5483,7 +5503,7 @@ io.on('connection', (socket) => {
   });
 
   // SUPERADMIN ONLY: Delete any room
-  socket.on('adminDeleteRoom', async ({ gameId: _gId, gameId: _rId, playerId, playerid, userId }) => {
+  socket.on('adminDeleteRoom', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId }) => {
     const gameId = _gId || _rId;
     // Support multiple parameter names
     const id = userId || playerId || playerid;
