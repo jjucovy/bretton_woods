@@ -2661,7 +2661,10 @@ io.on('connection', (socket) => {
 
       const role = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1) ? 'superadmin' : 'player';
       console.log('Login successful, role:', role);
-      
+
+      // Tag socket immediately so fetchSockets() can find it by userId
+      // before joinRoom or requestState is called
+      socket.userId = String(dbUser.user_id);
       // Get ALL active games for this player (multi-game support)
       let myActiveGames = [];
       if (role === 'player') {
