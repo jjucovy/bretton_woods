@@ -2702,6 +2702,21 @@ io.on('connection', (socket) => {
         }
       }
 
+      // If superadmin, set hostSocketId on their room immediately so broadcasts reach them
+      if (role === 'superadmin') {
+        const userId = String(dbUser.user_id);
+        for (const [gid, room] of Object.entries(globalState.games)) {
+          if (String(room.hostUserId) === userId || String(room.hostId) === userId) {
+            room.hostSocketId = socket.id;
+            socket.join(gid);
+            if (!observerRegistry[gid]) observerRegistry[gid] = {};
+            observerRegistry[gid][userId] = socket.id;
+            socket.join(`observers:${gid}`);
+            console.log(`🔑 Login: registered host ${userId} socket for game ${gid}`);
+          }
+        }
+      }
+
       // Always get available lobby games for players (regardless of active games)
       let availableGames = [];
       if (role === 'player') {
@@ -3391,30 +3406,34 @@ io.on('connection', (socket) => {
   // Lightweight state request — superadmin polls every few seconds to stay in sync
   // without the full joinRoom async flow. Also refreshes room membership + registry.
   socket.on('requestState', ({ gameId, userId }) => {
-    const room = globalState.games[gameId];
-    if (!room) return;
+    // Look up room by game_id first; fall back to game_code in case client has old value
+    let room = globalState.games[gameId];
+    let resolvedGameId = gameId;
+    if (!room) {
+      const entry = Object.entries(globalState.games).find(([, r]) => r.game_code === gameId);
+      if (!entry) return;
+      [resolvedGameId, room] = entry;
+    }
 
     // Tag socket so fetchSockets() can find admin by userId
     if (userId) socket.userId = userId;
 
     // Ensure socket is in the game room for future push broadcasts
-    socket.join(gameId);
+    socket.join(resolvedGameId);
 
     // Register as observer if: already in registry OR is the room host.
-    // The registry is empty after a server restart, so hosts must be re-registered
-    // here without requiring them to re-call joinRoom.
     const isHost = userId && (
       String(room.hostUserId) === String(userId) ||
       String(room.hostId) === String(userId)
     );
-    const wasAlreadyRegistered = userId && observerRegistry[gameId] && userId in observerRegistry[gameId];
+    const wasAlreadyRegistered = userId && observerRegistry[resolvedGameId] && userId in observerRegistry[resolvedGameId];
     if (isHost || wasAlreadyRegistered) {
-      if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
-      const changed = observerRegistry[gameId][userId] !== socket.id;
-      observerRegistry[gameId][userId] = socket.id;
-      socket.join(`observers:${gameId}`);
+      if (!observerRegistry[resolvedGameId]) observerRegistry[resolvedGameId] = {};
+      const changed = observerRegistry[resolvedGameId][userId] !== socket.id;
+      observerRegistry[resolvedGameId][userId] = socket.id;
+      socket.join(`observers:${resolvedGameId}`);
       if (isHost) room.hostSocketId = socket.id;
-      if (isHost && changed) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${gameId}`);
+      if (isHost && changed) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${resolvedGameId}`);
     }
 
     socket.emit('stateUpdate', room);
