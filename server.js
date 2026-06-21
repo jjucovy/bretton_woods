@@ -2661,7 +2661,10 @@ io.on('connection', (socket) => {
 
       const role = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1) ? 'superadmin' : 'player';
       console.log('Login successful, role:', role);
-      
+
+      // Tag socket immediately so fetchSockets() can find it by userId
+      // before joinRoom or requestState is called
+      socket.userId = String(dbUser.user_id);
       // Get ALL active games for this player (multi-game support)
       let myActiveGames = [];
       if (role === 'player') {
@@ -3412,11 +3415,13 @@ io.on('connection', (socket) => {
       String(room.hostUserId) === String(userId) ||
       String(room.hostId) === String(userId)
     );
-    if (isHost || (userId && observerRegistry[gameId] && userId in observerRegistry[gameId])) {
+    const wasAlreadyRegistered = userId && observerRegistry[gameId] && userId in observerRegistry[gameId];
+    if (isHost || wasAlreadyRegistered) {
       if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+      const changed = observerRegistry[gameId][userId] !== socket.id;
       observerRegistry[gameId][userId] = socket.id;
       socket.join(`observers:${gameId}`);
-      if (isHost) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${gameId}`);
+      if (isHost && changed) console.log(`🔭 requestState: re-registered host ${userId} as observer for game ${gameId}`);
     }
 
     socket.emit('stateUpdate', room);
