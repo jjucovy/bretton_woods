@@ -2578,7 +2578,16 @@ function resolveCrisisEffects(gameId, crisisId = null) {
 // Socket connection
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
-  
+
+  // If client sent userId in auth (on reconnect), tag socket immediately
+  // so broadcastToRoom can find the admin before any requestState fires.
+  const authUserId = socket.handshake.auth?.userId;
+  if (authUserId) {
+    socket.userId = String(authUserId);
+    registerUserSocket(socket.userId, socket.id);
+    console.log(`🔑 Auth userId=${socket.userId} pre-registered on connect (socket ${socket.id})`);
+  }
+
   // Register new user
   socket.on('register', async ({ username, password, email }) => {
     if (!username || !password || !email) {
