@@ -318,7 +318,7 @@ function loadState() {
 function saveState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      const getGameStateSnapshotsbackupFile = STATE_FILE.replace('.json', '-backup.json');
+      const backupFile = STATE_FILE.replace('.json', '-backup.json');
       fs.copyFileSync(STATE_FILE, backupFile);
     }
 
