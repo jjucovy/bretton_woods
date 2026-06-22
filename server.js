@@ -807,7 +807,6 @@ function broadcastToRoom(gameId) {
     let sock = cachedId ? io.sockets.sockets.get(cachedId) : null;
     if (!sock) {
       // userSocketMap miss or stale — scan all live sockets for this userId.
-      // socket.userId is always stored as String (set in auth handler and requestState).
       for (const [, s] of io.sockets.sockets) {
         if (String(s.userId) === String(memberId)) { sock = s; break; }
       }
@@ -2590,9 +2589,7 @@ io.on('connection', (socket) => {
     registerUserSocket(socket.userId, socket.id);
     console.log(`🔑 Auth userId=${socket.userId} pre-registered on connect (socket ${socket.id})`);
 
-    // Pre-join admin to all their game rooms so io.to(gameId) reaches them immediately,
-    // without waiting for the first requestState poll (up to 3s later).
-    // Pre-join host to their game rooms so they receive push broadcasts immediately
+    // Pre-join to all hosted rooms so io.to(gameId) reaches them immediately
     for (const [gameId, room] of Object.entries(globalState.games)) {
       const isRoomHost = String(room.hostUserId) === socket.userId || String(room.hostId) === socket.userId;
       if (isRoomHost) {
@@ -2698,7 +2695,6 @@ io.on('connection', (socket) => {
       console.log('Login successful, role:', role);
 
       // Tag socket immediately so fetchSockets() can find it by userId
-      // before joinRoom or requestState is called
       socket.userId = String(dbUser.user_id);
       registerUserSocket(dbUser.user_id, socket.id);
       // Get ALL active games for this player (multi-game support)
@@ -3429,31 +3425,6 @@ io.on('connection', (socket) => {
     console.log(`Player ${id} left game in room ${gameId}`);
   });
   
-  // Lightweight state request — superadmin polls every few seconds to stay in sync
-  // without the full joinRoom async flow. Also refreshes room membership + registry.
-  socket.on('requestState', ({ gameId, userId }) => {
-    // Look up room by game_id first; fall back to game_code in case client has old value
-    let room = globalState.games[gameId];
-    let resolvedGameId = gameId;
-    if (!room) {
-      const entry = Object.entries(globalState.games).find(([, r]) => r.game_code === gameId);
-      if (!entry) return;
-      [resolvedGameId, room] = entry;
-    }
-
-    // Tag socket so scan in broadcastToRoom can find it by userId
-    if (userId) {
-      socket.userId = String(userId); // always string so String(s.userId) === String(memberId) matches
-      registerUserSocket(userId, socket.id);
-    }
-
-    // Ensure socket is in the game room for future push broadcasts
-    socket.join(resolvedGameId);
-
-    console.log(`🔭 requestState: userId=${userId}, resolvedGameId=${resolvedGameId}`);
-    socket.emit('stateUpdate', room);
-  });
-
   // Set ready status
   socket.on('setReady', async ({ gameId: rawGameId, userId, playerid, ready }) => {
     let gameId = rawGameId;
