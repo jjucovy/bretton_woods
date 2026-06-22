@@ -2747,18 +2747,6 @@ io.on('connection', (socket) => {
         }
       }
 
-      // If superadmin, set hostSocketId on their room immediately so broadcasts reach them
-      if (role === 'superadmin') {
-        const userId = String(dbUser.user_id);
-        for (const [gid, room] of Object.entries(globalState.games)) {
-          if (String(room.hostUserId) === userId || String(room.hostId) === userId) {
-            room.hostSocketId = socket.id;
-            socket.join(gid);
-            console.log(`🔑 Login: registered host ${userId} socket for game ${gid}`);
-          }
-        }
-      }
-
       // Always get available lobby games for players (regardless of active games)
       let availableGames = [];
       if (role === 'player') {
