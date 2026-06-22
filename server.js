@@ -803,7 +803,9 @@ function broadcastToRoom(gameId) {
 
   // Also recover any connected member sockets that aren't yet in the io room
   // (e.g. if they connected and registered via auth but haven't sent joinRoom yet)
-  for (const memberId of Object.keys(room.members || {})) {
+  const memberKeys = Object.keys(room.members || {});
+  console.log(`🔍 broadcastToRoom(${gameId}): members=${JSON.stringify(memberKeys)}, userSocketMap keys=${JSON.stringify(Object.keys(userSocketMap))}, total sockets=${io.sockets.sockets.size}`);
+  for (const memberId of memberKeys) {
     const cachedId = userSocketMap[memberId];
     let sock = cachedId ? io.sockets.sockets.get(cachedId) : null;
     if (!sock) {
@@ -811,6 +813,7 @@ function broadcastToRoom(gameId) {
         if (String(s.userId) === String(memberId)) { sock = s; break; }
       }
     }
+    console.log(`   member ${memberId}: cachedSocketId=${cachedId}, sockFound=${!!sock}`);
     if (sock) {
       registerUserSocket(memberId, sock.id);
       sock.join(gameId);
@@ -819,8 +822,8 @@ function broadcastToRoom(gameId) {
 
   // Emit to everyone in the game's io room
   const roomSockets = io.sockets.adapter.rooms.get(gameId);
-  const socketCount = roomSockets ? roomSockets.size : 0;
-  console.log(`📡 Broadcast to room ${gameId}: ${socketCount} socket(s)`);
+  const socketIds = roomSockets ? [...roomSockets] : [];
+  console.log(`📡 Broadcast to room ${gameId}: ${socketIds.length} socket(s) [${socketIds.join(', ')}]`);
   io.to(gameId).emit('stateUpdate', room);
 }
 
