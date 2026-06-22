@@ -804,10 +804,28 @@ function broadcastToRoom(gameId) {
   const memberLog = [];
   for (const memberId of Object.keys(room.members || {})) {
     const cachedId = userSocketMap[memberId];
-    if (!cachedId) { memberLog.push(`${memberId}:no-socket`); console.log(`   ⚠️ broadcastToRoom: userSocketMap["${memberId}"] is empty (keys: ${Object.keys(userSocketMap).join(',')})`); continue; }
-    const sock = io.sockets.sockets.get(cachedId);
-    if (sock) { sock.emit('stateUpdate', room); memberDelivered++; memberLog.push(`${memberId}:ok`); }
-    else { memberLog.push(`${memberId}:stale(${cachedId})`); }
+    let sock = cachedId ? io.sockets.sockets.get(cachedId) : null;
+    if (!sock) {
+      // userSocketMap miss or stale — scan all live sockets for this userId.
+      // This recovers admin after a server restart: their client reconnects and
+      // their socket has socket.userId set (via auth handshake) before requestState fires.
+      for (const [, s] of io.sockets.sockets) {
+        if (s.userId === String(memberId)) { sock = s; break; }
+      }
+      if (sock) {
+        registerUserSocket(memberId, sock.id);
+        sock.join(gameId); // ensure future io.to(gameId) pushes reach them
+        memberLog.push(`${memberId}:recovered`);
+        console.log(`   🔄 broadcastToRoom: recovered socket for userId=${memberId} via scan (was: ${cachedId || 'empty'})`);
+      } else {
+        memberLog.push(cachedId ? `${memberId}:stale(${cachedId})` : `${memberId}:no-socket`);
+        if (!cachedId) console.log(`   ⚠️ broadcastToRoom: userSocketMap["${memberId}"] is empty and no live socket found (keys: ${Object.keys(userSocketMap).join(',')})`);
+        continue;
+      }
+    }
+    sock.emit('stateUpdate', room);
+    memberDelivered++;
+    if (!memberLog.find(e => e.startsWith(`${memberId}:`))) memberLog.push(`${memberId}:ok`);
   }
 
   const playerCount = Object.keys(room.players).length;
