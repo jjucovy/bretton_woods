@@ -5964,7 +5964,9 @@ async function initializeFromDatabase() {
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
             const isReady = player.is_ready === 1 || player.is_ready === '1';
-            const role = parseInt(player.role ?? 1);
+            const rawRole = parseInt(player.role ?? 1);
+            // role=0 means admin only if this user is the game host; old records may have role=0 for regular players
+            const role = (rawRole === 0 && String(player.user_id) === String(game.host_user_id)) ? 0 : (rawRole === 0 ? 1 : rawRole);
             // Add to members map regardless of role
             existingRoom.members[player.user_id] = {
               role,
@@ -6038,7 +6040,9 @@ async function initializeFromDatabase() {
           const isReadyFromDB = player.is_ready === 1 || player.is_ready === '1';
           const savedReady = !!(savedRoom?.players?.[player.user_id]?.ready || savedRoom?.members?.[player.user_id]?.ready);
           const isReady = isReadyFromDB || savedReady;
-          const role = parseInt(player.role ?? 1);
+          const rawRole = parseInt(player.role ?? 1);
+          // role=0 means admin only if this user is the game host; old records may have role=0 for regular players
+          const role = (rawRole === 0 && String(player.user_id) === String(game.host_user_id)) ? 0 : (rawRole === 0 ? 1 : rawRole);
           // All members go into room.members
           roomState.members[player.user_id] = {
             role,
