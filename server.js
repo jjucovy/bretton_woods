@@ -60,7 +60,11 @@ function verifyPassword(password, stored) {
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+  pingInterval: 10000,
+  pingTimeout: 5000,
+  upgradeTimeout: 10000,
+});
 
 const PORT = process.env.PORT || 65002;
 // Write state files to /tmp so pm2-watch doesn't detect changes and restart the server.
@@ -809,11 +813,10 @@ function broadcastToRoom(gameId) {
   }
 
   // Emit to everyone in the game's io room
+  const roomSockets = io.sockets.adapter.rooms.get(gameId);
+  const socketCount = roomSockets ? roomSockets.size : 0;
+  console.log(`📡 Broadcast to room ${gameId}: ${socketCount} socket(s)`);
   io.to(gameId).emit('stateUpdate', room);
-
-  io.in(gameId).allSockets().then(sids => {
-    console.log(`📡 Broadcast to room ${gameId}: ${[...sids].length} socket(s) [${[...sids].join(',')}]`);
-  });
 }
 
 // Broadcast room list to lobby
