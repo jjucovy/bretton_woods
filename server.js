@@ -64,6 +64,11 @@ const io = socketIo(server, {
   pingInterval: 10000,
   pingTimeout: 5000,
   upgradeTimeout: 10000,
+  connectionStateRecovery: {
+    // Buffer missed events for up to 2 minutes after disconnect
+    maxDisconnectionDuration: 2 * 60 * 1000,
+    skipMiddlewares: true,
+  },
 });
 
 const PORT = process.env.PORT || 65002;
@@ -2863,6 +2868,13 @@ io.on('connection', (socket) => {
   
   // Join existing room
   socket.on('joinRoom', async ({ gameId: _gameId, roomId: _roomId, userId }) => {
+    // If connection state was recovered, the socket is already in its rooms
+    // and missed stateUpdate events were replayed — skip the full rejoin flow.
+    if (socket.recovered) {
+      console.log(`♻️ joinRoom: socket ${socket.id} recovered state, skipping rejoin`);
+      return;
+    }
+
     let gameId = _gameId || _roomId;
 
     // If gameId is absent/undefined, look up the player's active game by userId
