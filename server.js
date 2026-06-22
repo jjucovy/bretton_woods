@@ -797,6 +797,16 @@ function broadcastToRoom(gameId) {
 
   // Emit to everyone in the game's io room — players and admin all join the same room
   io.to(gameId).emit('stateUpdate', room);
+
+  // Also deliver directly to every room member via userSocketMap as a safety net
+  // (catches any socket that somehow isn't in the io room despite joining)
+  for (const memberId of Object.keys(room.members || {})) {
+    const cachedId = userSocketMap[memberId];
+    if (!cachedId) continue;
+    const sock = io.sockets.sockets.get(cachedId);
+    if (sock) sock.emit('stateUpdate', room);
+  }
+
   const playerCount = Object.keys(room.players).length;
   const memberCount = Object.keys(room.members || {}).length;
   console.log(`📡 Broadcast to ${gameId}: ${playerCount} player(s), ${memberCount} member(s)`);
