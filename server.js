@@ -2584,7 +2584,8 @@ io.on('connection', (socket) => {
       if (isRoomHost || isMember) {
         socket.join(gameId);
         if (isRoomHost) room.hostSocketId = socket.id;
-        console.log(`🔑 Auth: pre-joined userId=${socket.userId} to room ${gameId}`);
+        socket.emit('stateUpdate', room);
+        console.log(`🔑 Auth: pre-joined userId=${socket.userId} to room ${gameId}, sent stateUpdate`);
       }
     }
   }
