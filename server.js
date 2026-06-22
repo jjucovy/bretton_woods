@@ -243,10 +243,6 @@ let globalState = {
   roomList: [] // { id, name, host, playerCount, maxPlayers, status, createdAt }
 };
 
-// Global observer registry: gameId -> { userId -> socketId | null }
-// Kept separate from room objects so room replacements/reconstructions don't lose it.
-const observerRegistry = {};
-
 // Global userId -> socketId map so broadcasts can always reach known users (esp. admin user_id=1)
 const userSocketMap = {};
 
@@ -799,32 +795,11 @@ function broadcastToRoom(gameId) {
     }
   }
 
-  // Emit to all sockets already in the Socket.IO room (players who joined via joinRoom)
+  // Emit to everyone in the game's io room — players and admin all join the same room
   io.to(gameId).emit('stateUpdate', room);
-  io.to(`observers:${gameId}`).emit('stateUpdate', room);
-
-  // Direct delivery to every room member (role=0 admin members may not be in the io room).
-  // room.members is keyed by userId and populated from the players DB table.
-  const memberIds = Object.keys(room.members || {});
-  let delivered = 0;
-  for (const memberId of memberIds) {
-    // Try cached socket first, then scan all connected sockets
-    let sock = null;
-    const cachedId = userSocketMap[memberId];
-    if (cachedId) sock = io.sockets.sockets.get(cachedId) || null;
-    if (!sock) {
-      for (const [, s] of io.sockets.sockets) {
-        if (String(s.userId) === memberId) {
-          sock = s;
-          registerUserSocket(memberId, s.id);
-          break;
-        }
-      }
-    }
-    if (sock) { sock.emit('stateUpdate', room); delivered++; }
-  }
   const playerCount = Object.keys(room.players).length;
-  console.log(`📡 Broadcast to ${gameId}: ${playerCount} player(s), ${memberIds.length} member(s), delivered=${delivered}`);
+  const memberCount = Object.keys(room.members || {}).length;
+  console.log(`📡 Broadcast to ${gameId}: ${playerCount} player(s), ${memberCount} member(s)`);
 }
 
 // Broadcast room list to lobby
@@ -2587,15 +2562,13 @@ io.on('connection', (socket) => {
 
     // Pre-join admin to all their game rooms so io.to(gameId) reaches them immediately,
     // without waiting for the first requestState poll (up to 3s later).
+    // Pre-join host to their game rooms so they receive push broadcasts immediately
     for (const [gameId, room] of Object.entries(globalState.games)) {
       const isRoomHost = String(room.hostUserId) === socket.userId || String(room.hostId) === socket.userId;
       if (isRoomHost) {
         socket.join(gameId);
-        socket.join(`observers:${gameId}`);
         room.hostSocketId = socket.id;
-        if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
-        observerRegistry[gameId][socket.userId] = socket.id;
-        console.log(`🔑 Auth: pre-joined userId=${socket.userId} to rooms ${gameId} + observers:${gameId}`);
+        console.log(`🔑 Auth: pre-joined userId=${socket.userId} to room ${gameId}`);
       }
     }
   }
@@ -2751,9 +2724,6 @@ io.on('connection', (socket) => {
           if (String(room.hostUserId) === userId || String(room.hostId) === userId) {
             room.hostSocketId = socket.id;
             socket.join(gid);
-            if (!observerRegistry[gid]) observerRegistry[gid] = {};
-            observerRegistry[gid][userId] = socket.id;
-            socket.join(`observers:${gid}`);
             console.log(`🔑 Login: registered host ${userId} socket for game ${gid}`);
           }
         }
@@ -2873,14 +2843,6 @@ io.on('connection', (socket) => {
     if (!room.members) room.members = {};
     room.members[creatorId] = { role: isSuperAdmin ? 0 : 1, country: null, playerId: null, ready: false };
 
-    // Register creator as observer in global registry + dedicated Socket.IO room
-    if (isSuperAdmin) {
-      if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
-      observerRegistry[gameId][creatorId] = socket.id;
-      socket.join(`observers:${gameId}`);
-      console.log(`🔭 Registered superadmin ${creatorId} as observer of ${gameId} (socket ${socket.id})`);
-    }
-
     socket.emit('roomCreated', {
       success: true,
       gameId: gameId,
@@ -2930,12 +2892,9 @@ io.on('connection', (socket) => {
     socket.join(gameId);
     console.log(`🔌 socket.join: socket ${socket.id} → room ${gameId}`);
 
-    // If this user was a known observer, re-join the observer room and update
-    // registry BEFORE any async DB calls, so broadcasts during the DB query reach them.
-    if (observerRegistry[gameId] && userId in observerRegistry[gameId]) {
-      observerRegistry[gameId][userId] = socket.id;
-      socket.join(`observers:${gameId}`);
-      console.log(`🔭 Fast-updated observer socket for ${userId}: ${socket.id} (rejoined observers:${gameId})`);
+    // Send current state immediately so reconnecting users don't wait for async DB ops
+    if (globalState.games[gameId]) {
+      socket.emit('stateUpdate', globalState.games[gameId]);
     }
 
     // If room not in memory, try to reconstruct from database + saved state
@@ -3063,38 +3022,11 @@ io.on('connection', (socket) => {
       console.log(`   Room has ${Object.keys(room.players).length} players`);
       console.log(`   Player keys:`, Object.keys(room.players));
       
-      // SUPERADMIN: Join as host/observer, UNLESS they also have a player record in this game.
+      // SUPERADMIN with no player record — join as host/observer
       if (isSuperAdmin && !room.players[userId]) {
-        // Check if this superadmin is the host
-        // First check memory, then check database
-        let isHost = room.hostUserId === userId || room.hostId === userId;
-        
-        // If not found in memory, check database
-        if (!isHost && room.gameId) {
-          try {
-            const gameData = await queryDatabase('getGame', { game_id: room.gameId });
-            if (gameData && gameData.host_user_id) {
-              isHost = gameData.host_user_id === userId;
-              // Update memory with host info
-              room.hostUserId = gameData.host_user_id;
-              console.log(`   Retrieved host_user_id from database: ${gameData.host_user_id}`);
-            }
-          } catch (err) {
-            console.error('Error checking host from database:', err);
-          }
-        }
-        
-        console.log(`✅ Superadmin ${userId} joined room ${gameId} as ${isHost ? 'HOST' : 'OBSERVER'} (socket ${socket.id})`);
-        console.log(`   Host check: room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, userId=${userId}, isHost=${isHost}`);
-
-        // Register observer socket in global registry AND a dedicated Socket.IO
-        // observer room. The Socket.IO room is authoritative for delivery;
-        // the registry is kept only for the log/count.
-        if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
-        observerRegistry[gameId][userId] = socket.id;
-        socket.join(`observers:${gameId}`);
+        const isHost = String(room.hostUserId) === String(userId) || String(room.hostId) === String(userId);
         if (isHost) room.hostSocketId = socket.id;
-        console.log(`🔭 Registered observer ${userId} in global registry + observers:${gameId} room (socket ${socket.id})`);
+        console.log(`✅ Superadmin ${userId} joined room ${gameId} as ${isHost ? 'HOST' : 'OBSERVER'} (socket ${socket.id})`);
 
         socket.emit('joinRoomResult', {
           success: true,
@@ -3105,7 +3037,6 @@ io.on('connection', (socket) => {
         });
 
         broadcastToRoom(gameId);
-        console.log(`✅ Superadmin ${userId} joined room: ${gameId} (will observe only)`);
         return;
       }
       
@@ -3501,22 +3432,7 @@ io.on('connection', (socket) => {
     // Ensure socket is in the game room for future push broadcasts
     socket.join(resolvedGameId);
 
-    // Register as observer if: already in registry OR is the room host.
-    const isHost = userId && (
-      String(room.hostUserId) === String(userId) ||
-      String(room.hostId) === String(userId)
-    );
-    const wasAlreadyRegistered = userId && observerRegistry[resolvedGameId] && userId in observerRegistry[resolvedGameId];
-    console.log(`🔭 requestState: userId=${userId}, resolvedGameId=${resolvedGameId}, room.hostUserId=${room.hostUserId}, room.hostId=${room.hostId}, isHost=${isHost}, wasRegistered=${wasAlreadyRegistered}`);
-    if (isHost || wasAlreadyRegistered) {
-      if (!observerRegistry[resolvedGameId]) observerRegistry[resolvedGameId] = {};
-      const changed = observerRegistry[resolvedGameId][userId] !== socket.id;
-      observerRegistry[resolvedGameId][userId] = socket.id;
-      socket.join(`observers:${resolvedGameId}`);
-      if (isHost) room.hostSocketId = socket.id;
-      if (changed) console.log(`🔭 requestState: registered socket ${socket.id} for userId=${userId} in game ${resolvedGameId} (host=${isHost})`);
-    }
-
+    console.log(`🔭 requestState: userId=${userId}, resolvedGameId=${resolvedGameId}`);
     socket.emit('stateUpdate', room);
   });
 
@@ -5833,18 +5749,6 @@ io.on('connection', (socket) => {
     // Find rooms where this socket is a player or observer
     Object.keys(globalState.games).forEach(gameId => {
       const room = globalState.games[gameId];
-
-      // Mark observer stale (null) in global registry — keeps the key so the
-      // fast-update at the top of joinRoom re-registers the new socket ID on reconnect.
-      const roomObs = observerRegistry[gameId];
-      if (roomObs) {
-        for (const [uid, sid] of Object.entries(roomObs)) {
-          if (sid === socket.id) {
-            roomObs[uid] = null;
-            console.log(`Observer ${uid} disconnected from room ${gameId} (marked stale in registry)`);
-          }
-        }
-      }
 
       const playerid = Object.keys(room.players).find(
         id => room.players[id].socketId === socket.id
