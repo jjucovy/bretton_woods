@@ -5754,10 +5754,9 @@ io.on('connection', (socket) => {
   });
   
   socket.on('disconnect', () => {
-    // Clear stale entry from global user→socket map
-    if (socket.userId && userSocketMap[socket.userId] === socket.id) {
-      delete userSocketMap[socket.userId];
-    }
+    // Do NOT delete from userSocketMap on disconnect — keep the last-known socket ID.
+    // broadcastToRoom handles stale IDs gracefully (socket not found → skip).
+    // The next reconnect's registerUserSocket call updates the map with the fresh ID.
 
     // Find rooms where this socket is a player or observer
     Object.keys(globalState.games).forEach(gameId => {
