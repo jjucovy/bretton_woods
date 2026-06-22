@@ -314,6 +314,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   window.actualRoomId = savedGameRoom;
                   setCurrentRoomId(savedGameRoom);
                   socket.emit('joinRoom', { gameId: savedGameRoom, userId: savedPlayerId });
+                  // Also send requestState immediately so the server tags this socket
+                  // before the next poll interval fires (up to 3s later).
+                  socket.emit('requestState', { gameId: savedGameRoom, userId: savedPlayerId });
                   setShowGameSelection(false);
                 } else {
                   console.log('User reconnected - showing game lobby');
@@ -660,6 +663,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 setIsAuthenticated(true);
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', newUserId);
+                localStorage.setItem('brettonWoodsPlayerId', newUserId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
 
                 console.log('Registration successful. Role:', role);
@@ -708,6 +712,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 setIsAuthenticated(true);
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', userId);
+                localStorage.setItem('brettonWoodsPlayerId', userId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
 
                 console.log('Login successful. Role:', role);

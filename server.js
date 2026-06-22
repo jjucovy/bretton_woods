@@ -271,6 +271,7 @@ function createGameState(gameId, roomName, hostId) {
     gameStarted: false,
     currentRound: 0,
     players: {},
+    members: {},   // ALL room members keyed by userId: { role, country, playerId, ready }
     votes: {},
     readyPlayers: [],
     gamePhase: 'lobby',
@@ -798,35 +799,32 @@ function broadcastToRoom(gameId) {
     }
   }
 
-  // Emit to all sockets in the game room (players + anyone who joined)
+  // Emit to all sockets already in the Socket.IO room (players who joined via joinRoom)
   io.to(gameId).emit('stateUpdate', room);
-  // Emit to dedicated observer Socket.IO room (belt-and-suspenders)
   io.to(`observers:${gameId}`).emit('stateUpdate', room);
 
-  // Always deliver directly to the superadmin (user_id=1).
-  // Don't rely on room.hostUserId/hostId — those can be undefined after restarts.
-  // Priority: userSocketMap['1'] → scan all sockets for socket.userId==='1'.
-  let adminSock = null;
-  const cachedAdminSockId = userSocketMap['1'];
-  if (cachedAdminSockId) {
-    adminSock = io.sockets.sockets.get(cachedAdminSockId) || null;
-    if (!adminSock) delete userSocketMap['1'];
-  }
-  if (!adminSock) {
-    for (const [, s] of io.sockets.sockets) {
-      if (String(s.userId) === '1') {
-        adminSock = s;
-        registerUserSocket('1', s.id);
-        room.hostSocketId = s.id;
-        console.log(`🔍 broadcastToRoom: found admin socket by scan, caching ${s.id}`);
-        break;
+  // Direct delivery to every room member (role=0 admin members may not be in the io room).
+  // room.members is keyed by userId and populated from the players DB table.
+  const memberIds = Object.keys(room.members || {});
+  let delivered = 0;
+  for (const memberId of memberIds) {
+    // Try cached socket first, then scan all connected sockets
+    let sock = null;
+    const cachedId = userSocketMap[memberId];
+    if (cachedId) sock = io.sockets.sockets.get(cachedId) || null;
+    if (!sock) {
+      for (const [, s] of io.sockets.sockets) {
+        if (String(s.userId) === memberId) {
+          sock = s;
+          registerUserSocket(memberId, s.id);
+          break;
+        }
       }
     }
+    if (sock) { sock.emit('stateUpdate', room); delivered++; }
   }
-  if (adminSock) {
-    adminSock.emit('stateUpdate', room);
-  }
-  console.log(`📡 Broadcast to ${gameId}: ${Object.keys(room.players).length} player(s), adminAlive=${!!adminSock}`);
+  const playerCount = Object.keys(room.players).length;
+  console.log(`📡 Broadcast to ${gameId}: ${playerCount} player(s), ${memberIds.length} member(s), delivered=${delivered}`);
 }
 
 // Broadcast room list to lobby
@@ -2586,6 +2584,20 @@ io.on('connection', (socket) => {
     socket.userId = String(authUserId);
     registerUserSocket(socket.userId, socket.id);
     console.log(`🔑 Auth userId=${socket.userId} pre-registered on connect (socket ${socket.id})`);
+
+    // Pre-join admin to all their game rooms so io.to(gameId) reaches them immediately,
+    // without waiting for the first requestState poll (up to 3s later).
+    for (const [gameId, room] of Object.entries(globalState.games)) {
+      const isRoomHost = String(room.hostUserId) === socket.userId || String(room.hostId) === socket.userId;
+      if (isRoomHost) {
+        socket.join(gameId);
+        socket.join(`observers:${gameId}`);
+        room.hostSocketId = socket.id;
+        if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
+        observerRegistry[gameId][socket.userId] = socket.id;
+        console.log(`🔑 Auth: pre-joined userId=${socket.userId} to rooms ${gameId} + observers:${gameId}`);
+      }
+    }
   }
 
   // Register new user
@@ -2857,6 +2869,10 @@ io.on('connection', (socket) => {
 
     console.log(`   Room host set to userId: ${creatorId}, hostSocketId: ${socket.id} (superadmin: ${isSuperAdmin})`);
 
+    // Add creator to room.members (role=0 for admin, role=1 for player-host)
+    if (!room.members) room.members = {};
+    room.members[creatorId] = { role: isSuperAdmin ? 0 : 1, country: null, playerId: null, ready: false };
+
     // Register creator as observer in global registry + dedicated Socket.IO room
     if (isSuperAdmin) {
       if (!observerRegistry[gameId]) observerRegistry[gameId] = {};
@@ -3047,8 +3063,8 @@ io.on('connection', (socket) => {
       console.log(`   Room has ${Object.keys(room.players).length} players`);
       console.log(`   Player keys:`, Object.keys(room.players));
       
-      // SUPERADMIN: Join as host/observer, NOT as player
-      if (isSuperAdmin) {
+      // SUPERADMIN: Join as host/observer, UNLESS they also have a player record in this game.
+      if (isSuperAdmin && !room.players[userId]) {
         // Check if this superadmin is the host
         // First check memory, then check database
         let isHost = room.hostUserId === userId || room.hostId === userId;
@@ -3256,12 +3272,14 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check if user is superadmin - they should NEVER join as a player
+    // Check if user is superadmin with NO existing player record in this game.
+    // A superadmin who already has a player_id in this game (e.g. is also playing)
+    // must be allowed through — block only pure observers with no player record.
     let isSuperAdmin = false;
     try {
       const dbUsers = await queryDatabase('getAllUsers', {});
       if (dbUsers && Array.isArray(dbUsers)) {
-        const dbUser = dbUsers.find(u => u.user_id === id);
+        const dbUser = dbUsers.find(u => String(u.user_id) === String(id));
         if (dbUser) {
           isSuperAdmin = (dbUser.is_teacher === '1' || dbUser.is_teacher === 1);
         }
@@ -3269,14 +3287,25 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error checking user role:', err);
     }
-    
+
     if (isSuperAdmin) {
-      console.log(`❌ Superadmin ${id} attempted to join as player - blocked`);
-      socket.emit('joinResult', { 
-        success: false, 
-        message: 'Administrators cannot join as players. You are an observer only.' 
-      });
-      return;
+      // Allow if they already have a player record in this game
+      let hasPlayerRecord = !!(room.players[id]?.id && /^\d+$/.test(String(room.players[id].id)));
+      if (!hasPlayerRecord) {
+        try {
+          const allPlayers = await queryDatabase('getPlayers', { game_id: String(gameId) });
+          hasPlayerRecord = Array.isArray(allPlayers) && allPlayers.some(p => String(p.user_id) === String(id));
+        } catch (e) { /* ignore */ }
+      }
+      if (!hasPlayerRecord) {
+        console.log(`❌ Superadmin ${id} attempted to join as player with no player record - blocked`);
+        socket.emit('joinResult', {
+          success: false,
+          message: 'Administrators cannot join as players. You are an observer only.'
+        });
+        return;
+      }
+      console.log(`✅ Superadmin ${id} has player record in game ${gameId} - allowing join as player`);
     }
     
     // Check if country is already taken
@@ -3310,7 +3339,8 @@ io.on('connection', (socket) => {
         const result = await queryDatabase('addPlayer', {
           gameCode: room.game_code,
           userId: id,
-          countryCode: country
+          countryCode: country,
+          role: 1
         });
 
         if (result?.player_id) {
@@ -3339,6 +3369,9 @@ io.on('connection', (socket) => {
       joinedAt: Date.now(),
       role: 'player'
     };
+    // Keep room.members in sync
+    if (!room.members) room.members = {};
+    room.members[id] = { role: 1, country, playerId: assignedPlayerId, ready: false };
     
     socket.emit('joinResult', { 
       success: true,
@@ -5925,23 +5958,35 @@ async function initializeFromDatabase() {
           existingRoom.hostId = game.host_user_id;
         }
 
-        // Update players from database in case they changed
+        // Update players/members from database in case they changed
         const players = await queryDatabase('getPlayers', { game_id: game.game_id });
+        if (!existingRoom.members) existingRoom.members = {};
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
             const isReady = player.is_ready === 1 || player.is_ready === '1';
-            existingRoom.players[player.user_id] = {
-              id: player.player_id,
-              userId: player.user_id,
-              playerId: player.player_id,
+            const role = parseInt(player.role ?? 1);
+            // Add to members map regardless of role
+            existingRoom.members[player.user_id] = {
+              role,
               country: normalizeCountryName(player.country_code) || player.country_code,
-              ready: isReady,
-              score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
-              phase1_score: parseInt(player.phase1_score) || 0,
-              phase2_score: parseInt(player.phase2_score) || 0
+              playerId: player.player_id,
+              ready: isReady
             };
-            if (isReady && !existingRoom.readyPlayers.includes(player.player_id)) {
-              existingRoom.readyPlayers.push(player.player_id);
+            if (role !== 0) {
+              // Only regular players go into room.players (used for game logic)
+              existingRoom.players[player.user_id] = {
+                id: player.player_id,
+                userId: player.user_id,
+                playerId: player.player_id,
+                country: normalizeCountryName(player.country_code) || player.country_code,
+                ready: isReady,
+                score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
+                phase1_score: parseInt(player.phase1_score) || 0,
+                phase2_score: parseInt(player.phase2_score) || 0
+              };
+              if (isReady && !existingRoom.readyPlayers.includes(player.player_id)) {
+                existingRoom.readyPlayers.push(player.player_id);
+              }
             }
           }
         }
@@ -5986,32 +6031,41 @@ async function initializeFromDatabase() {
       const players = await queryDatabase('getPlayers', { game_id: game.game_id });
 
       if (players && Array.isArray(players) && players.length > 0) {
-        console.log(`   Found ${players.length} player(s) in database`);
-        // savedRoom has the pre-restart state (loaded by loadState() before this function runs)
+        console.log(`   Found ${players.length} member(s) in database`);
         const savedRoom = globalState.games[gameId];
+        if (!roomState.members) roomState.members = {};
         for (const player of players) {
-          // Key by userId for consistency (so client can find them by userId)
           const isReadyFromDB = player.is_ready === 1 || player.is_ready === '1';
-          // PHP getPlayers doesn't return is_ready, so preserve ready from saved JSON
-          const savedReady = !!(savedRoom?.players?.[player.user_id]?.ready);
+          const savedReady = !!(savedRoom?.players?.[player.user_id]?.ready || savedRoom?.members?.[player.user_id]?.ready);
           const isReady = isReadyFromDB || savedReady;
-          roomState.players[player.user_id] = {
-            id: player.player_id,
-            userId: player.user_id,
-            playerId: player.player_id,
+          const role = parseInt(player.role ?? 1);
+          // All members go into room.members
+          roomState.members[player.user_id] = {
+            role,
             country: normalizeCountryName(player.country_code) || player.country_code,
-            ready: isReady,
-            score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
-            phase1_score: parseInt(player.phase1_score) || 0,
-            phase2_score: parseInt(player.phase2_score) || 0
+            playerId: player.player_id,
+            ready: isReady
           };
-          if (isReady && !roomState.readyPlayers.includes(player.player_id)) {
-            roomState.readyPlayers.push(player.player_id);
+          if (role !== 0) {
+            // Regular players only go into room.players (game logic)
+            roomState.players[player.user_id] = {
+              id: player.player_id,
+              userId: player.user_id,
+              playerId: player.player_id,
+              country: normalizeCountryName(player.country_code) || player.country_code,
+              ready: isReady,
+              score: (parseInt(player.phase1_score) || 0) + (parseInt(player.phase2_score) || 0),
+              phase1_score: parseInt(player.phase1_score) || 0,
+              phase2_score: parseInt(player.phase2_score) || 0
+            };
+            if (isReady && !roomState.readyPlayers.includes(player.player_id)) {
+              roomState.readyPlayers.push(player.player_id);
+            }
           }
-          console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}, ready=${isReady} (db=${isReadyFromDB}, saved=${savedReady})`);
+          console.log(`   - Member: user_id=${player.user_id}, role=${role}, country=${player.country_code}, ready=${isReady}`);
         }
       } else {
-        console.log(`   No players found for game ${game_code}`);
+        console.log(`   No members found for game ${game_code}`);
       }
 
       // Rebuild room.scores from player data (fallback - always available)
