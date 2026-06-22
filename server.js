@@ -807,18 +807,9 @@ function broadcastToRoom(gameId) {
     let sock = cachedId ? io.sockets.sockets.get(cachedId) : null;
     if (!sock) {
       // userSocketMap miss or stale — scan all live sockets for this userId.
-      // This recovers admin after a server restart: their client reconnects and
-      // their socket has socket.userId set (via auth handshake) before requestState fires.
+      // socket.userId is always stored as String (set in auth handler and requestState).
       for (const [, s] of io.sockets.sockets) {
-        if (String(s.userId) === String(memberId)) { sock = s; break; } // String() both sides: client may send userId as number
-      }
-      // Third fallback: room.hostSocketId is kept fresh by each requestState poll
-      if (!sock) {
-        const isHostMember = String(room.hostUserId) === String(memberId) || String(room.hostId) === String(memberId);
-        if (isHostMember && room.hostSocketId) {
-          const candidate = io.sockets.sockets.get(room.hostSocketId);
-          if (candidate) sock = candidate;
-        }
+        if (String(s.userId) === String(memberId)) { sock = s; break; }
       }
       if (sock) {
         registerUserSocket(memberId, sock.id);
@@ -3462,14 +3453,10 @@ io.on('connection', (socket) => {
       [resolvedGameId, room] = entry;
     }
 
-    // Tag socket so fetchSockets() can find admin by userId
+    // Tag socket so scan in broadcastToRoom can find it by userId
     if (userId) {
-      socket.userId = String(userId); // always string so scan's String(s.userId) === String(memberId) matches
+      socket.userId = String(userId); // always string so String(s.userId) === String(memberId) matches
       registerUserSocket(userId, socket.id);
-      // Keep room.hostSocketId fresh so broadcastToRoom can reach admin even when userSocketMap lags
-      const isHost = String(room.hostUserId) === String(userId) || String(room.hostId) === String(userId);
-      if (isHost) room.hostSocketId = socket.id;
-      console.log(`   📝 requestState: registered socket=${socket.id} for userId=${userId} (map keys: ${Object.keys(userSocketMap).join(',')})`);
     }
 
     // Ensure socket is in the game room for future push broadcasts
