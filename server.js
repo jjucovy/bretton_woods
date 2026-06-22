@@ -800,16 +800,19 @@ function broadcastToRoom(gameId) {
 
   // Also deliver directly to every room member via userSocketMap as a safety net
   // (catches any socket that somehow isn't in the io room despite joining)
+  let memberDelivered = 0;
+  const memberLog = [];
   for (const memberId of Object.keys(room.members || {})) {
     const cachedId = userSocketMap[memberId];
-    if (!cachedId) continue;
+    if (!cachedId) { memberLog.push(`${memberId}:no-socket`); continue; }
     const sock = io.sockets.sockets.get(cachedId);
-    if (sock) sock.emit('stateUpdate', room);
+    if (sock) { sock.emit('stateUpdate', room); memberDelivered++; memberLog.push(`${memberId}:ok`); }
+    else { memberLog.push(`${memberId}:stale(${cachedId})`); }
   }
 
   const playerCount = Object.keys(room.players).length;
   const memberCount = Object.keys(room.members || {}).length;
-  console.log(`📡 Broadcast to ${gameId}: ${playerCount} player(s), ${memberCount} member(s)`);
+  console.log(`📡 Broadcast to ${gameId}: ${playerCount} player(s), ${memberCount} member(s), direct=${memberDelivered} [${memberLog.join(',')}]`);
 }
 
 // Broadcast room list to lobby
