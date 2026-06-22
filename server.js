@@ -252,12 +252,12 @@ let globalState = {
   roomList: [] // { id, name, host, playerCount, maxPlayers, status, createdAt }
 };
 
-// room_member_id (from players table) -> socketId map; also stores userId -> socketId for pre-game tracking
+// Global userId -> socketId map so broadcasts can always reach known users (esp. admin user_id=1)
 const userSocketMap = {};
 
-function registerUserSocket(key, socketId) {
-  if (!key) return;
-  userSocketMap[String(key)] = socketId;
+function registerUserSocket(userId, socketId) {
+  if (!userId) return;
+  userSocketMap[String(userId)] = socketId;
 }
 
 // Load military deployments data
@@ -276,7 +276,7 @@ function createGameState(gameId, roomName, hostId) {
     gameStarted: false,
     currentRound: 0,
     players: {},
-    members: {},   // ALL room members keyed by room_member_id (players table PK): { role, country, playerId, ready, userId }
+    members: {},   // ALL room members keyed by userId: { role, country, playerId, ready }
     votes: {},
     readyPlayers: [],
     gamePhase: 'lobby',
@@ -803,16 +803,16 @@ function broadcastToRoom(gameId) {
 
   // Also recover any connected member sockets that aren't yet in the io room
   // (e.g. if they connected and registered via auth but haven't sent joinRoom yet)
-  for (const [roomMemberId, memberData] of Object.entries(room.members || {})) {
-    const cachedId = userSocketMap[roomMemberId];
+  for (const memberId of Object.keys(room.members || {})) {
+    const cachedId = userSocketMap[memberId];
     let sock = cachedId ? io.sockets.sockets.get(cachedId) : null;
-    if (!sock && memberData.userId) {
+    if (!sock) {
       for (const [, s] of io.sockets.sockets) {
-        if (String(s.userId) === String(memberData.userId)) { sock = s; break; }
+        if (String(s.userId) === String(memberId)) { sock = s; break; }
       }
     }
     if (sock) {
-      registerUserSocket(roomMemberId, sock.id);
+      registerUserSocket(memberId, sock.id);
       sock.join(gameId);
     }
   }
@@ -2585,11 +2585,10 @@ io.on('connection', (socket) => {
     // Pre-join to all rooms where this user is the host or a member
     for (const [gameId, room] of Object.entries(globalState.games)) {
       const isRoomHost = String(room.hostUserId) === socket.userId || String(room.hostId) === socket.userId;
-      const memberEntry = room.members && Object.entries(room.members).find(([, m]) => String(m.userId) === socket.userId);
-      if (isRoomHost || memberEntry) {
+      const isMember = room.members && room.members[socket.userId];
+      if (isRoomHost || isMember) {
         socket.join(gameId);
         if (isRoomHost) room.hostSocketId = socket.id;
-        if (memberEntry) registerUserSocket(memberEntry[0], socket.id);
         socket.emit('stateUpdate', room);
         console.log(`🔑 Auth: pre-joined userId=${socket.userId} to room ${gameId}, sent stateUpdate`);
       }
@@ -2851,7 +2850,7 @@ io.on('connection', (socket) => {
 
     // Add creator to room.members (role=0 for admin, role=1 for player-host)
     if (!room.members) room.members = {};
-    room.members[creatorId] = { role: isSuperAdmin ? 0 : 1, country: null, playerId: null, ready: false, userId: creatorId };
+    room.members[creatorId] = { role: isSuperAdmin ? 0 : 1, country: null, playerId: null, ready: false };
 
     socket.emit('roomCreated', {
       success: true,
@@ -2943,9 +2942,9 @@ io.on('connection', (socket) => {
           const dbPlayers = await queryDatabase('getPlayers', { gameCode: gameData.game_code });
           if (dbPlayers && Array.isArray(dbPlayers)) {
             dbPlayers.forEach(p => {
-              const rmId = p.room_member_id || p.player_id;
-              restoredRoom.players[p.user_id] = {
-                id: p.player_id,
+              const playerId = p.user_id || p.player_id;
+              restoredRoom.players[playerId] = {
+                id: playerId,
                 userId: p.user_id,
                 playerId: p.player_id,
                 country: p.country_code || p.country_name,
@@ -2954,15 +2953,7 @@ io.on('connection', (socket) => {
                 role: 'player',
                 disconnected: true
               };
-              if (!restoredRoom.members) restoredRoom.members = {};
-              restoredRoom.members[rmId] = {
-                role: 1,
-                country: p.country_code || p.country_name,
-                playerId: p.player_id,
-                ready: false,
-                userId: p.user_id
-              };
-              console.log(`   ✅ Restored player: userId=${p.user_id} room_member_id=${rmId} as ${p.country_code}`);
+              console.log(`   ✅ Restored player: ${playerId} as ${p.country_code}`);
             });
           }
 
@@ -3115,11 +3106,6 @@ io.on('connection', (socket) => {
             role: 'player',
             reconnected: true
           };
-          // Sync room.members keyed by room_member_id
-          const rmId = dbAssignment.room_member_id || dbAssignment.player_id;
-          if (!room.members) room.members = {};
-          room.members[rmId] = { role: 1, country: assignedCountry, playerId: dbAssignment.player_id, ready: false, userId };
-          registerUserSocket(rmId, socket.id);
 
           socket.emit('joinRoomResult', {
             success: true,
@@ -3280,7 +3266,6 @@ io.on('connection', (socket) => {
     
     // Get or create player assignment in database
     let assignedPlayerId = null;
-    let assignedRoomMemberId = null;
     try {
       // Check if user already has a player assignment in this game via getPlayers
       let existingAssignment = null;
@@ -3295,8 +3280,7 @@ io.on('connection', (socket) => {
 
       if (existingAssignment && existingAssignment.player_id) {
         assignedPlayerId = existingAssignment.player_id;
-        assignedRoomMemberId = existingAssignment.room_member_id || existingAssignment.player_id;
-        console.log(`   User already has player_id ${assignedPlayerId} room_member_id ${assignedRoomMemberId} in this game`);
+        console.log(`   User already has player_id ${assignedPlayerId} in this game`);
       } else {
         // Save player assignment to database — must use game_code, not gameId
         const result = await queryDatabase('addPlayer', {
@@ -3308,23 +3292,20 @@ io.on('connection', (socket) => {
 
         if (result?.player_id) {
           assignedPlayerId = result.player_id;
-          assignedRoomMemberId = result.room_member_id || result.player_id;
         } else {
           // PHP didn't return player_id — re-fetch from DB
           const allPlayers2 = await queryDatabase('getPlayers', { game_id: String(gameId) }).catch(() => null);
           const fetched = allPlayers2?.find(p => String(p.user_id) === String(id));
           assignedPlayerId = fetched?.player_id || `player_${Date.now()}`;
-          assignedRoomMemberId = fetched?.room_member_id || assignedPlayerId;
         }
-        console.log(`   Created player assignment in database: userId=${id}, game_id=${gameId}, country=${country}, player_id=${assignedPlayerId}, room_member_id=${assignedRoomMemberId}`);
+        console.log(`   Created player assignment in database: userId=${id}, game_id=${gameId}, country=${country}, player_id=${assignedPlayerId}`);
       }
     } catch (err) {
       console.error('Error managing player assignment:', err);
       // Fallback to generated player_id if database fails
       assignedPlayerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-      assignedRoomMemberId = assignedPlayerId;
     }
-
+    
     // Store player with both id and userId for flexibility
     room.players[id] = {
       id: assignedPlayerId,
@@ -3335,10 +3316,9 @@ io.on('connection', (socket) => {
       joinedAt: Date.now(),
       role: 'player'
     };
-    // Keep room.members in sync, keyed by room_member_id
+    // Keep room.members in sync
     if (!room.members) room.members = {};
-    room.members[assignedRoomMemberId] = { role: 1, country, playerId: assignedPlayerId, ready: false, userId: id };
-    registerUserSocket(assignedRoomMemberId, socket.id);
+    room.members[id] = { role: 1, country, playerId: assignedPlayerId, ready: false };
     
     socket.emit('joinResult', { 
       success: true,
@@ -3473,9 +3453,10 @@ io.on('connection', (socket) => {
       console.log(`⚠️ setReady: player not found in room.players for userId=${socketUserId}`);
       console.log(`   room.players keys:`, Object.keys(room.players));
     }
-    // Keep room.members in sync so host sees correct ready state (keyed by room_member_id)
-    const memberEntry = room.members && Object.entries(room.members).find(([, m]) => String(m.userId) === String(socketUserId));
-    if (memberEntry) memberEntry[1].ready = !!ready;
+    // Keep room.members in sync so host sees correct ready state
+    if (room.members && room.members[socketUserId]) {
+      room.members[socketUserId].ready = !!ready;
+    }
 
     if (ready) {
       if (!room.readyPlayers.includes(id)) {
@@ -5880,14 +5861,12 @@ async function initializeFromDatabase() {
             const rawRole = parseInt(player.role ?? 1);
             // role=0 means admin only if this user is the game host; old records may have role=0 for regular players
             const role = (rawRole === 0 && String(player.user_id) === String(game.host_user_id)) ? 0 : (rawRole === 0 ? 1 : rawRole);
-            // Add to members map keyed by room_member_id
-            const rmId = player.room_member_id || player.player_id;
-            existingRoom.members[rmId] = {
+            // Add to members map regardless of role
+            existingRoom.members[player.user_id] = {
               role,
               country: normalizeCountryName(player.country_code) || player.country_code,
               playerId: player.player_id,
-              ready: isReady,
-              userId: player.user_id
+              ready: isReady
             };
             if (role !== 0) {
               // Only regular players go into room.players (used for game logic)
@@ -5957,14 +5936,12 @@ async function initializeFromDatabase() {
           const rawRole = parseInt(player.role ?? 1);
           // role=0 means admin only if this user is the game host; old records may have role=0 for regular players
           const role = (rawRole === 0 && String(player.user_id) === String(game.host_user_id)) ? 0 : (rawRole === 0 ? 1 : rawRole);
-          // All members go into room.members keyed by room_member_id
-          const rmId = player.room_member_id || player.player_id;
-          roomState.members[rmId] = {
+          // All members go into room.members
+          roomState.members[player.user_id] = {
             role,
             country: normalizeCountryName(player.country_code) || player.country_code,
             playerId: player.player_id,
-            ready: isReady,
-            userId: player.user_id
+            ready: isReady
           };
           if (role !== 0) {
             // Regular players only go into room.players (game logic)
