@@ -804,7 +804,7 @@ function broadcastToRoom(gameId) {
   const memberLog = [];
   for (const memberId of Object.keys(room.members || {})) {
     const cachedId = userSocketMap[memberId];
-    if (!cachedId) { memberLog.push(`${memberId}:no-socket`); continue; }
+    if (!cachedId) { memberLog.push(`${memberId}:no-socket`); console.log(`   ⚠️ broadcastToRoom: userSocketMap["${memberId}"] is empty (keys: ${Object.keys(userSocketMap).join(',')})`); continue; }
     const sock = io.sockets.sockets.get(cachedId);
     if (sock) { sock.emit('stateUpdate', room); memberDelivered++; memberLog.push(`${memberId}:ok`); }
     else { memberLog.push(`${memberId}:stale(${cachedId})`); }
@@ -5958,8 +5958,7 @@ async function initializeFromDatabase() {
         if (!roomState.members) roomState.members = {};
         for (const player of players) {
           const isReadyFromDB = player.is_ready === 1 || player.is_ready === '1';
-          const savedReady = !!(savedRoom?.players?.[player.user_id]?.ready || savedRoom?.members?.[player.user_id]?.ready);
-          const isReady = isReadyFromDB || savedReady;
+          const isReady = isReadyFromDB;
           const rawRole = parseInt(player.role ?? 1);
           // role=0 means admin only if this user is the game host; old records may have role=0 for regular players
           const role = (rawRole === 0 && String(player.user_id) === String(game.host_user_id)) ? 0 : (rawRole === 0 ? 1 : rawRole);
