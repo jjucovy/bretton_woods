@@ -320,12 +320,9 @@ function loadState() {
 
 function saveState() {
   try {
-    if (fs.existsSync(STATE_FILE)) {
-      const backupFile = STATE_FILE.replace('.json', '-backup.json');
-      fs.copyFileSync(STATE_FILE, backupFile);
-    }
-
-    fs.writeFileSync(STATE_FILE, JSON.stringify(globalState, null, 2));
+    const tmpFile = STATE_FILE + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(globalState, null, 2));
+    fs.renameSync(tmpFile, STATE_FILE);
   } catch (err) {
     console.error('❌ Error saving state:', err);
   }
@@ -2589,12 +2586,13 @@ io.on('connection', (socket) => {
     registerUserSocket(socket.userId, socket.id);
     console.log(`🔑 Auth userId=${socket.userId} pre-registered on connect (socket ${socket.id})`);
 
-    // Pre-join to all hosted rooms so io.to(gameId) reaches them immediately
+    // Pre-join to all rooms where this user is the host or a member
     for (const [gameId, room] of Object.entries(globalState.games)) {
       const isRoomHost = String(room.hostUserId) === socket.userId || String(room.hostId) === socket.userId;
-      if (isRoomHost) {
+      const isMember = room.members && room.members[socket.userId];
+      if (isRoomHost || isMember) {
         socket.join(gameId);
-        room.hostSocketId = socket.id;
+        if (isRoomHost) room.hostSocketId = socket.id;
         console.log(`🔑 Auth: pre-joined userId=${socket.userId} to room ${gameId}`);
       }
     }
