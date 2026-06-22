@@ -368,6 +368,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             });
 
             socket.on('stateUpdate', (state) => {
+              // Ignore updates for rooms other than the one we're currently in
+              const incomingId = String(state.game_id || '');
+              const myRoomId = String(window.actualRoomId || '');
+              if (myRoomId && incomingId && incomingId !== myRoomId) {
+                console.log(`⏭️ Ignored stateUpdate for room ${incomingId} (current: ${myRoomId})`);
+                return;
+              }
               console.log('=== STATE UPDATE ===');
               console.log('State', Object.values(state))
               console.log('Game started:', state.gameStarted);

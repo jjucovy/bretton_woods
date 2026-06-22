@@ -269,10 +269,10 @@ const crisisEventsData = require('./crisis-events.json');
 // Create default game state template
 function createGameState(gameId, roomName, hostId) {
   return {
+    game_id: gameId,
     gameId: gameId,
     roomName: roomName,
     hostId: hostId,
-    gameId: Date.now(),
     gameStarted: false,
     currentRound: 0,
     players: {},
