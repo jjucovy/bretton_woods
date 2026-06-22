@@ -769,7 +769,7 @@ function updateRoomList() {
 function broadcastToRoom(gameId) {
   const room = globalState.games[gameId];
   if (!room) return;
-  
+
   // Log what we're about to broadcast
   if (room.phase2?.active) {
     console.log(`\n📡 BROADCASTING ROOM ${gameId}:`);
@@ -777,12 +777,12 @@ function broadcastToRoom(gameId) {
     console.log(`   phase2.currentYear: ${room.phase2.currentYear}`);
     console.log(`   phase2.yearlyData type: ${typeof room.phase2.yearlyData}`);
     console.log(`   phase2.yearlyData keys:`, Object.keys(room.phase2.yearlyData));
-    
+
     if (room.phase2.yearlyData[1946]) {
       const year1946 = room.phase2.yearlyData[1946];
       console.log(`   yearlyData[1946] type: ${typeof year1946}`);
       console.log(`   yearlyData[1946] keys:`, Object.keys(year1946));
-      
+
       const firstCountry = Object.entries(year1946)[0];
       if (firstCountry) {
         console.log(`   Sample (${firstCountry[0]}):`, JSON.stringify(firstCountry[1], null, 2).substring(0, 200));
@@ -792,40 +792,28 @@ function broadcastToRoom(gameId) {
     }
   }
 
-  // Emit to everyone in the game's io room — players and admin all join the same room
-  io.to(gameId).emit('stateUpdate', room);
-
-  // Also deliver directly to every room member via userSocketMap as a safety net
-  // (catches any socket that somehow isn't in the io room despite joining)
-  let memberDelivered = 0;
-  const memberLog = [];
+  // Also recover any connected member sockets that aren't yet in the io room
+  // (e.g. if they connected and registered via auth but haven't sent joinRoom yet)
   for (const memberId of Object.keys(room.members || {})) {
     const cachedId = userSocketMap[memberId];
     let sock = cachedId ? io.sockets.sockets.get(cachedId) : null;
     if (!sock) {
-      // userSocketMap miss or stale — scan all live sockets for this userId.
       for (const [, s] of io.sockets.sockets) {
         if (String(s.userId) === String(memberId)) { sock = s; break; }
       }
-      if (sock) {
-        registerUserSocket(memberId, sock.id);
-        sock.join(gameId); // ensure future io.to(gameId) pushes reach them
-        memberLog.push(`${memberId}:recovered`);
-        console.log(`   🔄 broadcastToRoom: recovered socket for userId=${memberId} via scan (was: ${cachedId || 'empty'})`);
-      } else {
-        memberLog.push(cachedId ? `${memberId}:stale(${cachedId})` : `${memberId}:no-socket`);
-        if (!cachedId) console.log(`   ⚠️ broadcastToRoom: userSocketMap["${memberId}"] is empty and no live socket found (keys: ${Object.keys(userSocketMap).join(',')})`);
-        continue;
-      }
     }
-    sock.emit('stateUpdate', room);
-    memberDelivered++;
-    if (!memberLog.find(e => e.startsWith(`${memberId}:`))) memberLog.push(`${memberId}:ok`);
+    if (sock) {
+      registerUserSocket(memberId, sock.id);
+      sock.join(gameId);
+    }
   }
 
-  const playerCount = Object.keys(room.players).length;
-  const memberCount = Object.keys(room.members || {}).length;
-  console.log(`📡 Broadcast to ${gameId}: ${playerCount} player(s), ${memberCount} member(s), direct=${memberDelivered} [${memberLog.join(',')}]`);
+  // Emit to everyone in the game's io room
+  io.to(gameId).emit('stateUpdate', room);
+
+  io.in(gameId).allSockets().then(sids => {
+    console.log(`📡 Broadcast to room ${gameId}: ${[...sids].length} socket(s) [${[...sids].join(',')}]`);
+  });
 }
 
 // Broadcast room list to lobby
@@ -3461,10 +3449,6 @@ io.on('connection', (socket) => {
     } else {
       room.readyPlayers = room.readyPlayers.filter(pid => pid !== id);
     }
-
-    // Log who's in the socket.io room
-    const socketsInRoom = await io.in(gameId).allSockets();
-    console.log(`📡 Broadcasting to ${socketsInRoom.size} socket(s) in room ${gameId}:`, [...socketsInRoom]);
 
     // Persist ready status to DB
     // player.id may be a temp string (player_<timestamp>_<rand>) if addPlayer previously failed.
