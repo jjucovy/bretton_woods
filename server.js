@@ -3546,6 +3546,10 @@ io.on('connection', (socket) => {
       console.log(`⚠️ setReady: player not found in room.players for userId=${socketUserId}`);
       console.log(`   room.players keys:`, Object.keys(room.players));
     }
+    // Keep room.members in sync so host sees correct ready state
+    if (room.members && room.members[socketUserId]) {
+      room.members[socketUserId].ready = !!ready;
+    }
 
     if (ready) {
       if (!room.readyPlayers.includes(id)) {
