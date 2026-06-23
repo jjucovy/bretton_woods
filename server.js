@@ -5713,7 +5713,7 @@ io.on('connection', (socket) => {
     }
     
     // Also check for rooms in memory only
-    for (const [gameId, roomState] of Object.entries(globalState.games)) {
+   /* for (const [gameId, roomState] of Object.entries(globalState.games)) {
       if (!activeGames.find(g => String(g.gameId) === gameId)) {
         console.log(`  - Memory-only game: ${gameId}`);
         activeGames.push({
@@ -5731,7 +5731,7 @@ io.on('connection', (socket) => {
         });
       }
     }
-    
+    */
     console.log(`Returning ${activeGames.length} games`);
     
     socket.emit('activeGamesResult', { 
