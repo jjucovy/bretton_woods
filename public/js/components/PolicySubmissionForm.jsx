@@ -21,7 +21,7 @@ const { useState } = React;
             setIsSubmitting(true);
             console.log('📤 Submitting policy for player:', playerId);
             socket.emit('submitPolicy', {
-              roomId,
+              gameId: roomId,
               playerid: playerId,
               policy: {
                 centralBankRate,
