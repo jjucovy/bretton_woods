@@ -476,14 +476,19 @@ async function savePlayerScoresToDB(gameId, phase) {
     const score = room.scores?.[country] || 0;
     if (score === 0 && phase === 'phase1') continue; // Skip if no points yet
 
+    const playerDbId = player.id;
+    if (!playerDbId) {
+      console.warn(`⚠️ No DB player_id for userId=${userId} (${country}), skipping score save`);
+      continue;
+    }
+
     try {
       await queryDatabase('updatePlayerPoints', {
-        gameCode: gameId,
-        userId: userId,
+        player_id: playerDbId,
         points: score,
         phase: phase
       });
-      console.log(`✅ ${phase}_score saved to DB: ${country} (user ${userId}) = ${score}`);
+      console.log(`✅ ${phase}_score saved to DB: ${country} (user ${userId}, player_id ${playerDbId}) = ${score}`);
     } catch (err) {
       console.error(`❌ Failed to save ${phase}_score for ${country}:`, err.message);
     }
@@ -2334,14 +2339,18 @@ function calculatePhase2Scores(gameId) {
       const country = normalizeCountryName(player.country) || player.country;
       const totalP2 = (phase2Scores[country] || 0) +
         Object.values(room.phase2.yearlyScores || {}).reduce((sum, ys) => sum + (ys[country] || 0), 0);
+      const playerDbId = player.id;
+      if (!playerDbId) {
+        console.warn(`⚠️ No DB player_id for userId=${userId} (${country}), skipping final score save`);
+        continue;
+      }
       try {
         await queryDatabase('updatePlayerPoints', {
-          gameCode: gameId,
-          userId: userId,
+          player_id: playerDbId,
           points: totalP2,
           phase: 'phase2'
         });
-        console.log(`✅ phase2_score saved to DB: ${country} (user ${userId}) = ${totalP2}`);
+        console.log(`✅ phase2_score saved to DB: ${country} (user ${userId}, player_id ${playerDbId}) = ${totalP2}`);
       } catch (err) {
         console.error(`❌ Failed to save phase2_score for ${country}:`, err.message);
       }
