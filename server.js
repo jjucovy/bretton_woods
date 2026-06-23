@@ -72,10 +72,16 @@ const io = socketIo(server, {
 });
 
 const PORT = process.env.PORT || 65002;
-// Write state files to /tmp so pm2-watch doesn't detect changes and restart the server.
-// DB snapshots + player scores are the authoritative persistence; the state file is a
-// fast-start cache that's safe to lose across reboots.
 const STATE_FILE = '/tmp/bretton-woods-state.json';
+
+// Load assignment definitions once at startup
+let assignmentDefs = [];
+try {
+  assignmentDefs = JSON.parse(fs.readFileSync(path.join(__dirname, 'assignments.json'), 'utf8')).assignments || [];
+  console.log(`📋 Loaded ${assignmentDefs.length} assignment definition(s)`);
+} catch (e) {
+  console.warn('⚠️ Could not load assignments.json:', e.message);
+}
 
 // Database (queryDatabase) imported from ./server/database.js
 // Email (sendAdminNotification) imported from ./server/email.js
@@ -312,7 +318,8 @@ function loadState() {
       globalState = {
         users: loadedState.users || {},
         games: loadedState.games || loadedState.rooms || {},
-        roomList: loadedState.roomList || []
+        roomList: loadedState.roomList || [],
+        assignments: loadedState.assignments || {}
       };
       
       console.log('✅ Multi-room state loaded from file');
@@ -2668,6 +2675,50 @@ io.on('connection', (socket) => {
   });
   
   // Login existing user
+  // ── Assignments ──────────────────────────────────────────────────────────
+
+  socket.on('getAssignmentProgress', ({ userId }) => {
+    if (!userId) return;
+    const progress = globalState.assignments[String(userId)] || {};
+    socket.emit('assignmentProgress', { progress });
+  });
+
+  socket.on('submitAssignment', ({ userId, assignmentId, responses, score, total }) => {
+    if (!userId || !assignmentId) return;
+    const uid = String(userId);
+    if (!globalState.assignments[uid]) globalState.assignments[uid] = {};
+    globalState.assignments[uid][assignmentId] = {
+      submitted: true,
+      responses,
+      score,
+      total,
+      submittedAt: Date.now()
+    };
+    saveState();
+    console.log(`📋 Assignment ${assignmentId} submitted by userId=${uid}`);
+    socket.emit('assignmentSubmitted', {
+      success: true,
+      assignmentId,
+      record: globalState.assignments[uid][assignmentId]
+    });
+  });
+
+  // Admin: get all students' assignment submissions
+  socket.on('getAllAssignments', ({ userId }) => {
+    // Only superadmin can view all
+    const user = Object.values(globalState.users).find(u => String(u.player?.id) === String(userId));
+    const isSuperAdmin = user?.player?.role === 'superadmin' || String(userId) === '1';
+    if (!isSuperAdmin) {
+      socket.emit('allAssignments', { success: false, message: 'Unauthorized' });
+      return;
+    }
+    socket.emit('allAssignments', {
+      success: true,
+      data: globalState.assignments,
+      definitions: assignmentDefs
+    });
+  });
+
   socket.on('login', async ({ username, password }) => {
     console.log('=== LOGIN REQUEST ===');
     console.log('Username:', username);
