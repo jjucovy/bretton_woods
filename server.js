@@ -4006,7 +4006,8 @@ io.on('connection', (socket) => {
   });
   
   // PHASE 2: Submit economic policy
-  socket.on('submitPolicy', async ({ gameId, playerid, policy }) => {
+  socket.on('submitPolicy', async ({ gameId: _gId, roomId: _rId, playerid, policy }) => {
+    const gameId = _gId || _rId;
     const room = globalState.games[gameId];
     if (!room || !room.phase2.active) return;
 

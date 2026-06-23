@@ -21,7 +21,7 @@ const { useState } = React;
             if (isSubmitting) return; // Prevent double-click
             setIsSubmitting(true);
             socket.emit('submitPolicy', {
-              roomId,
+              gameId: roomId,
               playerid: playerId,
               policy: {
                 fiveYearPlanTarget,
