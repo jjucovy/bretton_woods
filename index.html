@@ -2555,7 +2555,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       console.log(`   yearlyData keys:`, Object.keys(gameState.phase2?.yearlyData || {}));
                       console.log(`   yearlyData[${currentYear}]=`, gameState.phase2?.yearlyData?.[currentYear]);
                       console.log(`   myData=`, myData);
-                      const hasSubmitted = gameState.readyPlayers?.includes(gameState.players[playerId]?.id);
+                      const _readyIds = (gameState.readyPlayers || []).map(String);
+                      const hasSubmitted = _readyIds.includes(String(playerId)) ||
+                        _readyIds.includes(String(gameState.players[playerId]?.id));
 
                       // Use shared normalization for crisis matching
                       const normalizedPlayerCountry = normalizeCountryName(playerCountry);
