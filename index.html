@@ -849,6 +849,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 playerCountry={playerCountry}
                 assignments={assignmentDefs}
                 onComplete={() => setAssignmentsComplete(true)}
+                onBypass={() => setAssignmentsComplete(true)}
               />
             );
           }

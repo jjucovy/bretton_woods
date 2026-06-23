@@ -13,7 +13,7 @@ const { useState, useEffect } = React;
 //   onComplete   – callback when all assignments done
 // ────────────────────────────────────────────────────────────────────────────
 
-function AssignmentsGate({ socket, playerId, playerCountry, assignments, onComplete }) {
+function AssignmentsGate({ socket, playerId, playerCountry, assignments, onComplete, onBypass }) {
   const [progress, setProgress]   = useState({});   // { [assignmentId]: { submitted, responses, score } }
   const [activeId, setActiveId]   = useState(null);  // which assignment is open
   const [loading, setLoading]     = useState(true);
@@ -372,7 +372,17 @@ function AssignmentsGate({ socket, playerId, playerCountry, assignments, onCompl
       <div style={S.container}>
         {/* Header */}
         <div style={S.header}>
-          <h1 style={{ margin: '0 0 4px 0', fontSize: '1.5rem' }}>🌍 Bretton Woods Simulation</h1>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+            <h1 style={{ margin: 0, fontSize: '1.5rem' }}>🌍 Bretton Woods Simulation</h1>
+            {onBypass && (
+              <button
+                onClick={onBypass}
+                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', color: 'white', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+              >
+                Skip →
+              </button>
+            )}
+          </div>
           <p style={{ margin: '0 0 16px 0', opacity: 0.85 }}>
             Complete all {totalCount} pre-simulation assignments to unlock the game.
           </p>
