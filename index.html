@@ -144,6 +144,8 @@
     <script type="text/babel" src="/public/js/components/PolicySubmissionForm.jsx"></script>
     <script type="text/babel" src="/public/js/components/UserManagementPanel.jsx"></script>
     <script type="text/babel" src="/public/js/components/InstructionsModal.jsx"></script>
+    <script type="text/babel" src="/public/js/components/AssignmentsGate.jsx"></script>
+    <script type="text/babel" src="/public/js/components/AssignmentAdminPanel.jsx"></script>
 
 
     <script type="text/babel">
@@ -202,6 +204,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
         // Start loading
         loadGameData();
 
+        // Load assignment definitions
+        fetch('/assignments.json')
+          .then(r => r.json())
+          .then(d => { if (window._setAssignmentDefs) window._setAssignmentDefs(d.assignments || []); })
+          .catch(() => {});
+
         const socket = io({
           auth: (cb) => {
             // Called on every connect/reconnect — picks up userId after login
@@ -232,6 +240,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [showRegister, setShowRegister] = useState(false);
           
           const [showInstructions, setShowInstructions] = useState(false);
+          const [assignmentDefs, setAssignmentDefs] = useState([]);
+          const [assignmentsComplete, setAssignmentsComplete] = useState(false);
 
           // NEW: Game selection state (lobby)
           const [showGameSelection, setShowGameSelection] = useState(false);
@@ -264,6 +274,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [battleModalMinimized, setBattleModalMinimized] = useState(false);
           const [diplomaticModalMinimized, setDiplomaticModalMinimized] = useState(false);
           const [battleOptionsMinimized, setBattleOptionsMinimized] = useState(false);
+
+          // Expose assignment def setter to global scope (loaded outside React)
+          useEffect(() => {
+            window._setAssignmentDefs = setAssignmentDefs;
+            return () => { delete window._setAssignmentDefs; };
+          }, []);
 
           // Expand crisis overlay when a new crisis appears
           const activeCrisisId = gameState?.phase2?.crises?.active?.[0]?.id;
@@ -824,6 +840,19 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const myTheme = playerCountry ? getCountryTheme(playerCountry) : null;
 
 
+          // Assignment gate — shown to students before game selection
+          if (isAuthenticated && showGameSelection && userRole !== 'superadmin' && !assignmentsComplete && assignmentDefs.length > 0) {
+            return (
+              <AssignmentsGate
+                socket={socket}
+                playerId={playerId}
+                playerCountry={playerCountry}
+                assignments={assignmentDefs}
+                onComplete={() => setAssignmentsComplete(true)}
+              />
+            );
+          }
+
           // NEW: Game selection screen (for both superadmin and regular users)
           if (isAuthenticated && showGameSelection) {
             const isSuperAdmin = userRole === 'superadmin';
@@ -850,6 +879,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 {/* NEW: User Management Panel for Superadmin */}
                 {isSuperAdmin && (
                   <UserManagementPanel playerId={playerId} />
+                )}
+
+                {/* Assignment submissions viewer for superadmin */}
+                {isSuperAdmin && (
+                  <AssignmentAdminPanel socket={socket} playerId={playerId} assignmentDefs={assignmentDefs} />
                 )}
 
                 <div className="card" style={{ 
