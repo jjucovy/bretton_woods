@@ -2530,6 +2530,38 @@ function resolveCrisisEffects(gameId, crisisId = null) {
         console.log(`  ⚔️ ${country}: crisis military modifier +${spendingIncrease}% GDP spending, militaryRequired:`, choice.militaryRequired || 'none');
       }
 
+      // Deploy troops to the crisis region on the map when a military option is chosen
+      const deploymentRegion = crisis.deploymentTrigger?.region;
+      if (hasMilitaryReq && deploymentRegion) {
+        if (!room.phase2.cumulativeDeployments) room.phase2.cumulativeDeployments = {};
+        if (!room.phase2.cumulativeDeployments[deploymentRegion]) room.phase2.cumulativeDeployments[deploymentRegion] = {};
+        if (!room.phase2.cumulativeDeployments[deploymentRegion][country]) {
+          room.phase2.cumulativeDeployments[deploymentRegion][country] = { army: 0, navy: 0, airForce: 0, total: 0 };
+        }
+        const dep = room.phase2.cumulativeDeployments[deploymentRegion][country];
+        const reqArmy    = choice.militaryRequired.army     || 0;
+        const reqNavy    = choice.militaryRequired.navy     || 0;
+        const reqAirForce= choice.militaryRequired.airForce || 0;
+        dep.army     += reqArmy;
+        dep.navy     += reqNavy;
+        dep.airForce += reqAirForce;
+        dep.total    += reqArmy + reqNavy + reqAirForce;
+
+        if (!room.phase2.deploymentHistory) room.phase2.deploymentHistory = [];
+        room.phase2.deploymentHistory.push({
+          year: currentYear,
+          country,
+          region: deploymentRegion,
+          army: reqArmy,
+          navy: reqNavy,
+          airForce: reqAirForce,
+          total: reqArmy + reqNavy + reqAirForce,
+          reason: `Crisis: ${crisis.title} — ${choice.text}`,
+          crisisId: crisis.id
+        });
+        console.log(`  🪖 ${country}: deployed to ${deploymentRegion} — army=${reqArmy.toLocaleString()}, navy=${reqNavy.toLocaleString()}, airForce=${reqAirForce.toLocaleString()}`);
+      }
+
       // Apply diplomatic points
       if (effects.diplomaticPoints) {
         if (!room.phase2.diplomaticPoints) room.phase2.diplomaticPoints = {};
