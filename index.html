@@ -144,8 +144,8 @@
     <script type="text/babel" src="/public/js/components/PolicySubmissionForm.jsx"></script>
     <script type="text/babel" src="/public/js/components/UserManagementPanel.jsx"></script>
     <script type="text/babel" src="/public/js/components/InstructionsModal.jsx"></script>
-    <script type="text/babel" src="/public/js/components/AssignmentsGate.jsx"></script>
-    <script type="text/babel" src="/public/js/components/AssignmentAdminPanel.jsx"></script>
+    <script type="text/babel" src="/public/js/components/PreGameQuiz.jsx"></script>
+    <script type="text/babel" src="/public/js/components/EndGameTest.jsx"></script>
 
 
     <script type="text/babel">
@@ -204,12 +204,6 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
         // Start loading
         loadGameData();
 
-        // Load assignment definitions
-        fetch('/assignments.json')
-          .then(r => r.json())
-          .then(d => { if (window._setAssignmentDefs) window._setAssignmentDefs(d.assignments || []); })
-          .catch(() => {});
-
         const socket = io({
           auth: (cb) => {
             // Called on every connect/reconnect — picks up userId after login
@@ -240,8 +234,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [showRegister, setShowRegister] = useState(false);
           
           const [showInstructions, setShowInstructions] = useState(false);
-          const [assignmentDefs, setAssignmentDefs] = useState([]);
-          const [assignmentsComplete, setAssignmentsComplete] = useState(false);
+
+          // Quiz / assessment state
+          const [pendingVoteChoice, setPendingVoteChoice] = useState(null); // {id, letter, text}
+          const [voteExplanation, setVoteExplanation] = useState('');
+          const [endTestDone, setEndTestDone] = useState(false);
 
           // NEW: Game selection state (lobby)
           const [showGameSelection, setShowGameSelection] = useState(false);
@@ -274,12 +271,6 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [battleModalMinimized, setBattleModalMinimized] = useState(false);
           const [diplomaticModalMinimized, setDiplomaticModalMinimized] = useState(false);
           const [battleOptionsMinimized, setBattleOptionsMinimized] = useState(false);
-
-          // Expose assignment def setter to global scope (loaded outside React)
-          useEffect(() => {
-            window._setAssignmentDefs = setAssignmentDefs;
-            return () => { delete window._setAssignmentDefs; };
-          }, []);
 
           // Expand crisis overlay when a new crisis appears
           const activeCrisisId = gameState?.phase2?.crises?.active?.[0]?.id;
@@ -840,20 +831,6 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const myTheme = playerCountry ? getCountryTheme(playerCountry) : null;
 
 
-          // Assignment gate — shown to students before game selection
-          if (isAuthenticated && showGameSelection && userRole !== 'superadmin' && !assignmentsComplete && assignmentDefs.length > 0) {
-            return (
-              <AssignmentsGate
-                socket={socket}
-                playerId={playerId}
-                playerCountry={playerCountry}
-                assignments={assignmentDefs}
-                onComplete={() => setAssignmentsComplete(true)}
-                onBypass={() => setAssignmentsComplete(true)}
-              />
-            );
-          }
-
           // NEW: Game selection screen (for both superadmin and regular users)
           if (isAuthenticated && showGameSelection) {
             const isSuperAdmin = userRole === 'superadmin';
@@ -880,11 +857,6 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 {/* NEW: User Management Panel for Superadmin */}
                 {isSuperAdmin && (
                   <UserManagementPanel playerId={playerId} />
-                )}
-
-                {/* Assignment submissions viewer for superadmin */}
-                {isSuperAdmin && (
-                  <AssignmentAdminPanel socket={socket} playerId={playerId} assignmentDefs={assignmentDefs} />
                 )}
 
                 <div className="card" style={{ 
@@ -1851,8 +1823,21 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       currentIssue={currentIssue ? 'exists' : 'null'}
                     </div>
 
+                    {/* PRE-GAME QUIZ GATE */}
+                    {gameState.gamePhase === 'voting' && userRole !== 'superadmin' &&
+                     !gameState.players?.[playerId]?.quizCompleted && (
+                      <PreGameQuiz
+                        socket={socket}
+                        playerId={playerId}
+                        onComplete={() => {
+                          // State will update via stateUpdate broadcast
+                        }}
+                      />
+                    )}
+
                     {/* VOTING PHASE */}
-                    {gameState.gamePhase === 'voting' && (
+                    {gameState.gamePhase === 'voting' &&
+                     (userRole === 'superadmin' || gameState.players?.[playerId]?.quizCompleted) && (
                       <div>
                         {/* Revote Warning (if applicable) */}
                         {gameState.isTie && gameState.revoteCount > 0 && (
@@ -2254,7 +2239,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             {/* Voting Buttons */}
                             {!gameState.votes?.[myPlayerDbId] ? (
                               <div style={{ marginBottom: '20px' }}>
-                                <h4 style={{ 
+                                {/* Step 1: Select an option */}
+                                {!pendingVoteChoice && (
+                                  <>
+                                <h4 style={{
                                   fontSize: '1rem',
                                   color: '#1e293b',
                                   marginBottom: '12px',
@@ -2268,20 +2256,15 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                   gap: '12px'
                                 }}>
                                   {currentIssue.options && currentIssue.options.map((option, idx) => {
-                                    const optionLetter = String.fromCharCode(65 + idx); // A, B, C
+                                    const optionLetter = String.fromCharCode(65 + idx);
                                     const countryNameForVoting = getCountryNameForVoting(playerCountry);
                                     const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
                                     const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
-                                    
                                     return (
-                                      <button
-                                        key={idx}
+                                      <button key={idx}
                                         onClick={() => {
-                                          socket.emit('vote', {
-                                            gameId: currentRoomId,
-                                            playerid: playerId,
-                                            choice: option.id || optionLetter.toLowerCase()
-                                          });
+                                          setPendingVoteChoice({ id: option.id || optionLetter.toLowerCase(), letter: optionLetter, text: option.text });
+                                          setVoteExplanation('');
                                         }}
                                         style={{
                                           padding: '20px 15px',
@@ -2356,6 +2339,54 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     );
                                   })}
                                 </div>
+                                  </>
+                                )}
+
+                                {/* Step 2: Explanation required before confirming vote */}
+                                {pendingVoteChoice && (() => {
+                                  const expWords = voteExplanation.trim().split(/\s+/).filter(Boolean).length;
+                                  return (
+                                    <div style={{ border: '2px solid #3b82f6', borderRadius: '10px', padding: '20px', background: '#eff6ff' }}>
+                                      <h4 style={{ color: '#1e40af', margin: '0 0 8px 0' }}>
+                                        You selected Option {pendingVoteChoice.letter}: {pendingVoteChoice.text.substring(0, 60)}{pendingVoteChoice.text.length > 60 ? '...' : ''}
+                                      </h4>
+                                      <p style={{ color: '#1e40af', fontSize: '0.875rem', margin: '0 0 12px 0' }}>
+                                        Explain your reasoning (minimum 20 words) before confirming your vote:
+                                      </p>
+                                      <textarea
+                                        value={voteExplanation}
+                                        onChange={e => setVoteExplanation(e.target.value)}
+                                        placeholder="Why is this option best for your country's interests? Consider the national position, economic effects, and coalition dynamics..."
+                                        rows={4}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #93c5fd', fontSize: '0.875rem', boxSizing: 'border-box', resize: 'vertical' }}
+                                      />
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                                        <span style={{ fontSize: '0.8rem', color: expWords >= 20 ? '#16a34a' : '#dc2626', fontWeight: 'bold' }}>
+                                          {expWords} / 20 words minimum
+                                        </span>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                          <button
+                                            onClick={() => { setPendingVoteChoice(null); setVoteExplanation(''); }}
+                                            style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
+                                          >
+                                            Back
+                                          </button>
+                                          <button
+                                            disabled={expWords < 20}
+                                            onClick={() => {
+                                              socket.emit('vote', { gameId: currentRoomId, playerid: playerId, choice: pendingVoteChoice.id, explanation: voteExplanation });
+                                              setPendingVoteChoice(null);
+                                              setVoteExplanation('');
+                                            }}
+                                            style={{ padding: '8px 20px', background: expWords >= 20 ? '#2563eb' : '#94a3b8', color: 'white', border: 'none', borderRadius: '6px', cursor: expWords >= 20 ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '0.875rem' }}
+                                          >
+                                            Confirm Vote for Option {pendingVoteChoice.letter}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             ) : (
                               <div style={{
@@ -3645,8 +3676,17 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       );
                     })()}
 
+                    {/* END-GAME TEST GATE */}
+                    {gameState.gamePhase === 'complete' && userRole !== 'superadmin' && !endTestDone && (
+                      <EndGameTest
+                        socket={socket}
+                        playerId={playerId}
+                        onComplete={() => setEndTestDone(true)}
+                      />
+                    )}
+
                     {/* GAME COMPLETE */}
-                    {gameState.gamePhase === 'complete' && (
+                    {gameState.gamePhase === 'complete' && (userRole === 'superadmin' || endTestDone) && (
                       <div>
                         <div style={{
                           padding: '40px',

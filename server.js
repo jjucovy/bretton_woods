@@ -2513,6 +2513,23 @@ function resolveCrisisEffects(gameId, crisisId = null) {
       if (effects.inflation) yearData.inflation = (yearData.inflation || 0) + effects.inflation;
       if (effects.unemployment) yearData.unemployment = (yearData.unemployment || 0) + effects.unemployment;
 
+      // Crisis military budget effects: escalation costs force higher military spending next year
+      const crisisCost = choice.cost || 0;
+      const hasMilitaryReq = !!(choice.militaryRequired && Object.keys(choice.militaryRequired).length > 0);
+      if (crisisCost > 0 || hasMilitaryReq) {
+        // Every $200B in crisis cost ≈ +0.5% GDP military spending commitment next year
+        const spendingIncrease = Math.min(4, Math.ceil(crisisCost / 200) * 0.5);
+        if (!room.phase2.pendingMilitaryModifiers) room.phase2.pendingMilitaryModifiers = {};
+        if (!room.phase2.pendingMilitaryModifiers[country]) room.phase2.pendingMilitaryModifiers[country] = 0;
+        room.phase2.pendingMilitaryModifiers[country] += spendingIncrease;
+        // Commit minimum troops if militaryRequired
+        if (hasMilitaryReq) {
+          if (!room.phase2.militaryCommitments) room.phase2.militaryCommitments = {};
+          room.phase2.militaryCommitments[country] = choice.militaryRequired;
+        }
+        console.log(`  ⚔️ ${country}: crisis military modifier +${spendingIncrease}% GDP spending, militaryRequired:`, choice.militaryRequired || 'none');
+      }
+
       // Apply diplomatic points
       if (effects.diplomaticPoints) {
         if (!room.phase2.diplomaticPoints) room.phase2.diplomaticPoints = {};
@@ -3658,8 +3675,47 @@ io.on('connection', (socket) => {
     console.log('=========================');
   });
   
+  // Pre-game quiz submission
+  socket.on('submitPreGameQuiz', ({ playerId: pid, answers, score, total }) => {
+    const id = String(pid);
+    let gameId = null;
+    for (const [gId, room] of Object.entries(globalState.games)) {
+      if (room.players[id]) { gameId = gId; break; }
+    }
+    if (!gameId) return;
+    const room = globalState.games[gameId];
+    if (room.players[id]) {
+      room.players[id].quizCompleted = true;
+      room.players[id].quizScore = score;
+      room.players[id].quizTotal = total;
+      console.log(`✅ Quiz completed: userId=${id} score=${score}/${total}`);
+    }
+    socket.emit('quizCompleted', { success: true, score, total });
+    broadcastToRoom(gameId);
+    saveState();
+  });
+
+  // End-of-game test submission
+  socket.on('submitEndGameTest', ({ playerId: pid, answers, score, total }) => {
+    const id = String(pid);
+    let gameId = null;
+    for (const [gId, room] of Object.entries(globalState.games)) {
+      if (room.players[id]) { gameId = gId; break; }
+    }
+    if (!gameId) return;
+    const room = globalState.games[gameId];
+    if (room.players[id]) {
+      room.players[id].endTestCompleted = true;
+      room.players[id].endTestScore = score;
+      room.players[id].endTestTotal = total;
+      console.log(`✅ End-game test completed: userId=${id} score=${score}/${total}`);
+    }
+    socket.emit('endTestCompleted', { success: true, score, total });
+    saveState();
+  });
+
   // Vote on current issue
-  socket.on('vote', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId, choice }) => {
+  socket.on('vote', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId, choice, explanation }) => {
     const gameId = _gId || _rId;
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
@@ -3687,6 +3743,12 @@ io.on('connection', (socket) => {
 
     // Store vote keyed by DB player_id
     room.votes[playerDbId] = choice;
+    // Store explanation separately
+    if (explanation) {
+      if (!room.voteExplanations) room.voteExplanations = {};
+      if (!room.voteExplanations[room.currentRound]) room.voteExplanations[room.currentRound] = {};
+      room.voteExplanations[room.currentRound][playerDbId] = explanation;
+    }
     console.log(`Vote received: userId=${id} player_id=${playerDbId} voted ${choice} in room ${gameId}`);
 
     // Check if all players have voted
@@ -4092,24 +4154,47 @@ io.on('connection', (socket) => {
       return;
     }
     
-    room.phase2.policies[currentYear][normalizeCountryName(player.country)] = policy.isCommandEconomy ? {
+    // Apply crisis military modifiers — crisis escalation commitments raise minimum spending
+    const normCountry = normalizeCountryName(player.country);
+    const crisisMilitaryMod = room.phase2.pendingMilitaryModifiers?.[normCountry] || 0;
+    const militaryCommitment = room.phase2.militaryCommitments?.[normCountry] || {};
+    const effectiveMilitarySpending = Math.min(20, (policy.militarySpending || (policy.isCommandEconomy ? 15 : 5)) + crisisMilitaryMod);
+    const effectiveArmySize = Math.max(policy.armySize || 500000, militaryCommitment.army || 0);
+    const effectiveNavySize = Math.max(policy.navySize || 100000, militaryCommitment.navy || 0);
+    const effectiveAirForceSize = Math.max(policy.airForceSize || 100000, militaryCommitment.airForce || 0);
+    if (crisisMilitaryMod > 0) {
+      console.log(`⚔️ Crisis military modifier applied for ${normCountry}: +${crisisMilitaryMod}% → effective spending=${effectiveMilitarySpending}%`);
+    }
+    // Clear modifiers after applying (one-year effect)
+    if (room.phase2.pendingMilitaryModifiers) delete room.phase2.pendingMilitaryModifiers[normCountry];
+    if (room.phase2.militaryCommitments) delete room.phase2.militaryCommitments[normCountry];
+
+    room.phase2.policies[currentYear][normCountry] = policy.isCommandEconomy ? {
       // Command economy policy
       fiveYearPlanTarget: policy.fiveYearPlanTarget || 8,
       heavyIndustryAllocation: policy.heavyIndustryAllocation || 60,
-      foreignTradeOrientation: policy.foreignTradeOrientation || 50, // 0=COMECON, 100=West
-      planFulfillmentPriority: policy.planFulfillmentPriority || 70, // Gosbank credit rigor
-      militarySpending: policy.militarySpending || 15,
+      foreignTradeOrientation: policy.foreignTradeOrientation || 50,
+      planFulfillmentPriority: policy.planFulfillmentPriority || 70,
+      militarySpending: effectiveMilitarySpending,
       militarySize: policy.militarySize || 3000000,
+      armySize: effectiveArmySize,
+      navySize: effectiveNavySize,
+      airForceSize: effectiveAirForceSize,
       isCommandEconomy: true,
+      explanation: policy.explanation || '',
       submittedAt: Date.now()
     } : {
       // Market economy policy
       centralBankRate: policy.centralBankRate || 3.0,
       exchangeRate: policy.exchangeRate || 1.0,
       tariffRate: policy.tariffRate || 10,
-      militarySpending: policy.militarySpending || 5,
+      militarySpending: effectiveMilitarySpending,
       militarySize: policy.militarySize || 500000,
+      armySize: effectiveArmySize,
+      navySize: effectiveNavySize,
+      airForceSize: effectiveAirForceSize,
       isCommandEconomy: false,
+      explanation: policy.explanation || '',
       submittedAt: Date.now()
     };
     
