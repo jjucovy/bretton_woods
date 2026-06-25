@@ -3726,6 +3726,7 @@ io.on('connection', (socket) => {
         queryDatabase('saveSubmission', {
           player_id: playerDbId,
           submissions_type_id: 1,
+          round_number: 0,
           quiz_completed: 1,
           quiz_score: score,
           quiz_total: total
@@ -3756,6 +3757,7 @@ io.on('connection', (socket) => {
         queryDatabase('saveSubmission', {
           player_id: playerDbId,
           submissions_type_id: 4,
+          round_number: 0,
           end_test_completed: 1,
           end_test_score: score,
           quiz_total: total
@@ -3803,7 +3805,8 @@ io.on('connection', (socket) => {
       queryDatabase('saveSubmission', {
         player_id: playerDbId,
         submissions_type_id: 2,
-        vote_explanation: `Round ${room.currentRound} (Option ${choice.toUpperCase()}): ${explanation}`
+        round_number: room.currentRound,
+        vote_explanation: `Option ${choice.toUpperCase()}: ${explanation}`
       }).catch(err => console.error('⚠️ Failed to save vote explanation:', err));
     }
     console.log(`Vote received: userId=${id} player_id=${playerDbId} voted ${choice} in room ${gameId}`);
@@ -4262,7 +4265,8 @@ io.on('connection', (socket) => {
       queryDatabase('saveSubmission', {
         player_id: player.id,
         submissions_type_id: 3,
-        policy_explanation: `${currentYear}: ${policy.explanation}`
+        round_number: currentYear,
+        policy_explanation: policy.explanation
       }).catch(err => console.error('⚠️ Failed to save policy explanation:', err));
     }
 
