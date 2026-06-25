@@ -3721,6 +3721,17 @@ io.on('connection', (socket) => {
       room.players[id].quizScore = score;
       room.players[id].quizTotal = total;
       console.log(`✅ Quiz completed: userId=${id} score=${score}/${total}`);
+      const playerDbId = room.players[id].id;
+      if (playerDbId) {
+        queryDatabase('saveSubmission', {
+          player_id: playerDbId,
+          submissions_type_id: 1,
+          round_number: 0,
+          quiz_completed: 1,
+          quiz_score: score,
+          quiz_total: total
+        }).catch(err => console.error('⚠️ Failed to save quiz submission:', err));
+      }
     }
     socket.emit('quizCompleted', { success: true, score, total });
     broadcastToRoom(gameId);
@@ -3741,6 +3752,17 @@ io.on('connection', (socket) => {
       room.players[id].endTestScore = score;
       room.players[id].endTestTotal = total;
       console.log(`✅ End-game test completed: userId=${id} score=${score}/${total}`);
+      const playerDbId = room.players[id].id;
+      if (playerDbId) {
+        queryDatabase('saveSubmission', {
+          player_id: playerDbId,
+          submissions_type_id: 4,
+          round_number: 0,
+          end_test_completed: 1,
+          end_test_score: score,
+          quiz_total: total
+        }).catch(err => console.error('⚠️ Failed to save end-game test submission:', err));
+      }
     }
     socket.emit('endTestCompleted', { success: true, score, total });
     saveState();
@@ -3780,6 +3802,12 @@ io.on('connection', (socket) => {
       if (!room.voteExplanations) room.voteExplanations = {};
       if (!room.voteExplanations[room.currentRound]) room.voteExplanations[room.currentRound] = {};
       room.voteExplanations[room.currentRound][playerDbId] = explanation;
+      queryDatabase('saveSubmission', {
+        player_id: playerDbId,
+        submissions_type_id: 2,
+        round_number: room.currentRound,
+        vote_explanation: `Option ${choice.toUpperCase()}: ${explanation}`
+      }).catch(err => console.error('⚠️ Failed to save vote explanation:', err));
     }
     console.log(`Vote received: userId=${id} player_id=${playerDbId} voted ${choice} in room ${gameId}`);
 
@@ -4231,7 +4259,17 @@ io.on('connection', (socket) => {
     };
     
     console.log(`Player ${playerid} (${player.country}) submitted policy for ${currentYear}`);
-    
+
+    // Persist policy explanation to DB
+    if (policy.explanation && player.id) {
+      queryDatabase('saveSubmission', {
+        player_id: player.id,
+        submissions_type_id: 3,
+        round_number: currentYear,
+        policy_explanation: policy.explanation
+      }).catch(err => console.error('⚠️ Failed to save policy explanation:', err));
+    }
+
     // Mark ready
     if (!room.readyPlayers.includes(playerid)) {
       room.readyPlayers.push(playerid);
