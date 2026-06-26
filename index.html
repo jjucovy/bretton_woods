@@ -1132,7 +1132,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         </div>
                       ) : (
                     <div style={{ display: 'grid', gap: '16px' }}>
-                      {availableGames.filter((game) => !myActiveGames.some(ag => ag.gameCode === game.gameCode)).map((game) => (
+                      {availableGames.map((game) => {
+                        const myActiveGame = myActiveGames.find(ag => ag.gameCode === game.gameCode || String(ag.gameId) === String(game.gameId));
+                        const myCountry = myActiveGame?.country_code;
+                        return (
                         <div
                           key={game.gameCode}
                           onClick={() => handleSelectGame(game.gameId || game.roomId || game.gameCode)}
@@ -1206,27 +1209,53 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 )}
                               </div>
                             </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectGame(game.gameId || game.roomId || game.gameCode);
-                              }}
-                              style={{
-                                padding: '10px 20px',
-                                background: '#3b82f6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '0.95rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                              }}
-                              onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
-                              onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
-                            >
-                              {isSuperAdmin ? '👁️ Observe' : '🎯 Join Game'}
-                            </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectGame(game.gameId || game.roomId || game.gameCode);
+                                }}
+                                style={{
+                                  padding: '10px 20px',
+                                  background: myCountry ? '#16a34a' : '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  fontSize: '0.95rem',
+                                  fontWeight: 'bold',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = myCountry ? '#15803d' : '#2563eb'}
+                                onMouseOut={(e) => e.currentTarget.style.background = myCountry ? '#16a34a' : '#3b82f6'}
+                              >
+                                {isSuperAdmin ? '👁️ Observe' : myCountry ? `↩ Rejoin as ${myCountry}` : '🎯 Join Game'}
+                              </button>
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(`/api/submissions?game_id=${game.gameId || game.gameCode}`, '_blank');
+                                  }}
+                                  style={{
+                                    padding: '7px 14px',
+                                    background: '#7c3aed',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                  onMouseOver={(e) => e.currentTarget.style.background = '#6d28d9'}
+                                  onMouseOut={(e) => e.currentTarget.style.background = '#7c3aed'}
+                                >
+                                  📋 View Submissions
+                                </button>
+                              )}
+                            </div>
                           </div>
                           
                           {isSuperAdmin && (
@@ -1286,7 +1315,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
                           )}
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                       )}
                     </div>
