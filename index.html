@@ -267,6 +267,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [showBattleOptionsModal, setShowBattleOptionsModal] = useState(false);
           const [battleOptionsData, setBattleOptionsData] = useState(null);
           const [tensionAlerts, setTensionAlerts] = useState([]);
+          const [submissionsModal, setSubmissionsModal] = useState(null); // { gameId, gameCode, rows, loading, error }
           const [crisisMinimized, setCrisisMinimized] = useState(false);
           const [battleModalMinimized, setBattleModalMinimized] = useState(false);
           const [diplomaticModalMinimized, setDiplomaticModalMinimized] = useState(false);
@@ -1234,9 +1235,25 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               </button>
                               {isSuperAdmin && (
                                 <button
-                                  onClick={(e) => {
+                                  onClick={async (e) => {
                                     e.stopPropagation();
-                                    window.open(`/api/submissions?game_id=${game.gameId || game.gameCode}`, '_blank');
+                                    const gid = game.gameId || game.gameCode;
+                                    setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: [], loading: true, error: null });
+                                    try {
+                                      const res = await fetch('https://jucovy.com/api.php?key=bretton-woods-secret-key-2024', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ action: 'getSubmissions', game_id: gid })
+                                      });
+                                      const json = await res.json();
+                                      if (json.success) {
+                                        setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: json.data || [], loading: false, error: null });
+                                      } else {
+                                        setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: [], loading: false, error: json.error || 'Failed to load' });
+                                      }
+                                    } catch (err) {
+                                      setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: [], loading: false, error: err.message });
+                                    }
                                   }}
                                   style={{
                                     padding: '7px 14px',
@@ -4204,6 +4221,51 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 </div>
              )}
   
+                {/* SUBMISSIONS MODAL */}
+                {submissionsModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div style={{ background: 'white', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '900px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                        <h2 style={{ margin: 0 }}>📋 Submissions — Game {submissionsModal.gameCode}</h2>
+                        <button onClick={() => setSubmissionsModal(null)} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 14px', cursor: 'pointer', fontWeight: 'bold' }}>✕ Close</button>
+                      </div>
+                      {submissionsModal.loading && <p style={{ textAlign: 'center', color: '#64748b' }}>Loading…</p>}
+                      {submissionsModal.error && <p style={{ color: '#dc2626' }}>Error: {submissionsModal.error}</p>}
+                      {!submissionsModal.loading && !submissionsModal.error && submissionsModal.rows.length === 0 && (
+                        <p style={{ color: '#64748b' }}>No submissions found for this game.</p>
+                      )}
+                      {!submissionsModal.loading && submissionsModal.rows.length > 0 && (
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                            <thead>
+                              <tr style={{ background: '#f1f5f9', position: 'sticky', top: 0 }}>
+                                {['Player ID', 'Type', 'Round', 'Quiz ✓', 'Quiz Score', 'End Test ✓', 'End Score', 'Vote Explanation', 'Policy Explanation'].map(h => (
+                                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {submissionsModal.rows.map((row, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', background: i % 2 === 0 ? 'white' : '#f8fafc' }}>
+                                  <td style={{ padding: '7px 10px' }}>{row.player_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{['','Pre-Game Quiz','Vote Explanation','Policy Explanation','End-Game Test'][row.submissions_type_id] || row.submissions_type_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.round_number}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.quiz_completed ? '✅' : '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.quiz_score != null ? `${row.quiz_score}/${row.quiz_total}` : '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.end_test_completed ? '✅' : '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.end_test_score != null ? row.end_test_score : '—'}</td>
+                                  <td style={{ padding: '7px 10px', maxWidth: '200px', wordBreak: 'break-word' }}>{row.vote_explanation || '—'}</td>
+                                  <td style={{ padding: '7px 10px', maxWidth: '200px', wordBreak: 'break-word' }}>{row.policy_explanation || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* BATTLE MODAL */}
                 {showBattleModal && militaryConflict && battleModalMinimized && (
                   <div
