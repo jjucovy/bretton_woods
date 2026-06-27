@@ -1236,7 +1236,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    window.open(`/api/submissions?game_id=${game.gameId || game.gameCode}`, '_blank');
+                                    window.open(`/api/getSubmissions?game_id=${game.gameId || game.gameCode}`, '_blank');
                                   }}
                                   style={{
                                     padding: '7px 14px',
