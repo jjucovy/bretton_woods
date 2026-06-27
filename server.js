@@ -771,14 +771,15 @@ app.get('/api/export-users', async (req, res) => {
 function updateRoomList() {
   globalState.roomList = Object.keys(globalState.games).map(gameId => {
     const room = globalState.games[gameId];
-    const playerCount = Object.keys(room.players).length;
-    
+    // Only count country-assigned players; superadmin observers live in observerSockets
+    const playerCount = Object.values(room.players).filter(p => p.country).length;
+
     return {
       id: gameId,
       name: room.roomName,
       host: room.hostId,
       playerCount: playerCount,
-      maxPlayers: room.maxPlayers,
+      maxPlayers: room.maxPlayers || 7,
       status: room.gameStarted ? 'playing' : 'waiting',
       phase: room.gamePhase,
       createdAt: room.createdAt
@@ -2857,20 +2858,24 @@ io.on('connection', (socket) => {
         const lobbyGames = Object.values(globalState.games).filter(room => {
           // Must be in lobby phase (not started)
           if (room.gamePhase !== 'lobby' || room.gameStarted) return false;
-          // Must have room for new players (less than 7)
-          const playerCount = Object.keys(room.players).length;
-          if (playerCount >= 7) return false;
+          // Must have room for new players — only count country-assigned players, not observers
+          const activePlayerCount = Object.values(room.players).filter(p => p.country).length;
+          if (activePlayerCount >= (room.maxPlayers || 7)) return false;
           return true;
         });
-        availableGames = lobbyGames.map(room => ({
-          gameId: room.game_id,
-          gameCode: room.game_code || room.game_id,
-          playerCount: Object.keys(room.players).length,
-          maxPlayers: 7,
-          availableSlots: 7 - Object.keys(room.players).length,
-          hostUserId: room.hostUserId || room.hostId,
-          createdAt: room.createdAt
-        }));
+        availableGames = lobbyGames.map(room => {
+          const activeCount = Object.values(room.players).filter(p => p.country).length;
+          const max = room.maxPlayers || 7;
+          return {
+            gameId: room.game_id,
+            gameCode: room.game_code || room.game_id,
+            playerCount: activeCount,
+            maxPlayers: max,
+            availableSlots: max - activeCount,
+            hostUserId: room.hostUserId || room.hostId,
+            createdAt: room.createdAt
+          };
+        });
         console.log(`   Found ${availableGames.length} available lobby games for player`);
       }
 
@@ -3367,9 +3372,18 @@ io.on('connection', (socket) => {
       console.log(`✅ Superadmin ${id} has player record in game ${gameId} - allowing join as player`);
     }
     
+    // Check capacity — observers (in observerSockets) are never in room.players so they don't count
+    const activePlayers = Object.values(room.players).filter(p => p.country).length;
+    const existingPlayer = room.players[id];
+    if (!existingPlayer && activePlayers >= (room.maxPlayers || 7)) {
+      console.log(`❌ Game ${gameId} is full (${activePlayers}/${room.maxPlayers || 7})`);
+      socket.emit('joinResult', { success: false, message: `Game is full (${room.maxPlayers || 7} players maximum)` });
+      return;
+    }
+
     // Check if country is already taken
     const taken = Object.values(room.players).some(p => p.country === country);
-    
+
     if (taken) {
       console.log(`❌ Country ${country} already taken`);
       socket.emit('joinResult', { success: false, message: 'Country already taken' });
@@ -3811,8 +3825,9 @@ io.on('connection', (socket) => {
     }
     console.log(`Vote received: userId=${id} player_id=${playerDbId} voted ${choice} in room ${gameId}`);
 
-    // Check if all players have voted
-    const allVoted = Object.values(room.players).every(p => room.votes[p.id]);
+    // Check if all active (country-assigned) players have voted — observers have no country and are in observerSockets, not room.players
+    const activePlayers = Object.values(room.players).filter(p => p.country);
+    const allVoted = activePlayers.length > 0 && activePlayers.every(p => room.votes[p.id]);
     
     if (allVoted) {
       console.log('All players voted, calculating results...');
@@ -4307,14 +4322,15 @@ io.on('connection', (socket) => {
       year: currentYear
     });
     
-    // Check if all players have submitted policies
-    const activePlayers = Object.keys(room.players).length;
+    // Check if all active (country-assigned) players have submitted policies
+    // Observers live in observerSockets, not room.players, so they are already excluded
+    const countActivePlayers = Object.values(room.players).filter(p => p.country).length;
     const readyCount = room.readyPlayers.length;
-    
-    console.log(`Policy submissions: ${readyCount}/${activePlayers} players ready`);
+
+    console.log(`Policy submissions: ${readyCount}/${countActivePlayers} players ready`);
 
     // Auto-advance if all players submitted
-    if (readyCount === activePlayers && activePlayers > 0) {
+    if (readyCount === countActivePlayers && countActivePlayers > 0) {
       console.log('🎯 All players have submitted policies!');
 
       // Wait a moment then check for conflicts or auto-advance
