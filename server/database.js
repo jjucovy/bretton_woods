@@ -7,6 +7,11 @@ const DB_API = {
   apiKey: 'bretton-woods-secret-key-2024'
 };
 
+// Build URL with key as query param — avoids body-parsing issues on the PHP host
+function apiUrl() {
+  return `${DB_API.url}?key=${DB_API.apiKey}`;
+}
+
 async function queryDatabase(action, data = {}) {
   try {
     const payload = {
@@ -17,7 +22,7 @@ async function queryDatabase(action, data = {}) {
 
     console.log(`📤 DB Request [${action}]:`, JSON.stringify(data));
 
-    const response = await axios.post(DB_API.url, payload, {
+    const response = await axios.post(apiUrl(), payload, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 15000
     });
@@ -48,7 +53,7 @@ async function queryDatabaseForm(action, data = {}) {
 
     console.log(`📤 DB Form Request [${action}]:`, JSON.stringify(data));
 
-    const response = await axios.post(DB_API.url, qs.stringify(payload), {
+    const response = await axios.post(apiUrl(), qs.stringify(payload), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       timeout: 15000
     });
