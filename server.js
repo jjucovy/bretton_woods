@@ -4477,23 +4477,6 @@ io.on('connection', (socket) => {
     const currentYear = room.phase2.currentYear;
     const normalizedCountry = normalizeCountryName(country);
 
-    // Deployment limit: max 2 deployments per country per year
-    const MAX_DEPLOYMENTS_PER_YEAR = 2;
-    if (!room.phase2.deploymentsThisYear) {
-      room.phase2.deploymentsThisYear = {};
-    }
-    const countryDeploymentsThisYear = room.phase2.deploymentsThisYear[normalizedCountry] || 0;
-    if (countryDeploymentsThisYear >= MAX_DEPLOYMENTS_PER_YEAR) {
-      console.log(`Deploy troops rejected: ${country} already deployed ${countryDeploymentsThisYear} times this year (max ${MAX_DEPLOYMENTS_PER_YEAR})`);
-      const playerSocket = io.sockets.sockets.get(player.socketId);
-      if (playerSocket) {
-        playerSocket.emit('deploymentRejected', {
-          region,
-          reason: `You have already deployed ${MAX_DEPLOYMENTS_PER_YEAR} times this year. Wait for the next year.`
-        });
-      }
-      return;
-    }
 
     // Year-gate checks
     if (region === 'Pakistan' && currentYear < 1947) {
@@ -4592,9 +4575,6 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Track deployment count for this year
-    room.phase2.deploymentsThisYear[normalizedCountry] = (room.phase2.deploymentsThisYear[normalizedCountry] || 0) + 1;
-    console.log(`   📋 ${normalizedCountry} deployments this year: ${room.phase2.deploymentsThisYear[normalizedCountry]}/${MAX_DEPLOYMENTS_PER_YEAR}`);
 
     console.log(`✅ ${country} deployed ${troops} ${normalizedBranch} to ${region}`);
     console.log(`   Cumulative in ${region}: ${JSON.stringify(room.phase2.cumulativeDeployments[region][country])}`);
@@ -5645,7 +5625,6 @@ io.on('connection', (socket) => {
     room.phase2.currentYear++;
     room.currentRound++; // Track Phase 2 progress in DB (11=1946, 12=1947, etc.)
     room.readyPlayers = [];
-    room.phase2.deploymentsThisYear = {}; // Reset deployment limits for new year
 
     // Score this year's economic performance
     calculateYearlyPhase2Score(gameId, room.phase2.currentYear);
