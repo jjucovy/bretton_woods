@@ -4239,7 +4239,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                             <thead>
                               <tr style={{ background: '#f1f5f9', position: 'sticky', top: 0 }}>
-                                {['Player ID', 'Type', 'Round', 'Quiz ✓', 'Quiz Score', 'End Test ✓', 'End Score', 'Vote Explanation', 'Policy Explanation'].map(h => (
+                                {['Player', 'Country', 'Type', 'Round', 'Quiz ✓', 'Quiz Score', 'End Test ✓', 'End Score', 'Vote Explanation', 'Policy Explanation'].map(h => (
                                   <th key={h} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
                                 ))}
                               </tr>
@@ -4247,8 +4247,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             <tbody>
                               {submissionsModal.rows.map((row, i) => (
                                 <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', background: i % 2 === 0 ? 'white' : '#f8fafc' }}>
-                                  <td style={{ padding: '7px 10px' }}>{row.player_id}</td>
-                                  <td style={{ padding: '7px 10px' }}>{['','Pre-Game Quiz','Vote Explanation','Policy Explanation','End-Game Test'][row.submissions_type_id] || row.submissions_type_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.username || row.player_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.country_code || '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.type_name || row.submissions_type_id}</td>
                                   <td style={{ padding: '7px 10px' }}>{row.round_number}</td>
                                   <td style={{ padding: '7px 10px' }}>{row.quiz_completed ? '✅' : '—'}</td>
                                   <td style={{ padding: '7px 10px' }}>{row.quiz_score != null ? `${row.quiz_score}/${row.quiz_total}` : '—'}</td>
