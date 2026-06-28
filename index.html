@@ -773,6 +773,26 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             window.location.reload();
           };
 
+          // Load submissions for a game and open the modal
+          const loadSubmissions = async (gameId, gameCode) => {
+            setSubmissionsModal({ gameId, gameCode, rows: [], loading: true, error: null });
+            try {
+              const res = await fetch('https://jucovy.com/api.php?key=bretton-woods-secret-key-2024', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'getSubmissions', game_id: gameId })
+              });
+              const json = await res.json();
+              if (json.success) {
+                setSubmissionsModal({ gameId, gameCode, rows: json.data || [], loading: false, error: null });
+              } else {
+                setSubmissionsModal({ gameId, gameCode, rows: [], loading: false, error: json.error || 'Failed to load' });
+              }
+            } catch (err) {
+              setSubmissionsModal({ gameId, gameCode, rows: [], loading: false, error: err.message });
+            }
+          };
+
           // Game handlers
           const handleJoinGame = (country) => {
             if (userRole === 'superadmin') {
@@ -1233,45 +1253,6 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               >
                                 {isSuperAdmin ? '👁️ Observe' : myCountry ? `↩ Rejoin as ${myCountry}` : '🎯 Join Game'}
                               </button>
-                              {isSuperAdmin && (
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    const gid = game.gameId || game.gameCode;
-                                    setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: [], loading: true, error: null });
-                                    try {
-                                      const res = await fetch('https://jucovy.com/api.php?key=bretton-woods-secret-key-2024', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ action: 'getSubmissions', game_id: gid })
-                                      });
-                                      const json = await res.json();
-                                      if (json.success) {
-                                        setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: json.data || [], loading: false, error: null });
-                                      } else {
-                                        setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: [], loading: false, error: json.error || 'Failed to load' });
-                                      }
-                                    } catch (err) {
-                                      setSubmissionsModal({ gameId: gid, gameCode: game.gameCode, rows: [], loading: false, error: err.message });
-                                    }
-                                  }}
-                                  style={{
-                                    padding: '7px 14px',
-                                    background: '#7c3aed',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    fontSize: '0.82rem',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                  onMouseOver={(e) => e.currentTarget.style.background = '#6d28d9'}
-                                  onMouseOut={(e) => e.currentTarget.style.background = '#7c3aed'}
-                                >
-                                  📋 View Submissions
-                                </button>
-                              )}
                             </div>
                           </div>
                           
@@ -2043,25 +2024,42 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <p style={{ margin: '0 0 12px 0', color: '#991b1b', fontSize: '0.8rem' }}>
                                 Use if players are unable to vote (e.g. after a server restart). Skips this round without recording results.
                               </p>
-                              <button
-                                onClick={() => {
-                                  if (window.confirm(`Skip Round ${gameState.currentRound} and advance to the next round?\n\nAny votes already cast this round will be discarded.`)) {
-                                    socket.emit('advanceRound', { gameId: currentRoomId, playerId });
-                                  }
-                                }}
-                                style={{
-                                  padding: '10px 24px',
-                                  background: '#dc2626',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  fontSize: '0.9rem',
-                                  fontWeight: '600',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                ⏭ Force Advance to Round {(gameState.currentRound || 1) + 1}
-                              </button>
+                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`Skip Round ${gameState.currentRound} and advance to the next round?\n\nAny votes already cast this round will be discarded.`)) {
+                                      socket.emit('advanceRound', { gameId: currentRoomId, playerId });
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 24px',
+                                    background: '#dc2626',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  ⏭ Force Advance to Round {(gameState.currentRound || 1) + 1}
+                                </button>
+                                <button
+                                  onClick={() => loadSubmissions(gameState.game_id || currentRoomId, gameState.game_code || currentRoomId)}
+                                  style={{
+                                    padding: '10px 24px',
+                                    background: '#7c3aed',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  📋 View Submissions
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -3693,30 +3691,49 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               border: '2px solid #dc2626'
                             }}>
                               <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#dc2626' }}>🛡️ Administrator Controls</h3>
-                              <button
-                                onClick={() => {
-                                  // Super admin sends userId, not playerId (they're not a player)
-                                  socket.emit('advanceYear', {
-                                    gameId: currentRoomId,
-                                    userId: playerId  // playerId for superadmin is actually their userId
-                                  });
-                                }}
-                                style={{
-                                  padding: '15px 40px',
-                                  background: '#16a34a',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '8px',
-                                  fontSize: '1.1rem',
-                                  fontWeight: 'bold',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s'
-                                }}
-                                onMouseOver={(e) => e.currentTarget.style.background = '#15803d'}
-                                onMouseOut={(e) => e.currentTarget.style.background = '#16a34a'}
-                              >
-                                🎯 Advance to Year {currentYear + 1}
-                              </button>
+                              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <button
+                                  onClick={() => {
+                                    socket.emit('advanceYear', {
+                                      gameId: currentRoomId,
+                                      userId: playerId
+                                    });
+                                  }}
+                                  style={{
+                                    padding: '15px 40px',
+                                    background: '#16a34a',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseOver={(e) => e.currentTarget.style.background = '#15803d'}
+                                  onMouseOut={(e) => e.currentTarget.style.background = '#16a34a'}
+                                >
+                                  🎯 Advance to Year {currentYear + 1}
+                                </button>
+                                <button
+                                  onClick={() => loadSubmissions(gameState.game_id || currentRoomId, gameState.game_code || currentRoomId)}
+                                  style={{
+                                    padding: '15px 40px',
+                                    background: '#7c3aed',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseOver={(e) => e.currentTarget.style.background = '#6d28d9'}
+                                  onMouseOut={(e) => e.currentTarget.style.background = '#7c3aed'}
+                                >
+                                  📋 View Submissions
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -4239,7 +4256,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                             <thead>
                               <tr style={{ background: '#f1f5f9', position: 'sticky', top: 0 }}>
-                                {['Player ID', 'Type', 'Round', 'Quiz ✓', 'Quiz Score', 'End Test ✓', 'End Score', 'Vote Explanation', 'Policy Explanation'].map(h => (
+                                {['Player', 'Country', 'Type', 'Round', 'Quiz ✓', 'Quiz Score', 'End Test ✓', 'End Score', 'Vote Explanation', 'Policy Explanation'].map(h => (
                                   <th key={h} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
                                 ))}
                               </tr>
@@ -4247,8 +4264,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             <tbody>
                               {submissionsModal.rows.map((row, i) => (
                                 <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', background: i % 2 === 0 ? 'white' : '#f8fafc' }}>
-                                  <td style={{ padding: '7px 10px' }}>{row.player_id}</td>
-                                  <td style={{ padding: '7px 10px' }}>{['','Pre-Game Quiz','Vote Explanation','Policy Explanation','End-Game Test'][row.submissions_type_id] || row.submissions_type_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.username || row.player_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.country_code || '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.type_name || row.submissions_type_id}</td>
                                   <td style={{ padding: '7px 10px' }}>{row.round_number}</td>
                                   <td style={{ padding: '7px 10px' }}>{row.quiz_completed ? '✅' : '—'}</td>
                                   <td style={{ padding: '7px 10px' }}>{row.quiz_score != null ? `${row.quiz_score}/${row.quiz_total}` : '—'}</td>
