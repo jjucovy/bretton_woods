@@ -4442,9 +4442,13 @@ io.on('connection', (socket) => {
 
   // PHASE 2: Advance to next year
   // PLAYER: Deploy troops
-  socket.on('deployTroops', ({ gameId, playerid, deployment }) => {
+  socket.on('deployTroops', ({ gameId: _gId, roomId: _rId, playerid, deployment }) => {
+    const gameId = _gId || _rId;
     const room = globalState.games[gameId];
-    if (!room) return;
+    if (!room) {
+      console.log(`❌ deployTroops: room not found for gameId=${_gId} roomId=${_rId}`);
+      return;
+    }
 
     const player = room.players[playerid];
     if (!player) return;
