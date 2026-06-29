@@ -1070,7 +1070,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         fontWeight: 'bold'
                                       }}>
                                         {game.gamePhase === 'lobby' ? 'Lobby' :
-                                         game.gamePhase === 'voting' ? `Voting - Round ${game.currentRound || 0}/10` :
+                                         game.gamePhase === 'voting' ? `Voting - Round ${game.currentRound || 0}/17` :
                                          game.gamePhase === 'results' ? 'Results' :
                                          game.gamePhase === 'phase2' ? `Phase 2 - ${game.currentYear || '1946'}` :
                                          game.gamePhase}
@@ -1279,7 +1279,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <div>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Round</div>
                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>
-                                  {game.currentRound || 0} / 10
+                                  {game.currentRound || 0} / 17
                                 </div>
                               </div>
                               <div>
@@ -1899,7 +1899,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                               <h2 style={{ color: myTheme?.textDark || '#1e40af', margin: 0, fontSize: '1.5rem' }}>
-                                Round {gameState.currentRound} of 10
+                                Round {gameState.currentRound} of 17
                               </h2>
                               <p style={{ color: myTheme?.textMedium || '#3b82f6', margin: '5px 0 0 0', fontSize: '0.875rem' }}>
                                 Phase 1: Conference Voting

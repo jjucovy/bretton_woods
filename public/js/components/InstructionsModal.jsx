@@ -152,7 +152,7 @@ function InstructionsModal({ onClose }) {
                 <div style={styles.grid2}>
                   <div style={styles.card}>
                     <div style={styles.cardTitle}>🏛️ Phase 1: The Conference</div>
-                    <div style={styles.cardText}>10 rounds of voting on the rules of the post-war economic order. Each vote shapes the world you'll manage in Phase 2.</div>
+                    <div style={styles.cardText}>17 rounds of voting on the rules of the post-war economic order. Each vote shapes the world you'll manage in Phase 2.</div>
                   </div>
                   <div style={styles.card}>
                     <div style={styles.cardTitle}>📊 Phase 2: Economic Management</div>
@@ -194,7 +194,7 @@ function InstructionsModal({ onClose }) {
               <div style={styles.section}>
                 <h2 style={styles.h2}>Phase 1: The Bretton Woods Conference</h2>
                 <p style={styles.p}>
-                  10 rounds of secret-ballot voting. Each round, all players simultaneously vote on one policy question.
+                  17 rounds of secret-ballot voting. Each round, all players simultaneously vote on one policy question.
                   The majority wins. <strong>Votes that align with your national interest score points.</strong>
                 </p>
 

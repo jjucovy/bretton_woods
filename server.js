@@ -4189,7 +4189,7 @@ io.on('connection', (socket) => {
     console.log(`✅ Advancing to round ${room.currentRound}`);
     
     // Check if Phase 1 is complete - start Phase 2
-    if (room.currentRound > 10) {
+    if (room.currentRound > 17) {
       initializePhase2(gameId);
       console.log('Phase 1 complete! Starting Phase 2: Post-war economic management');
     } else {
