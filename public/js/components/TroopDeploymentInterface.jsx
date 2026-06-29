@@ -150,18 +150,9 @@ const { useState } = React;
             return true;
           };
 
-          // Track deployments this year (from gameState)
-          const MAX_DEPLOYMENTS_PER_YEAR = 2;
-          const deploymentsThisYear = gameState?.phase2?.deploymentsThisYear?.[normalized] || 0;
-          const deploymentsRemaining = MAX_DEPLOYMENTS_PER_YEAR - deploymentsThisYear;
-
           const handleDeploy = () => {
             if (!selectedRegion) return;
             if (!isRegionAvailable(selectedRegion)) return;
-            if (deploymentsRemaining <= 0) {
-              alert(`You have already deployed ${MAX_DEPLOYMENTS_PER_YEAR} times this year. Wait for the next year.`);
-              return;
-            }
 
             const deployment = {
               country: playerCountry,
@@ -202,17 +193,6 @@ const { useState } = React;
               <h2 style={{ marginTop: 0, marginBottom: '10px', color: '#dc2626' }}>
                 ⚔️ Deploy Your Troops - {playerCountry}
               </h2>
-              <div style={{
-                marginBottom: '15px',
-                padding: '8px 12px',
-                background: deploymentsRemaining > 0 ? '#dbeafe' : '#fee2e2',
-                borderRadius: '6px',
-                fontSize: '0.9rem',
-                color: deploymentsRemaining > 0 ? '#1e40af' : '#991b1b',
-                fontWeight: 'bold'
-              }}>
-                Deployments remaining this year: {deploymentsRemaining} / {MAX_DEPLOYMENTS_PER_YEAR}
-              </div>
 
               {/* Current Deployments Summary */}
               {myDeployments.length > 0 && (

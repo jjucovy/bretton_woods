@@ -1070,7 +1070,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         fontWeight: 'bold'
                                       }}>
                                         {game.gamePhase === 'lobby' ? 'Lobby' :
-                                         game.gamePhase === 'voting' ? `Voting - Round ${game.currentRound || 0}/10` :
+                                         game.gamePhase === 'voting' ? `Voting - Round ${game.currentRound || 0}/17` :
                                          game.gamePhase === 'results' ? 'Results' :
                                          game.gamePhase === 'phase2' ? `Phase 2 - ${game.currentYear || '1946'}` :
                                          game.gamePhase}
@@ -1279,7 +1279,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <div>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Round</div>
                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>
-                                  {game.currentRound || 0} / 10
+                                  {game.currentRound || 0} / 17
                                 </div>
                               </div>
                               <div>
