@@ -3738,6 +3738,7 @@ io.on('connection', (socket) => {
       const playerDbId = room.players[id].id;
       if (playerDbId) {
         queryDatabase('saveSubmission', {
+          game_id: room.game_id || gameId,
           player_id: playerDbId,
           submissions_type_id: 1,
           round_number: 0,
@@ -3769,6 +3770,7 @@ io.on('connection', (socket) => {
       const playerDbId = room.players[id].id;
       if (playerDbId) {
         queryDatabase('saveSubmission', {
+          game_id: room.game_id || gameId,
           player_id: playerDbId,
           submissions_type_id: 4,
           round_number: 0,
@@ -3817,6 +3819,7 @@ io.on('connection', (socket) => {
       if (!room.voteExplanations[room.currentRound]) room.voteExplanations[room.currentRound] = {};
       room.voteExplanations[room.currentRound][playerDbId] = explanation;
       queryDatabase('saveSubmission', {
+        game_id: room.game_id || gameId,
         player_id: playerDbId,
         submissions_type_id: 2,
         round_number: room.currentRound,
@@ -4278,6 +4281,7 @@ io.on('connection', (socket) => {
     // Persist policy explanation to DB
     if (policy.explanation && player.id) {
       queryDatabase('saveSubmission', {
+        game_id: room.game_id || gameId,
         player_id: player.id,
         submissions_type_id: 3,
         round_number: currentYear,
