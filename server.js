@@ -6332,8 +6332,13 @@ async function initializeFromDatabase() {
               console.log(`   ✅ Round history restored (${snapshotHistory.length} rounds)`);
             }
 
+            // latest.phase comes back from MySQL/PHP and may be a string ("2") rather
+            // than a number — coerce once so the strict checks below don't silently
+            // skip Phase 2 restoration (this was the cause of games reverting to 1946).
+            const latestPhaseNum = parseInt(latest.phase, 10);
+
             // Restore currentYear from snapshot if in Phase 2
-            if (latest.current_year && latest.phase === 2) {
+            if (latest.current_year && latestPhaseNum === 2) {
               const snapshotYear = typeof latest.current_year === 'string' ? parseInt(latest.current_year) : latest.current_year;
               if (snapshotYear > roomState.phase2.currentYear) {
                 roomState.phase2.currentYear = snapshotYear;
@@ -6342,7 +6347,7 @@ async function initializeFromDatabase() {
             }
 
             // Restore Phase 2 yearly data from snapshot fields
-            if (latest.yearly_data && latest.phase === 2) {
+            if (latest.yearly_data && latestPhaseNum === 2) {
               let yearlyData = latest.yearly_data;
               if (typeof yearlyData === 'string') {
                 try { yearlyData = JSON.parse(yearlyData); } catch(e) { yearlyData = null; }
@@ -6354,28 +6359,28 @@ async function initializeFromDatabase() {
             }
 
             // Restore policies, deployments, crises from snapshot
-            if (latest.policies && latest.phase === 2) {
+            if (latest.policies && latestPhaseNum === 2) {
               let policies = latest.policies;
               if (typeof policies === 'string') {
                 try { policies = JSON.parse(policies); } catch(e) { policies = null; }
               }
               if (policies) roomState.phase2.policies = policies;
             }
-            if (latest.deployments && latest.phase === 2) {
+            if (latest.deployments && latestPhaseNum === 2) {
               let deployments = latest.deployments;
               if (typeof deployments === 'string') {
                 try { deployments = JSON.parse(deployments); } catch(e) { deployments = null; }
               }
               if (deployments) roomState.phase2.cumulativeDeployments = deployments;
             }
-            if (latest.crises && latest.phase === 2) {
+            if (latest.crises && latestPhaseNum === 2) {
               let crises = latest.crises;
               if (typeof crises === 'string') {
                 try { crises = JSON.parse(crises); } catch(e) { crises = null; }
               }
               if (crises) roomState.phase2.crises = crises;
             }
-            if (latest.diplomatic_points && latest.phase === 2) {
+            if (latest.diplomatic_points && latestPhaseNum === 2) {
               let diplo = latest.diplomatic_points;
               if (typeof diplo === 'string') {
                 try { diplo = JSON.parse(diplo); } catch(e) { diplo = null; }
