@@ -853,7 +853,14 @@ function broadcastRoomList() {
 function initializePhase2(gameId) {
   const room = globalState.games[gameId];
   if (!room) return;
-  
+
+  // Guard against re-running this on an already-active Phase 2 game — it hard-resets
+  // currentYear/yearlyData back to 1946, which is what caused games to revert.
+  if (room.phase2.active && Object.keys(room.phase2.yearlyData || {}).length > 0) {
+    console.log(`⚠️ initializePhase2(${gameId}) called but Phase 2 is already active (year=${room.phase2.currentYear}) — skipping re-init`);
+    return;
+  }
+
   const gameDataPath = path.join(__dirname, 'game-data.json');
   const gameData = JSON.parse(fs.readFileSync(gameDataPath, 'utf8'));
   const initialEconomicData = gameData.economicData;
@@ -4187,10 +4194,22 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Phase 2 progression is driven by 'advanceYear', not 'advanceRound'. If the room
+    // is already in (or past) Phase 2, calling this again must NOT re-run
+    // initializePhase2 — that hard-resets currentYear/yearlyData back to 1946 while
+    // currentRound keeps climbing, which is what caused games to "revert to 1946".
+    if (room.gamePhase === 'phase2' || room.gamePhase === 'complete') {
+      console.log(`❌ Advance round rejected - room ${gameId} is already in Phase 2/complete (use advanceYear instead)`);
+      socket.emit('advanceRoundError', {
+        message: 'Phase 2 is already active — use "Advance to Year" instead of "Force Advance Round".'
+      });
+      return;
+    }
+
     // Advance round
     room.currentRound++;
     console.log(`✅ Advancing to round ${room.currentRound}`);
-    
+
     // Check if Phase 1 is complete - start Phase 2
     if (room.currentRound > 10) {
       initializePhase2(gameId);
