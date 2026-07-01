@@ -6241,17 +6241,22 @@ async function initializeFromDatabase() {
           console.log(`   📸 Found ${snapshots.length} snapshot(s), best: id=${latestMeta.id}, type=${latestMeta.snapshot_type}, phase=${latestMeta.phase}, round/year=${latestMeta.round_or_year} (newest by timestamp: id=${snapshots[0].id}, round/year=${snapshots[0].round_or_year})`);
 
           let latest = latestMeta; // fallback to lightweight data
-          if (latestMeta.id) {
+          // Try snapshots in best-progress order until we get one with actual data.
+          // getGameStateSnapshot sometimes fails (PHP error, timeout) — don't give up on first failure.
+          const snapshotsTried = [latestMeta, ...snapshots.filter(s => s.id !== latestMeta.id)];
+          for (const candidateMeta of snapshotsTried) {
+            if (!candidateMeta.id) continue;
             try {
-              const fullSnapshot = await queryDatabase('getGameStateSnapshot', { id: latestMeta.id });
-              if (fullSnapshot && !fullSnapshot.error) {
+              const fullSnapshot = await queryDatabase('getGameStateSnapshot', { id: candidateMeta.id });
+              if (fullSnapshot && !fullSnapshot.error && (fullSnapshot.full_state || fullSnapshot.yearly_data)) {
                 latest = fullSnapshot;
-                console.log(`   📸 Fetched full snapshot (id=${latestMeta.id}), has full_state: ${!!latest.full_state}, has yearly_data: ${!!latest.yearly_data}`);
+                console.log(`   📸 Fetched full snapshot (id=${candidateMeta.id}), has full_state: ${!!latest.full_state}, has yearly_data: ${!!latest.yearly_data}`);
+                break;
               } else {
-                console.log(`   ⚠️ Could not fetch full snapshot by id=${latestMeta.id}, using lightweight data`);
+                console.log(`   ⚠️ Snapshot id=${candidateMeta.id} returned no useful data — trying next`);
               }
             } catch (fetchErr) {
-              console.log(`   ⚠️ Error fetching full snapshot: ${fetchErr.message}`);
+              console.log(`   ⚠️ Error fetching snapshot id=${candidateMeta.id}: ${fetchErr.message} — trying next`);
             }
           }
 
@@ -6429,7 +6434,13 @@ async function initializeFromDatabase() {
 
       // Try to load Phase 2 state from per-game JSON file (if it exists)
       // On Render, per-game files don't survive restarts, so snapshot restoration above is primary
-      const hasPhase2FromSnapshot = roomState.phase2?.yearlyData && Object.keys(roomState.phase2.yearlyData).length > 0;
+      // Treat "has snapshot" as true when either yearlyData was restored OR currentYear came back
+      // > 1946 from lightweight snapshot metadata (proof the game had progressed beyond the start).
+      // This prevents initializePhase2() from being called as a "last resort" and resetting to 1946
+      // when the single-row snapshot fetch fails but we still know the year from the list query.
+      const hasPhase2YearlyData = roomState.phase2?.yearlyData && Object.keys(roomState.phase2.yearlyData).length > 0;
+      const hasPhase2FromSnapshot = hasPhase2YearlyData ||
+        (roomState.phase2?.active && parseInt(roomState.phase2.currentYear) > 1946);
       const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
 
       if (wasInPhase2) {
@@ -6437,7 +6448,7 @@ async function initializeFromDatabase() {
         if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
           // Per-game file exists (local dev or non-ephemeral FS) — use it if it has more data than snapshot
           const fileYears = Object.keys(savedPhase2State.yearlyData).length;
-          const snapshotYears = hasPhase2FromSnapshot ? Object.keys(roomState.phase2.yearlyData).length : 0;
+          const snapshotYears = hasPhase2YearlyData ? Object.keys(roomState.phase2.yearlyData).length : 0;
 
           if (fileYears >= snapshotYears) {
             if (!roomState.phase2) roomState.phase2 = {};
