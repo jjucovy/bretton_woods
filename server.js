@@ -3302,6 +3302,11 @@ io.on('connection', (socket) => {
         // Player already in this game - update their socket ID for reconnection
         existingPlayer.socketId = socket.id;
         existingPlayer.disconnected = false;
+        if (!room.members) room.members = {};
+        if (!room.members[userId]) {
+          room.members[userId] = { role: 1, country: existingPlayer.country, playerId: existingPlayer.id || existingPlayer.playerId, ready: false };
+        }
+        registerUserSocket(userId, socket.id);
         console.log(`✅ User ${userId} reconnected to game ${gameId} as ${existingPlayer.country}`);
         
         socket.emit('joinRoomResult', { 
@@ -6290,14 +6295,23 @@ async function initializeFromDatabase() {
         console.log(`   Found ${players.length} member(s) in database`);
         if (!roomState.members) roomState.members = {};
         for (const player of players) {
+          const country = normalizeCountryName(player.country_code) || player.country_code;
+          const rawRole = parseInt(player.role ?? 1);
+          const role = (rawRole === 0 && String(player.user_id) === String(game.host_user_id)) ? 0 : (rawRole === 0 ? 1 : rawRole);
           roomState.players[player.user_id] = {
             id: player.player_id,
             userId: player.user_id,
-            country: normalizeCountryName(player.country_code) || player.country_code,
+            country,
             ready: false,
             score: (player.phase1_score || 0) + (player.phase2_score || 0),
             phase1_score: player.phase1_score || 0,
             phase2_score: player.phase2_score || 0
+          };
+          roomState.members[player.user_id] = {
+            role,
+            country,
+            playerId: player.player_id,
+            ready: false
           };
         }
       }

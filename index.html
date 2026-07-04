@@ -2893,6 +2893,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                       <button
                                         key={option.id}
                                         onClick={() => {
+                                          console.log('🚨 Crisis button clicked!', { gameId: currentRoomId, playerid: playerId, choiceId: option.id, crisisId: activeCrisis?.id });
                                           socket.emit('submitCrisisResponse', {
                                             gameId: currentRoomId,
                                             playerid: playerId,
