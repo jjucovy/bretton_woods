@@ -1487,37 +1487,19 @@ function triggerCrisisIfNeeded(gameId, year, options = {}) {
       console.log(`   Reason: ${crisis.triggerReason}`);
     }
 
-    // Filter affected countries and options to only include countries with active players
-    const filteredAffected = crisis.affectedCountries.filter(c =>
-      activePlayerCountries.has(c) || activePlayerCountries.has(normalizeCountryName(c))
-    );
-    const filteredOptions = {};
-    Object.keys(crisis.options).forEach(c => {
-      if (activePlayerCountries.has(c) || activePlayerCountries.has(normalizeCountryName(c))) {
-        filteredOptions[c] = crisis.options[c];
-      }
-    });
-
-    // Skip this crisis entirely if no active players are affected
-    if (filteredAffected.length === 0) {
-      console.log(`   ⏭️ Skipping "${crisis.title}" — no active players among affected countries`);
-      continue;
-    }
+    // Merge affectedCountries with any countries that have options defined
+    const optionCountries = Object.keys(crisis.options || {});
+    const allAffected = [...new Set([...crisis.affectedCountries, ...optionCountries])];
 
     room.phase2.crises.active.push({
       ...crisis,
-      affectedCountries: filteredAffected,
-      options: filteredOptions,
+      affectedCountries: allAffected,
       triggeredAt: Date.now(),
       resolved: false,
-      responses: {} // Track responses per crisis
+      responses: {}
     });
 
-    console.log(`   Affected countries (active players only):`, filteredAffected);
-    if (filteredAffected.length < crisis.affectedCountries.length) {
-      const skipped = crisis.affectedCountries.filter(c => !filteredAffected.includes(c));
-      console.log(`   Skipped (no player):`, skipped);
-    }
+    console.log(`   Affected countries:`, allAffected);
   }
 
   console.log(`✋ ${triggeredCrises.length} crisis(es) active - waiting for player responses`);
@@ -5477,10 +5459,11 @@ io.on('connection', (socket) => {
     if (crisisId) {
       crisis = activeCrises.find(c => c.id === crisisId);
     } else {
-      // Backwards compatibility: find first crisis this country is affected by
+      // Backwards compatibility: find first crisis this country is affected by or has options for
       const country = player.country;
       const normalizedCountry = normalizeCountryName(country);
       crisis = activeCrises.find(c =>
+        c.options?.[country] || c.options?.[normalizedCountry] ||
         c.affectedCountries.some(ac =>
           ac === country || ac === normalizedCountry || normalizeCountryName(ac) === normalizedCountry
         )
@@ -5496,18 +5479,19 @@ io.on('connection', (socket) => {
     const country = player.country;
     const normalizedCountry = normalizeCountryName(country);
 
-    // Check if this country is affected by the crisis
-    const isAffected = crisis.affectedCountries.some(c =>
-      c === country || c === normalizedCountry || normalizeCountryName(c) === normalizedCountry
-    );
+    // Get the choice - check both raw and normalized country name
+    let countryOptions = crisis.options[country] || crisis.options[normalizedCountry];
+
+    // Check if this country is affected by the crisis (via affectedCountries OR having options)
+    const isAffected = countryOptions ||
+      crisis.affectedCountries.some(c =>
+        c === country || c === normalizedCountry || normalizeCountryName(c) === normalizedCountry
+      );
     if (!isAffected) {
       console.log(`${country} (normalized: ${normalizedCountry}) not affected by crisis: ${crisis.title}`);
       socket.emit('crisisResponseResult', { success: false, error: `${normalizedCountry} not affected by ${crisis.title}` });
       return;
     }
-
-    // Get the choice
-    let countryOptions = crisis.options[country] || crisis.options[normalizedCountry];
     if (!countryOptions) {
       console.log(`No options for ${country} or ${normalizedCountry} in crisis: ${crisis.title}`);
       console.log(`Available option keys: ${Object.keys(crisis.options).join(', ')}`);
