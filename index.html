@@ -398,7 +398,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('🗳️ Is tie:', state.isTie, 'Revote count:', state.revoteCount);
               
               setGameState(state);
-              
+              setCrisisSubmitting(null);
+
               // If game started, always hide game selection screen
               if (state.gameStarted) {
                 console.log('✅ Game started - hiding game selection screen');
@@ -2724,10 +2725,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       const myCountryOptions = activeCrisis?.options?.[playerCountry] || activeCrisis?.options?.[normalizedCountry] || [];
                       const hasRespondedToCrisis = hasPlayerResponded(activeCrisis);
 
-                      // Check if there are more crises to respond to
-                      const remainingCrises = activeCrises.filter(c =>
-                        isPlayerAffected(c) && !hasPlayerResponded(c)
-                      ).length;
+                      // Count crises the player is involved in and has responded to
+                      const myCrises = activeCrises.filter(c => isPlayerAffected(c));
+                      const respondedCrises = myCrises.filter(c => hasPlayerResponded(c)).length;
+                      const remainingCrises = myCrises.length - respondedCrises;
+                      const currentCrisisIndex = activeCrisis ? myCrises.indexOf(activeCrisis) + 1 : 0;
+                      const totalMyCrises = myCrises.length;
 
                       // Debug crisis options
                       if (activeCrisis) {
@@ -2767,14 +2770,14 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <span style={{ fontSize: '1.3rem' }}>🚨</span>
                                 <strong>{activeCrisis.title}</strong>
-                                {!hasRespondedToCrisis && myCountryOptions.length > 0 && (
+                                {remainingCrises > 0 && (
                                   <span style={{ background: '#fbbf24', color: '#000', padding: '2px 8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                                    Response needed
+                                    {remainingCrises} response{remainingCrises > 1 ? 's' : ''} needed
                                   </span>
                                 )}
-                                {hasRespondedToCrisis && (
+                                {respondedCrises > 0 && (
                                   <span style={{ background: '#22c55e', color: '#fff', padding: '2px 8px', borderRadius: '8px', fontSize: '0.8rem' }}>
-                                    Responded
+                                    {respondedCrises} responded
                                   </span>
                                 )}
                               </div>
@@ -2805,6 +2808,27 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 maxHeight: '90vh',
                                 overflowY: 'auto'
                               }}>
+                                {totalMyCrises > 1 && (
+                                  <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '12px',
+                                    padding: '8px 16px',
+                                    background: respondedCrises > 0 ? '#d1fae5' : '#fef3c7',
+                                    borderRadius: '8px',
+                                    border: respondedCrises > 0 ? '2px solid #10b981' : '2px solid #f59e0b',
+                                    fontSize: '0.95rem',
+                                    fontWeight: 'bold'
+                                  }}>
+                                    <span>Crisis {currentCrisisIndex} of {totalMyCrises}</span>
+                                    {respondedCrises > 0 && (
+                                      <span style={{ color: '#16a34a' }}>
+                                        ✅ {respondedCrises} responded, {remainingCrises} remaining
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                                   <h1 style={{ color: '#dc2626', marginTop: 0, marginBottom: 0, fontSize: '2rem' }}>
                                     {activeCrisis.title}
