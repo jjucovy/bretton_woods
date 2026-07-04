@@ -1,0 +1,29 @@
+-- Crisis Options table (ALREADY EXISTS on Hostinger)
+-- Stores crisis option definitions — all available choices for each crisis event
+--
+-- Existing schema (DO NOT recreate):
+--   option_id      int(11)      PK AUTO_INCREMENT
+--   crisis_id      int(11)      NOT NULL  (1-11, maps to crisis-events.json order)
+--   country_code   varchar(20)  NOT NULL  (e.g. 'USA', 'UK', 'USSR')
+--   option_key     varchar(50)  NOT NULL  (e.g. 'massive-aid', 'disengage')
+--   option_text    varchar(300) NOT NULL  (display text shown to player)
+--   cost           int(11)      DEFAULT 0 (gold/resource cost)
+--   effects        longtext     JSON      (economic effects: gdpGrowth, tradeBalance, etc.)
+--   military_required longtext  JSON      (e.g. {"army": 500000})
+--   outcome        text                   (outcome description)
+--
+-- Crisis ID mapping:
+--   1  = china-civil-war         (1946)
+--   2  = india-partition          (1947)
+--   3  = argentina-peronism       (1946)
+--   4  = first-indochina-war      (1946)
+--   5  = berlin-blockade          (1948)
+--   6  = marshall-plan            (1948)
+--   7  = korean-war               (1950)
+--   8  = argentina-british-debt   (1947)
+--   9  = argentina-commodity-boom (1948)
+--   10 = argentina-drought-1951   (1951)
+--   11 = evita-death-1952         (1952)
+--
+-- To populate: Run sql/crisis_options_data.sql on Hostinger
+-- To regenerate: node generate-crisis-sql.js > sql/crisis_options_data.sql

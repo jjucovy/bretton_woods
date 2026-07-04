@@ -69,6 +69,12 @@
             100% { stroke-opacity: 0.4; }
         }
 
+        /* Ensure Leaflet divIcon markers render without default icon styles */
+        .leaflet-div-icon {
+            background: none !important;
+            border: none !important;
+        }
+
         .battle-label {
             animation: battle-label-flash 1s ease-in-out infinite;
         }
@@ -123,7 +129,7 @@
     <script src="/public/js/shared-styles.js"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 
     <!-- Extracted React components (loaded via Babel standalone) -->
     <script type="text/babel" src="/public/js/components/ErrorBoundary.jsx"></script>
@@ -137,6 +143,9 @@
     <script type="text/babel" src="/public/js/components/CommandEconomyPolicyForm.jsx"></script>
     <script type="text/babel" src="/public/js/components/PolicySubmissionForm.jsx"></script>
     <script type="text/babel" src="/public/js/components/UserManagementPanel.jsx"></script>
+    <script type="text/babel" src="/public/js/components/InstructionsModal.jsx"></script>
+    <script type="text/babel" src="/public/js/components/PreGameQuiz.jsx"></script>
+    <script type="text/babel" src="/public/js/components/EndGameTest.jsx"></script>
 
 
     <script type="text/babel">
@@ -190,7 +199,14 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
         // Start loading
         loadGameData();
 
-        const socket = io();
+        const socket = io({
+          auth: (cb) => {
+            // Called on every connect/reconnect — picks up userId after login
+            const userId = sessionStorage.getItem('brettonWoodsPlayerId') ||
+                           localStorage.getItem('brettonWoodsPlayerId');
+            cb({ userId: userId || undefined });
+          }
+        });
         const { useState, useEffect } = React;
 
         // MilitaryMap, TroopDeploymentInterface, CommandEconomyPolicyForm,
@@ -209,11 +225,20 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [username, setUsername] = useState('');
           const [playerId, setPlayerId] = useState('');
           const [userRole, setUserRole] = useState('player');
+          const [isRoomHost, setIsRoomHost] = useState(false);
           const [showRegister, setShowRegister] = useState(false);
           
-          // NEW: Game selection state
+          const [showInstructions, setShowInstructions] = useState(false);
+
+          // Quiz / assessment state
+          const [pendingVoteChoice, setPendingVoteChoice] = useState(null); // {id, letter, text}
+          const [voteExplanation, setVoteExplanation] = useState('');
+          const [endTestDone, setEndTestDone] = useState(false);
+
+          // NEW: Game selection state (lobby)
           const [showGameSelection, setShowGameSelection] = useState(false);
           const [availableGames, setAvailableGames] = useState([]);
+          const [myActiveGames, setMyActiveGames] = useState([]);
           const [loadingGames, setLoadingGames] = useState(false);
           
           // Game state
@@ -237,6 +262,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [showBattleOptionsModal, setShowBattleOptionsModal] = useState(false);
           const [battleOptionsData, setBattleOptionsData] = useState(null);
           const [tensionAlerts, setTensionAlerts] = useState([]);
+          const [submissionsModal, setSubmissionsModal] = useState(null); // { gameId, gameCode, rows, loading, error }
           const [crisisMinimized, setCrisisMinimized] = useState(false);
           const [battleModalMinimized, setBattleModalMinimized] = useState(false);
           const [diplomaticModalMinimized, setDiplomaticModalMinimized] = useState(false);
@@ -268,39 +294,51 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               setConnected(true);
               console.log('Connected to server');
 
-              // Auto-rejoin game if user has saved session and game room
               const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
-              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom');
               const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
+              const savedUsername = sessionStorage.getItem('brettonWoodsUsername');
+              // Fall back to window.actualRoomId so admin/observer re-joins even when
+              // sessionStorage wasn't set (e.g. joined via createRoom before this fix)
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom') || window.actualRoomId || localStorage.getItem('brettonWoodsGameRoom');
 
-              if (savedPlayerId && savedGameRoom) {
-                console.log('Auto-rejoining game:', savedGameRoom, 'as user:', savedPlayerId);
-                window.actualRoomId = savedGameRoom;
-                setCurrentRoomId(savedGameRoom);
-                socket.emit('joinRoom', { roomId: savedGameRoom, userId: savedPlayerId });
-              } else if (savedPlayerId && !savedGameRoom) {
-                // User is logged in but not in a game - show game selection
-                console.log('User logged in but not in a game - showing game selection');
-                if (savedUserRole !== 'superadmin') {
-                  setShowGameSelection(true);
-                  setLoadingGames(true);
-                  socket.emit('getAvailableGames', { playerId: savedPlayerId });
-                  socket.once('availableGamesResult', ({ success, games }) => {
-                    setLoadingGames(false);
-                    if (success) {
-                      setAvailableGames(games || []);
-                    }
-                  });
+              // Only fetch lobby on reconnect if user has a saved session
+              // (page refresh scenario - fresh login is handled by handleLogin)
+              if (savedPlayerId && savedUsername) {
+                // If user was in a game room, re-join it so they keep receiving broadcasts
+                if (savedGameRoom) {
+                  console.log('Reconnecting - re-joining room:', savedGameRoom);
+                  window.actualRoomId = savedGameRoom;
+                  setCurrentRoomId(savedGameRoom);
+                  socket.emit('joinRoom', { gameId: savedGameRoom, userId: savedPlayerId });
+                  setShowGameSelection(false);
                 } else {
+                  console.log('User reconnected - showing game lobby');
                   setShowGameSelection(true);
                   setLoadingGames(true);
-                  socket.emit('getActiveGames', { playerId: savedPlayerId });
-                  socket.once('activeGamesResult', ({ success, games }) => {
-                    setLoadingGames(false);
-                    if (success) {
-                      setAvailableGames(games || []);
-                    }
-                  });
+
+                  if (savedUserRole === 'superadmin') {
+                    socket.emit('getActiveGames', { playerId: savedPlayerId });
+                    socket.once('activeGamesResult', ({ success, games }) => {
+                      setLoadingGames(false);
+                      if (success) setAvailableGames(games || []);
+                    });
+                  } else {
+                    // Fetch both active games and available lobby games in parallel
+                    let responses = 0;
+                    const checkDone = () => { if (++responses >= 2) setLoadingGames(false); };
+
+                    socket.emit('getAvailableGames', { playerId: savedPlayerId });
+                    socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
+
+                    socket.once('availableGamesResult', ({ success, games }) => {
+                      if (success) setAvailableGames(games || []);
+                      checkDone();
+                    });
+                    socket.once('playerActiveGamesResult', ({ success, games }) => {
+                      if (success) setMyActiveGames(games || []);
+                      checkDone();
+                    });
+                  }
                 }
               }
             });
@@ -310,7 +348,39 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('Disconnected from server');
             });
 
+            // When admin creates or deletes a game, refresh the available game list
+            // so players in the lobby see it immediately without re-logging in.
+            // Only fires if the player is logged in AND not currently in a game room.
+            // Debounced: multiple rapid events within 800ms collapse into one fetch.
+            let _roomListDebounce = null;
+            socket.on('roomListUpdate', () => {
+              const savedPlayerId = sessionStorage.getItem('brettonWoodsPlayerId');
+              const savedUserRole = sessionStorage.getItem('brettonWoodsUserRole');
+              const savedGameRoom = sessionStorage.getItem('brettonWoodsGameRoom');
+              // Skip if not a logged-in player or if they're already in a game
+              if (savedUserRole !== 'player' || !savedPlayerId || savedGameRoom) return;
+              if (_roomListDebounce) return;
+              _roomListDebounce = setTimeout(() => {
+                _roomListDebounce = null;
+                socket.once('availableGamesResult', ({ success, games }) => {
+                  if (success) setAvailableGames(games || []);
+                });
+                socket.once('playerActiveGamesResult', ({ success, games }) => {
+                  if (success) setMyActiveGames(games || []);
+                });
+                socket.emit('getAvailableGames', { playerId: savedPlayerId });
+                socket.emit('getPlayerActiveGames', { playerId: savedPlayerId });
+              }, 800);
+            });
+
             socket.on('stateUpdate', (state) => {
+              // Ignore updates for rooms other than the one we're currently in
+              const incomingId = String(state.game_id || '');
+              const myRoomId = String(window.actualRoomId || '');
+              if (myRoomId && incomingId && incomingId !== myRoomId) {
+                console.log(`⏭️ Ignored stateUpdate for room ${incomingId} (current: ${myRoomId})`);
+                return;
+              }
               console.log('=== STATE UPDATE ===');
               console.log('State', Object.values(state))
               console.log('Game started:', state.gameStarted);
@@ -323,7 +393,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('📊 Scores received:', state.scores);
               console.log('📊 Round scores received:', state.roundScores);
               console.log('🗳️ Votes:', state.votes);
-              console.log('🗳️ My vote:', state.votes?.[playerId]);
+              console.log('🗳️ My vote (playerId lookup):', state.votes?.[playerId], '(will use myPlayerDbId in render)');
               console.log('🗳️ Is tie:', state.isTie, 'Revote count:', state.revoteCount);
               
               setGameState(state);
@@ -338,7 +408,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               if (state.players[playerId]) {
                 const myPlayer = state.players[playerId];
                 setPlayerCountry(myPlayer.country);
-                setIsReady(state.readyPlayers.includes(playerId));
+                setIsReady(!!myPlayer.ready);
                 
                 // Save country to session storage for persistence
                 sessionStorage.setItem('brettonWoodsCountry', myPlayer.country);
@@ -351,10 +421,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   console.log('   Attempting to rejoin as:', savedCountry);
                   
                   // Try to rejoin with saved country
-                  socket.emit('rejoinGame', { 
-                    roomId: currentRoomId, 
-                    playerId, 
-                    country: savedCountry 
+                  socket.emit('rejoinGame', {
+                    gameId: currentRoomId,
+                    playerId,
+                    country: savedCountry
                   });
                 }
               }
@@ -362,21 +432,33 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('State updated in React');
             });
 
-            socket.on('joinRoomResult', ({ success, roomId, message, role, isHost, reconnected, country, needsCountrySelection }) => {
+            socket.on('joinRoomResult', ({ success, roomId: _rId, gameId: _gId, message, role, isHost, reconnected, country, needsCountrySelection }) => {
               if (success) {
+                // Server sends gameId (numeric); fall back to roomId for legacy
+                const roomId = _gId || _rId;
                 console.log('Joined room:', roomId);
                 console.log('Role:', role);
                 console.log('Is host:', isHost);
                 console.log('Reconnected:', reconnected);
                 console.log('Country:', country);
                 console.log('Needs country selection:', needsCountrySelection);
-                
+
+                // Always sync currentRoomId to the canonical numeric game_id the server confirmed
+                if (roomId) {
+                  setCurrentRoomId(roomId);
+                  window.actualRoomId = roomId;
+                  sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+                  localStorage.setItem('brettonWoodsGameRoom', roomId);
+                }
+
+                setIsRoomHost(!!isHost);
+
                 // If reconnected with country, set it
                 if (reconnected && country) {
                   setPlayerCountry(country);
                   sessionStorage.setItem('brettonWoodsCountry', country);
                 }
-                
+
                 // If superadmin, they are observing and should not select a country
                 if (role === 'superadmin') {
                   console.log('✓ Joined as superadmin/observer');
@@ -384,6 +466,32 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 }
               } else {
                 console.error('Failed to join room:', message);
+                // Clear the stale game room so reconnects don't keep looping
+                sessionStorage.removeItem('brettonWoodsGameRoom');
+                localStorage.removeItem('brettonWoodsGameRoom');
+                window.actualRoomId = null;
+                setCurrentRoomId(null);
+                setGameState(null);
+                // Show game selection so user can pick/create a game
+                setShowGameSelection(true);
+                setLoadingGames(true);
+                const savedRole = sessionStorage.getItem('brettonWoodsUserRole');
+                const savedPid = sessionStorage.getItem('brettonWoodsPlayerId');
+                if (savedRole === 'superadmin') {
+                  socket.emit('getActiveGames', { playerId: savedPid });
+                  socket.once('activeGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) setAvailableGames(games || []);
+                  });
+                } else {
+                  socket.emit('getAvailableGames', { playerId: savedPid });
+                  socket.emit('getPlayerActiveGames', { playerId: savedPid });
+                  socket.once('availableGamesResult', ({ success, games }) => { if (success) setAvailableGames(games || []); });
+                  socket.once('playerActiveGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) setMyActiveGames(games || []);
+                  });
+                }
               }
             });
             
@@ -413,9 +521,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   setPlayerCountry(country);
                   sessionStorage.setItem('brettonWoodsCountry', country);
                 }
-                // Save game room to session for auto-rejoin on refresh
+                // Save game room to session+local for auto-rejoin on refresh/tab-close
                 if (window.actualRoomId) {
                   sessionStorage.setItem('brettonWoodsGameRoom', window.actualRoomId);
+                  localStorage.setItem('brettonWoodsGameRoom', window.actualRoomId);
                   console.log('   Saved game room to session:', window.actualRoomId);
                 }
               }
@@ -437,11 +546,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               alert('❌ ' + message);
             });
 
-            socket.on('policySubmitted', ({ success, country, year }) => {
+            socket.on('policySubmitted', ({ success, country, year, message }) => {
               if (success) {
                 console.log(`✅ Policy submitted for ${country} - ${year}`);
-                // Show visual confirmation
                 alert(`✅ Policy submitted successfully for ${year}!`);
+              } else {
+                console.log(`⚠️ Policy submission rejected: ${message}`);
+                alert(`⚠️ ${message || 'Policy already submitted for this year.'}`);
               }
             });
 
@@ -552,43 +663,30 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 setIsAuthenticated(true);
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', newUserId);
+                localStorage.setItem('brettonWoodsPlayerId', newUserId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
 
                 console.log('Registration successful. Role:', role);
 
-                // For superadmin, show all games to observe
-                if (role === 'superadmin') {
-                  console.log('Superadmin registered - fetching all active games');
-                  setShowGameSelection(true);
-                  setLoadingGames(true);
+                // Always go to game lobby
+                setShowGameSelection(true);
 
+                if (role === 'superadmin') {
+                  setLoadingGames(true);
                   socket.emit('getActiveGames', { playerId: newUserId });
                   socket.once('activeGamesResult', ({ success, games }) => {
                     setLoadingGames(false);
-                    if (success) {
-                      setAvailableGames(games || []);
-                    }
+                    if (success) setAvailableGames(games || []);
                   });
-                  return;
+                } else {
+                  // New player - fetch available lobby games
+                  setLoadingGames(true);
+                  socket.emit('getAvailableGames', { playerId: newUserId });
+                  socket.once('availableGamesResult', ({ success, games }) => {
+                    setLoadingGames(false);
+                    if (success) setAvailableGames(games || []);
+                  });
                 }
-
-                // For new players, show game selection (fetch available lobby games)
-                console.log('New player registered. Fetching available games...');
-                setShowGameSelection(true);
-                setLoadingGames(true);
-
-                socket.emit('getAvailableGames', { playerId: newUserId });
-                socket.once('availableGamesResult', ({ success, games, message: gamesMessage }) => {
-                  setLoadingGames(false);
-                  console.log('Available games result:', { success, games, gamesMessage });
-                  if (success) {
-                    setAvailableGames(games || []);
-                    console.log('Available games loaded:', games);
-                  } else {
-                    console.error('Failed to load games:', gamesMessage);
-                    setAvailableGames([]);
-                  }
-                });
 
               } else {
                 console.error('Registration failed:', message);
@@ -605,7 +703,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
             socket.emit('login', { username, password });
             
-            socket.once('loginResult', ({ success, userId, role, message, activeGame, availableGames: loginAvailableGames }) => {
+            socket.once('loginResult', ({ success, userId, role, message, myActiveGames: loginActiveGames, availableGames: loginAvailableGames }) => {
 
               if (success) {
                 setUsername(username);
@@ -614,80 +712,31 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 setIsAuthenticated(true);
                 sessionStorage.setItem('brettonWoodsUsername', username);
                 sessionStorage.setItem('brettonWoodsPlayerId', userId);
+                localStorage.setItem('brettonWoodsPlayerId', userId);
                 sessionStorage.setItem('brettonWoodsUserRole', role || 'player');
 
                 console.log('Login successful. Role:', role);
+                console.log('Active games from login:', loginActiveGames?.length || 0);
                 console.log('Available games from login:', loginAvailableGames?.length || 0);
 
-                // SUPERADMIN: Show game selection screen (all games, any phase)
-                if (role === 'superadmin') {
-                  console.log('Superadmin logged in - fetching all active games');
-                  setShowGameSelection(true);
-                  setLoadingGames(true);
-                  
-                  socket.emit('getActiveGames', { playerId: userId });
-                  socket.once('activeGamesResult', ({ success, games, message }) => {
-                    setLoadingGames(false);
-                    console.log('Active games result:', { success, games, message });
-                    if (success) {
-                      setAvailableGames(games || []);
-                      console.log('Active games loaded:', games);
-                    } else {
-                      console.error('Failed to load games:', message);
-                      setAvailableGames([]);
-                    }
-                  });
-                  return;
-                }
-                
-                // REGULAR PLAYER WITH ACTIVE GAME: Auto-join their game
-                // Skip completed games — player should be released to lobby
-                if (activeGame && activeGame.gameCode && activeGame.status !== 'completed') {
-                  console.log('Player has active game - rejoining:', activeGame.gameCode);
-                  console.log('Player country from DB:', activeGame.country_code || activeGame.country_id);
-                  
-                  window.actualRoomId = activeGame.gameCode;
-                  sessionStorage.setItem('brettonWoodsGameRoom', activeGame.gameCode);
-                  setCurrentRoomId(activeGame.gameCode);
-                  
-                  // If they have a country assignment, save it
-                  if (activeGame.country_code || activeGame.country_id) {
-                    const countryCode = activeGame.country_code || activeGame.country_id;
-                    sessionStorage.setItem('brettonWoodsCountry', countryCode);
-                    console.log('Saved country to session:', countryCode);
-                  }
-                  
-                  setTimeout(() => {
-                    socket.emit('joinRoom', { roomId: activeGame.gameCode, userId: userId });
-                  }, 500);
-                  return;
-                }
-                
-                // REGULAR PLAYER WITHOUT ACTIVE GAME: Show available games
-                console.log('Player has no active game - showing available games');
+                // Always go to game lobby
                 setShowGameSelection(true);
 
-                // Use available games from login result if provided
-                if (loginAvailableGames && loginAvailableGames.length > 0) {
-                  console.log('Using available games from login result:', loginAvailableGames);
-                  setAvailableGames(loginAvailableGames);
-                  setLoadingGames(false);
-                } else {
-                  // Fetch from server if not provided in login result
+                if (role === 'superadmin') {
                   setLoadingGames(true);
-                  socket.emit('getAvailableGames', { playerId: userId });
-                  socket.once('availableGamesResult', ({ success, games, message }) => {
+                  socket.emit('getActiveGames', { playerId: userId });
+                  socket.once('activeGamesResult', ({ success, games }) => {
                     setLoadingGames(false);
-                    console.log('Available games result:', { success, games, message });
-                    if (success) {
-                      setAvailableGames(games || []);
-                      console.log('Available games loaded:', games);
-                    } else {
-                      console.error('Failed to load games:', message);
-                      setAvailableGames([]);
-                    }
+                    if (success) setAvailableGames(games || []);
                   });
+                  return;
                 }
+
+                // REGULAR PLAYER: Use data from login response directly
+                // Server already returns both myActiveGames and availableGames
+                setMyActiveGames(loginActiveGames || []);
+                setAvailableGames(loginAvailableGames || []);
+                setLoadingGames(false);
 
               } else {
                 console.log('Login failed:', message);
@@ -696,17 +745,19 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           };
           
           // NEW: Handler to select and join a game
-          const handleSelectGame = (gameCode) => {
-            console.log('User selected game:', gameCode);
-            
+          const handleSelectGame = (gameId) => {
+            const roomId = String(gameId);
+            console.log('User selected game:', roomId);
+
             // Set the room ID
-            window.actualRoomId = gameCode;
-            sessionStorage.setItem('brettonWoodsGameRoom', gameCode);
-            setCurrentRoomId(gameCode);
-            
+            window.actualRoomId = roomId;
+            sessionStorage.setItem('brettonWoodsGameRoom', roomId);
+            localStorage.setItem('brettonWoodsGameRoom', roomId);
+            setCurrentRoomId(roomId);
+
             // Join the selected room
-            socket.emit('joinRoom', { roomId: gameCode, userId: playerId });
-            
+            socket.emit('joinRoom', { gameId: roomId, userId: playerId });
+
             // Hide game selection screen
             setShowGameSelection(false);
           };
@@ -715,6 +766,26 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             sessionStorage.clear();
             localStorage.clear();
             window.location.reload();
+          };
+
+          // Load submissions for a game and open the modal
+          const loadSubmissions = async (gameId, gameCode) => {
+            setSubmissionsModal({ gameId, gameCode, rows: [], loading: true, error: null });
+            try {
+              const res = await fetch('https://jucovy.com/api.php?key=bretton-woods-secret-key-2024', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'getSubmissions', game_id: gameId })
+              });
+              const json = await res.json();
+              if (json.success) {
+                setSubmissionsModal({ gameId, gameCode, rows: json.data || [], loading: false, error: null });
+              } else {
+                setSubmissionsModal({ gameId, gameCode, rows: [], loading: false, error: json.error || 'Failed to load' });
+              }
+            } catch (err) {
+              setSubmissionsModal({ gameId, gameCode, rows: [], loading: false, error: err.message });
+            }
           };
 
           // Game handlers
@@ -729,7 +800,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               return;
             }
             
-            socket.emit('joinGame', { roomId: window.actualRoomId, userId: playerId, country });
+            socket.emit('joinGame', { gameId: window.actualRoomId, userId: playerId, country });
           };
 
           const handleLeaveGame = () => {
@@ -737,13 +808,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.error('No room ID available.');
               return;
             }
-            socket.emit('leaveGame', { roomId: window.actualRoomId, userId: playerId });
+            socket.emit('leaveGame', { gameId: window.actualRoomId, userId: playerId });
             setPlayerCountry(null);
             setIsReady(false);
           };
 
           const handleReady = () => {
-            socket.emit('setReady', { roomId: currentRoomId, userId: playerId, ready: !isReady });
+            socket.emit('setReady', { gameId: currentRoomId, userId: playerId, ready: !isReady });
           };
 
           // Get countries and issues from game data
@@ -759,6 +830,22 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             return normalized || countries[countryCode]?.name || countryCode;
           };
 
+          // Get country theme (colors, flag, leader, motto, etc.)
+          const getCountryTheme = (countryKey) => {
+            const c = countries[countryKey];
+            if (!c?.theme) {
+              return {
+                flag: '', primary: '#334155', secondary: '#64748b', light: '#f1f5f9',
+                lighter: '#f8fafc', accent: '#334155', gradient: 'linear-gradient(135deg, #334155 0%, #64748b 100%)',
+                headerGradient: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                borderColor: '#64748b', textDark: '#334155', textMedium: '#64748b',
+                name: countryKey, leader: '', currency: '', motto: ''
+              };
+            }
+            return { ...c.theme, flag: c.flag || '', name: c.name, leader: c.leader || '', currency: c.currency || '', motto: c.motto || '' };
+          };
+          const myTheme = playerCountry ? getCountryTheme(playerCountry) : null;
+
 
           // NEW: Game selection screen (for both superadmin and regular users)
           if (isAuthenticated && showGameSelection) {
@@ -766,10 +853,22 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             
             return (
               <div className="container">
-                <div className="header">
+                <div className="header" style={{ position: 'relative' }}>
                   <h1>🌍 Bretton Woods 1944</h1>
                   <p>{isSuperAdmin ? 'Administrator Game Selection' : 'Select a Game to Join'}</p>
+                  <button
+                    onClick={() => setShowInstructions(true)}
+                    style={{
+                      position: 'absolute', top: '16px', right: '16px',
+                      background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.5)',
+                      color: 'white', padding: '8px 16px', borderRadius: '8px',
+                      cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem',
+                    }}
+                  >
+                    📋 How to Play
+                  </button>
                 </div>
+                {showInstructions && <InstructionsModal onClose={() => setShowInstructions(false)} />}
 
                 {/* NEW: User Management Panel for Superadmin */}
                 {isSuperAdmin && (
@@ -802,55 +901,45 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                     <div style={{ display: 'flex', gap: '10px' }}>
                       {isSuperAdmin && (
                         <button
-                          onClick={async () => {
+                          onClick={() => {
                             const gameCode = `game_${Date.now()}`;
                             console.log('Creating new game:', gameCode);
-                            
-                            try {
-                              // Create game in database
-                              const response = await fetch('https://jucovy.com/api.php', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  action: 'createNewGame',
-                                  api_key: 'bretton-woods-secret-key-2024',
-                                  gameCode: gameCode,
-                                  createdBy: playerId
-                                })
-                              });
-                              
-                              const result = await response.json();
-                              console.log('Game created in database:', result);
-                              
-                              if (result.game_id) {
-                                // Create room in server memory - pass userId so superadmin becomes host
-                                socket.emit('createRoom', { 
-                                  userId: playerId,
-                                  roomName: gameCode 
-                                });
-                                
-                                socket.once('roomCreated', ({ success, roomId, hostId }) => {
+
+                            // Server handles DB persistence (createNewGame via PHP)
+                            socket.emit('createRoom', {
+                              userId: playerId,
+                              roomName: gameCode
+                            });
+
+                            socket.once('roomCreated', ({ success, gameId, roomId: createdRoomId, hostId }) => {
+                              if (success) {
+                                const newRoomId = gameId || createdRoomId;
+                                console.log('Game created successfully:', newRoomId);
+                                alert(`Game created (ID: ${newRoomId})\nYou are the host.`);
+
+                                // Save game room so reconnect re-joins automatically
+                                window.actualRoomId = newRoomId;
+                                setCurrentRoomId(newRoomId);
+                                sessionStorage.setItem('brettonWoodsGameRoom', newRoomId);
+                                localStorage.setItem('brettonWoodsGameRoom', newRoomId);
+                                setShowGameSelection(false);
+
+                                // Also emit joinRoom so the admin is officially in the socket room
+                                socket.emit('joinRoom', { gameId: newRoomId, userId: playerId });
+
+                                // Refresh games list
+                                setLoadingGames(true);
+                                socket.emit('getActiveGames', { playerId });
+                                socket.once('activeGamesResult', ({ success, games }) => {
+                                  setLoadingGames(false);
                                   if (success) {
-                                    console.log('Game created successfully:', roomId);
-                                    console.log('Host ID:', hostId);
-                                    alert(`Game created: ${gameCode}\nYou are the host.`);
-                                    
-                                    // Refresh games list
-                                    setLoadingGames(true);
-                                    socket.emit('getActiveGames', { playerId });
-                                    socket.once('activeGamesResult', ({ success, games }) => {
-                                      setLoadingGames(false);
-                                      if (success) {
-                                        setAvailableGames(games || []);
-                                      }
-                                    });
+                                    setAvailableGames(games || []);
                                   }
                                 });
+                              } else {
+                                alert('Failed to create game. Check console for details.');
                               }
-                            } catch (err) {
-                              console.error('Error creating game:', err);
-                              alert('Failed to create game. Check console for details.');
-                            }
+                            });
                           }}
                           style={{
                             padding: '10px 16px',
@@ -861,25 +950,37 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             cursor: 'pointer',
                             fontWeight: '600'
                           }}
-                        >
+                        class="btn-primary">
                           ➕ Create New Game
                         </button>
                       )}
                       <button
                         onClick={() => {
                           setLoadingGames(true);
-                          const eventName = isSuperAdmin ? 'getActiveGames' : 'getAvailableGames';
-                          const resultEvent = isSuperAdmin ? 'activeGamesResult' : 'availableGamesResult';
-                          
                           console.log('Refreshing games list...');
-                          socket.emit(eventName, { playerId });
-                          socket.once(resultEvent, ({ success, games }) => {
-                            setLoadingGames(false);
-                            console.log('Refresh result:', { success, gameCount: games?.length });
-                            if (success) {
-                              setAvailableGames(games || []);
-                            }
-                          });
+
+                          if (isSuperAdmin) {
+                            socket.emit('getActiveGames', { playerId });
+                            socket.once('activeGamesResult', ({ success, games }) => {
+                              setLoadingGames(false);
+                              if (success) setAvailableGames(games || []);
+                            });
+                          } else {
+                            let gotAvailable = false, gotActive = false;
+                            socket.emit('getAvailableGames', { playerId });
+                            socket.emit('getPlayerActiveGames', { playerId });
+
+                            socket.once('availableGamesResult', ({ success, games }) => {
+                              gotAvailable = true;
+                              if (success) setAvailableGames(games || []);
+                              if (gotActive) setLoadingGames(false);
+                            });
+                            socket.once('playerActiveGamesResult', ({ success, games }) => {
+                              gotActive = true;
+                              if (success) setMyActiveGames(games || []);
+                              if (gotAvailable) setLoadingGames(false);
+                            });
+                          }
                         }}
                         style={{
                           padding: '10px 16px',
@@ -897,8 +998,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                   </div>
 
                   {loadingGames ? (
-                    <div style={{ 
-                      padding: '40px', 
+                    <div style={{
+                      padding: '40px',
                       textAlign: 'center',
                       background: 'white',
                       borderRadius: '8px'
@@ -906,30 +1007,154 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       <div style={{ fontSize: '2rem', marginBottom: '16px' }}>⏳</div>
                       <p style={{ color: '#64748b', margin: 0 }}>Loading games...</p>
                     </div>
-                  ) : availableGames.length === 0 ? (
-                    <div style={{ 
-                      padding: '40px', 
-                      textAlign: 'center',
-                      background: 'white',
-                      borderRadius: '8px',
-                      border: '2px dashed #cbd5e1'
-                    }}>
-                      <div style={{ fontSize: '2rem', marginBottom: '16px' }}>📭</div>
-                      <h3 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>
-                        {isSuperAdmin ? 'No Active Games' : 'No Available Games'}
-                      </h3>
-                      <p style={{ color: '#64748b', margin: 0 }}>
-                        {isSuperAdmin 
-                          ? 'There are currently no active games to observe. Check the database or create a new game.'
-                          : 'There are currently no games you can join. Please check back later or ask your teacher to create a new game.'}
-                      </p>
-                    </div>
                   ) : (
+                    <div>
+                      {/* YOUR ACTIVE GAMES section (regular players only) */}
+                      {!isSuperAdmin && myActiveGames.length > 0 && (
+                        <div style={{ marginBottom: '24px' }}>
+                          <h3 style={{ margin: '0 0 12px 0', color: '#166534', fontSize: '1.1rem' }}>
+                            Your Active Games ({myActiveGames.length})
+                          </h3>
+                          <div style={{ display: 'grid', gap: '12px' }}>
+                            {myActiveGames.map((game) => (
+                              <div
+                                key={game.gameCode}
+                                onClick={() => handleSelectGame(game.roomId || game.game_id || game.gameCode)}
+                                style={{
+                                  padding: '16px 20px',
+                                  background: '#f0fdf4',
+                                  borderRadius: '8px',
+                                  border: '2px solid #86efac',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.currentTarget.style.borderColor = '#16a34a';
+                                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(22, 163, 74, 0.2)';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.currentTarget.style.borderColor = '#86efac';
+                                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div>
+                                    <h4 style={{ margin: '0 0 6px 0', color: '#14532d' }}>
+                                      {game.gameCode}
+                                    </h4>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                      {game.country_code && (
+                                        <span style={{
+                                          padding: '3px 8px',
+                                          background: '#dcfce7',
+                                          color: '#166534',
+                                          borderRadius: '4px',
+                                          fontSize: '0.8rem',
+                                          fontWeight: 'bold'
+                                        }}>
+                                          Playing as: {game.country_code}
+                                        </span>
+                                      )}
+                                      <span style={{
+                                        padding: '3px 8px',
+                                        background: '#dbeafe',
+                                        color: '#1e40af',
+                                        borderRadius: '4px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 'bold'
+                                      }}>
+                                        {game.gamePhase === 'lobby' ? 'Lobby' :
+                                         game.gamePhase === 'voting' ? `Voting - Round ${game.currentRound || 0}/17` :
+                                         game.gamePhase === 'results' ? 'Results' :
+                                         game.gamePhase === 'phase2' ? `Phase 2 - ${game.currentYear || '1946'}` :
+                                         game.gamePhase}
+                                      </span>
+                                      <span style={{
+                                        padding: '3px 8px',
+                                        background: '#eff6ff',
+                                        color: '#1e40af',
+                                        borderRadius: '4px',
+                                        fontSize: '0.8rem'
+                                      }}>
+                                        {game.playerCount}/7 players
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectGame(game.roomId || game.game_id || game.gameCode);
+                                    }}
+                                    style={{
+                                      padding: '10px 20px',
+                                      background: '#16a34a',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      fontSize: '0.95rem',
+                                      fontWeight: 'bold',
+                                      cursor: 'pointer'
+                                    }}
+                                    onMouseOver={(e) => e.currentTarget.style.background = '#15803d'}
+                                    onMouseOut={(e) => e.currentTarget.style.background = '#16a34a'}
+                                  >
+                                    Resume
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AVAILABLE GAMES TO JOIN section */}
+                      {!isSuperAdmin && (
+                        <h3 style={{ margin: '0 0 12px 0', color: '#1e40af', fontSize: '1.1rem' }}>
+                          Available Games to Join
+                        </h3>
+                      )}
+
+                      {availableGames.length === 0 && (isSuperAdmin ? true : myActiveGames.length === 0) ? (
+                        <div style={{
+                          padding: '40px',
+                          textAlign: 'center',
+                          background: 'white',
+                          borderRadius: '8px',
+                          border: '2px dashed #cbd5e1'
+                        }}>
+                          <div style={{ fontSize: '2rem', marginBottom: '16px' }}>📭</div>
+                          <h3 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>
+                            {isSuperAdmin ? 'No Active Games' : 'No Available Games'}
+                          </h3>
+                          <p style={{ color: '#64748b', margin: 0 }}>
+                            {isSuperAdmin
+                              ? 'There are currently no active games to observe. Check the database or create a new game.'
+                              : 'There are currently no games you can join. Please check back later or ask your teacher to create a new game.'}
+                          </p>
+                        </div>
+                      ) : availableGames.length === 0 && !isSuperAdmin ? (
+                        <div style={{
+                          padding: '20px',
+                          textAlign: 'center',
+                          background: 'white',
+                          borderRadius: '8px',
+                          border: '1px dashed #cbd5e1',
+                          marginBottom: '16px'
+                        }}>
+                          <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem' }}>
+                            No new games available to join right now. Ask your teacher to create one.
+                          </p>
+                        </div>
+                      ) : (
                     <div style={{ display: 'grid', gap: '16px' }}>
-                      {availableGames.map((game) => (
-                        <div 
+                      {availableGames.map((game) => {
+                        const myActiveGame = myActiveGames.find(ag => ag.gameCode === game.gameCode || String(ag.gameId) === String(game.gameId));
+                        const myCountry = myActiveGame?.country_code;
+                        return (
+                        <div
                           key={game.gameCode}
-                          onClick={() => handleSelectGame(game.gameCode)}
+                          onClick={() => handleSelectGame(game.gameId || game.roomId || game.gameCode)}
                           style={{
                             padding: '20px',
                             background: 'white',
@@ -1000,27 +1225,30 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 )}
                               </div>
                             </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectGame(game.gameCode);
-                              }}
-                              style={{
-                                padding: '10px 20px',
-                                background: '#3b82f6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '0.95rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                              }}
-                              onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
-                              onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
-                            >
-                              {isSuperAdmin ? '👁️ Observe' : '🎯 Join Game'}
-                            </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectGame(game.gameId || game.roomId || game.gameCode);
+                                }}
+                                style={{
+                                  padding: '10px 20px',
+                                  background: myCountry ? '#16a34a' : '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  fontSize: '0.95rem',
+                                  fontWeight: 'bold',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = myCountry ? '#15803d' : '#2563eb'}
+                                onMouseOut={(e) => e.currentTarget.style.background = myCountry ? '#16a34a' : '#3b82f6'}
+                              >
+                                {isSuperAdmin ? '👁️ Observe' : myCountry ? `↩ Rejoin as ${myCountry}` : '🎯 Join Game'}
+                              </button>
+                            </div>
                           </div>
                           
                           {isSuperAdmin && (
@@ -1046,7 +1274,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               <div>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Round</div>
                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>
-                                  {game.currentRound || 0} / 8
+                                  {game.currentRound || 0} / 17
                                 </div>
                               </div>
                               <div>
@@ -1080,10 +1308,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
                           )}
                         </div>
-                      ))}
+                      );
+                      })}
+                    </div>
+                      )}
                     </div>
                   )}
-                  
+
                   <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: `2px solid ${isSuperAdmin ? '#f59e0b' : '#3b82f6'}` }}>
                     <button
                       onClick={() => {
@@ -1228,6 +1459,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
           // Main Game View
           const playerList = gameState?.players ? Object.values(gameState.players) : [];
+          // Find current user's DB player_id (votes are keyed by this, not userId)
+          const myPlayerDbId = playerList.find(p => String(p.userId) === String(playerId))?.id;
           console.log('🎮 Player list for filtering:', playerList.map(p => ({ id: p.id, country: p.country })));
           console.log('🎮 Countries keys:', Object.keys(countries));
           const availableCountries = Object.keys(countries).filter(
@@ -1254,8 +1487,20 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 </div>
               )}
 
-              <div className="header">
+              {showInstructions && <InstructionsModal onClose={() => setShowInstructions(false)} />}
+              <div className="header" style={{ position: 'relative' }}>
                 <h1>🌍 Bretton Woods 1944</h1>
+                <button
+                  onClick={() => setShowInstructions(true)}
+                  style={{
+                    position: 'absolute', top: '16px', right: '16px',
+                    background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.5)',
+                    color: 'white', padding: '8px 16px', borderRadius: '8px',
+                    cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem',
+                  }}
+                >
+                  📋 How to Play
+                </button>
                 <p style={{ marginTop: '8px', fontSize: '0.875rem', color: '#64748b' }}>
                   Welcome, {username}!
                   {userRole === 'superadmin' && (
@@ -1289,26 +1534,30 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         👁️ Observing Game
                       </h3>
                       <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
-                        Room: {gameState?.roomId || currentRoomId || 'Loading...'}
+                        Room: {gameState?.game_id || currentRoomId || 'Loading...'}
                       </p>
                     </div>
                     <button
                       onClick={() => {
                         if (confirm('Leave this game and return to game selection?')) {
                           console.log('🚪 Leaving game...');
-                          // Clear the current room
+                          const roomToLeave = gameState?.game_id || currentRoomId;
+                          socket.emit('leaveRoom', { gameId: roomToLeave });
                           sessionStorage.removeItem('brettonWoodsGameRoom');
+                          localStorage.removeItem('brettonWoodsGameRoom');
                           sessionStorage.removeItem('brettonWoodsCountry');
                           window.actualRoomId = null;
                           setCurrentRoomId(null);
-                          
-                          // Leave the room on server
-                          const roomToLeave = gameState?.roomId || currentRoomId;
-                          console.log('   Leaving room:', roomToLeave);
-                          socket.emit('leaveRoom', { roomId: roomToLeave });
-                          
-                          // Reload to show game selection
-                          setTimeout(() => window.location.reload(), 100);
+                          setGameState(null);
+                          setPlayerCountry(null);
+                          setShowGameSelection(true);
+                          setLoadingGames(true);
+
+                          socket.emit('getActiveGames', { playerId });
+                          socket.once('activeGamesResult', ({ success, games }) => {
+                            setLoadingGames(false);
+                            if (success) setAvailableGames(games || []);
+                          });
                         }
                       }}
                       style={{
@@ -1328,6 +1577,58 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       ⬅️ Leave Game
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Return to Lobby Button (Regular Players - Always Visible when in a game) */}
+              {userRole !== 'superadmin' && (gameState || currentRoomId) && (
+                <div style={{ marginBottom: '12px', textAlign: 'right' }}>
+                  <button
+                    onClick={() => {
+                      console.log('🚪 Returning to lobby...');
+                      const roomToLeave = gameState?.game_id || currentRoomId;
+                      socket.emit('leaveRoom', { gameId: roomToLeave });
+                      sessionStorage.removeItem('brettonWoodsGameRoom');
+                      sessionStorage.removeItem('brettonWoodsCountry');
+                      window.actualRoomId = null;
+                      setCurrentRoomId(null);
+                      setGameState(null);
+                      setPlayerCountry(null);
+                      setShowGameSelection(true);
+                      setLoadingGames(true);
+
+                      // Fetch both game lists
+                      let gotAvailable = false, gotActive = false;
+                      socket.emit('getAvailableGames', { playerId });
+                      socket.emit('getPlayerActiveGames', { playerId });
+
+                      socket.once('availableGamesResult', ({ success, games }) => {
+                        gotAvailable = true;
+                        if (success) setAvailableGames(games || []);
+                        if (gotActive) setLoadingGames(false);
+                      });
+                      socket.once('playerActiveGamesResult', ({ success, games }) => {
+                        gotActive = true;
+                        if (success) setMyActiveGames(games || []);
+                        if (gotAvailable) setLoadingGames(false);
+                      });
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#6b7280',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.background = '#4b5563'}
+                    onMouseOut={(e) => e.currentTarget.style.background = '#6b7280'}
+                  >
+                    ⬅️ Back to Lobby
+                  </button>
                 </div>
               )}
 
@@ -1425,7 +1726,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                     <button
                       onClick={() => {
                         if (confirm('Reset the game? All progress will be lost.')) {
-                          socket.emit('resetRoom', { roomId: currentRoomId, playerId });
+                          socket.emit('resetRoom', { gameId: currentRoomId, playerId });
                         }
                       }}
                       style={{
@@ -1491,10 +1792,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           <button
                             onClick={() => {
                               console.log('Start game button clicked, skipPhase1:', skipPhase1);
-                              socket.emit('startGame', { 
-                                roomId: currentRoomId, 
+                              socket.emit('startGame', {
+                                gameId: currentRoomId,
                                 playerid: playerId,
-                                skipPhase1: skipPhase1 
+                                skipPhase1: skipPhase1
                               });
                             }}
                             className="btn-primary"
@@ -1508,7 +1809,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         <button
                           onClick={() => {
                             if (window.confirm('Reset the game? All progress will be lost.')) {
-                              socket.emit('resetRoom', { roomId: currentRoomId, playerId });
+                              socket.emit('resetRoom', { gameId: currentRoomId, playerId });
                             }
                           }}
                           style={{
@@ -1530,7 +1831,8 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 {gameState?.gameStarted ? (
                   <div>
                     {/* VOTING PHASE */}
-                    {gameState.gamePhase === 'voting' && (
+                    {gameState.gamePhase === 'voting' &&
+                     (userRole === 'superadmin' || gameState.players?.[playerId]?.quizCompleted) && (
                       <div>
                         {/* Revote Warning (if applicable) */}
                         {gameState.isTie && gameState.revoteCount > 0 && (
@@ -1553,29 +1855,32 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           </div>
                         )}
 
-                        {/* Round Header */}
+                        {/* Round Header - Country Themed */}
                         <div style={{
                           padding: '20px',
-                          background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                          background: myTheme ? myTheme.headerGradient : 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
                           borderRadius: '8px',
                           marginBottom: '20px',
-                          border: '2px solid #3b82f6'
+                          border: `2px solid ${myTheme?.borderColor || '#3b82f6'}`
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                              <h2 style={{ color: '#1e40af', margin: 0, fontSize: '1.5rem' }}>
+                              <h2 style={{ color: myTheme?.textDark || '#1e40af', margin: 0, fontSize: '1.5rem' }}>
                                 Round {gameState.currentRound} of 10
                               </h2>
-                              <p style={{ color: '#3b82f6', margin: '5px 0 0 0', fontSize: '0.875rem' }}>
+                              <p style={{ color: myTheme?.textMedium || '#3b82f6', margin: '5px 0 0 0', fontSize: '0.875rem' }}>
                                 Phase 1: Conference Voting
                               </p>
                             </div>
-                            {userRole !== 'superadmin' && (() => {
+                            {userRole !== 'superadmin' && myTheme && (() => {
                               const countryNameForScoring = getCountryNameForVoting(playerCountry);
                               return (
                               <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Your Score</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a' }}>
+                                <div style={{ fontSize: '1.5rem', marginBottom: '2px' }}>{myTheme.flag}</div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: myTheme.textDark }}>
+                                  {myTheme.name}
+                                </div>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: myTheme.textDark }}>
                                   {gameState.scores?.[countryNameForScoring] || 0} pts
                                 </div>
                               </div>
@@ -1583,6 +1888,35 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             })()}
                           </div>
                         </div>
+
+                        {/* Country Identity Banner */}
+                        {userRole !== 'superadmin' && myTheme && (
+                          <div style={{
+                            padding: '12px 20px',
+                            background: myTheme.gradient,
+                            borderRadius: '8px',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            color: 'white'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <span style={{ fontSize: '2rem' }}>{myTheme.flag}</span>
+                              <div>
+                                <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                  Delegation of {myTheme.name}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+                                  Lead Delegate: {myTheme.leader} &middot; {myTheme.motto}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.85 }}>
+                              {myTheme.currency}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Observer View */}
                         {userRole === 'superadmin' && (
@@ -1607,13 +1941,13 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 <p style={{ color: '#64748b', fontSize: '0.95rem' }}>
                                   {currentIssue.description}
                                 </p>
-                                
+
                                 <div style={{ marginTop: '20px' }}>
                                   <h4 style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '10px' }}>
                                     Voting Progress:
                                   </h4>
-                                  <div style={{ 
-                                    display: 'grid', 
+                                  <div style={{
+                                    display: 'grid',
                                     gap: '8px'
                                   }}>
                                     {playerList.map((player) => (
@@ -1623,11 +1957,14 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         borderRadius: '6px',
                                         borderLeft: '4px solid ' + (gameState.votes?.[player.id] ? '#16a34a' : '#cbd5e1')
                                       }}>
+                                        <span style={{ fontSize: '1.1rem', marginRight: '6px' }}>
+                                          {countries[player.country]?.flag || ''}
+                                        </span>
                                         <span style={{ fontWeight: 'bold' }}>
                                           {countries[player.country]?.name || player.country}
                                         </span>
-                                        <span style={{ 
-                                          marginLeft: '10px', 
+                                        <span style={{
+                                          marginLeft: '10px',
                                           color: gameState.votes?.[player.id] ? '#16a34a' : '#64748b',
                                           fontSize: '0.875rem'
                                         }}>
@@ -1639,6 +1976,58 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 </div>
                               </div>
                             )}
+
+                            {/* Admin controls during voting — force-advance if players are stuck */}
+                            <div style={{
+                              padding: '20px',
+                              background: '#fef2f2',
+                              borderRadius: '8px',
+                              border: '2px solid #fca5a5',
+                              marginTop: '10px'
+                            }}>
+                              <h4 style={{ margin: '0 0 8px 0', color: '#7f1d1d', fontSize: '0.95rem' }}>
+                                🛡️ Admin Controls
+                              </h4>
+                              <p style={{ margin: '0 0 12px 0', color: '#991b1b', fontSize: '0.8rem' }}>
+                                Use if players are unable to vote (e.g. after a server restart). Skips this round without recording results.
+                              </p>
+                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`Skip Round ${gameState.currentRound} and advance to the next round?\n\nAny votes already cast this round will be discarded.`)) {
+                                      socket.emit('advanceRound', { gameId: currentRoomId, playerId });
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 24px',
+                                    background: '#dc2626',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  ⏭ Force Advance to Round {(gameState.currentRound || 1) + 1}
+                                </button>
+                                <button
+                                  onClick={() => loadSubmissions(gameState.game_id || currentRoomId, gameState.game_code || currentRoomId)}
+                                  style={{
+                                    padding: '10px 24px',
+                                    background: '#7c3aed',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  📋 View Submissions
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         )}
 
@@ -1666,14 +2055,78 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 </h3>
                               </div>
                               
-                              <p style={{ 
-                                fontSize: '0.95rem', 
+                              <p style={{
+                                fontSize: '0.95rem',
                                 lineHeight: '1.6',
                                 color: '#475569',
                                 marginBottom: '20px'
                               }}>
                                 {currentIssue.description}
                               </p>
+
+                              {/* Historical briefing */}
+                              {currentIssue.briefing && (
+                                <div style={{
+                                  padding: '15px',
+                                  background: '#fffbeb',
+                                  borderRadius: '6px',
+                                  borderLeft: '4px solid #d97706',
+                                  marginBottom: '20px'
+                                }}>
+                                  <h4 style={{
+                                    margin: '0 0 8px 0',
+                                    fontSize: '0.85rem',
+                                    color: '#92400e',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em'
+                                  }}>
+                                    Historical Context
+                                  </h4>
+                                  <p style={{
+                                    margin: 0,
+                                    fontSize: '0.875rem',
+                                    lineHeight: '1.6',
+                                    color: '#78350f'
+                                  }}>
+                                    {currentIssue.briefing}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* National position for player's country */}
+                              {currentIssue.nationalPositions && playerCountry && (() => {
+                                const countryKey = getCountryNameForVoting(playerCountry);
+                                const position = currentIssue.nationalPositions[countryKey];
+                                if (!position) return null;
+                                return (
+                                  <div style={{
+                                    padding: '15px',
+                                    background: myTheme ? myTheme.lighter : '#f0fdf4',
+                                    borderRadius: '6px',
+                                    borderLeft: `4px solid ${myTheme?.borderColor || '#16a34a'}`,
+                                    marginBottom: '20px'
+                                  }}>
+                                    <h4 style={{
+                                      margin: '0 0 8px 0',
+                                      fontSize: '0.85rem',
+                                      color: myTheme?.textDark || '#166534',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.05em'
+                                    }}>
+                                      {myTheme?.flag} Your Delegation's Position ({countryKey})
+                                    </h4>
+                                    <p style={{
+                                      margin: 0,
+                                      fontSize: '0.875rem',
+                                      lineHeight: '1.6',
+                                      color: myTheme?.textDark || '#14532d',
+                                      fontStyle: 'italic'
+                                    }}>
+                                      "{position}"
+                                    </p>
+                                  </div>
+                                );
+                              })()}
 
                               {/* Country-specific interests - show which option favors you */}
                               {currentIssue.options && playerCountry && (
@@ -1796,9 +2249,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
 
                             {/* Voting Buttons */}
-                            {!gameState.votes?.[playerId] ? (
+                            {!gameState.votes?.[myPlayerDbId] ? (
                               <div style={{ marginBottom: '20px' }}>
-                                <h4 style={{ 
+                                {/* Step 1: Select an option */}
+                                {!pendingVoteChoice && (
+                                  <>
+                                <h4 style={{
                                   fontSize: '1rem',
                                   color: '#1e293b',
                                   marginBottom: '12px',
@@ -1812,20 +2268,15 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                   gap: '12px'
                                 }}>
                                   {currentIssue.options && currentIssue.options.map((option, idx) => {
-                                    const optionLetter = String.fromCharCode(65 + idx); // A, B, C
+                                    const optionLetter = String.fromCharCode(65 + idx);
                                     const countryNameForVoting = getCountryNameForVoting(playerCountry);
                                     const favorsYou = option.favors && option.favors.includes(countryNameForVoting);
                                     const opposesYou = option.opposes && option.opposes.includes(countryNameForVoting);
-                                    
                                     return (
-                                      <button
-                                        key={idx}
+                                      <button key={idx}
                                         onClick={() => {
-                                          socket.emit('vote', {
-                                            roomId: currentRoomId,
-                                            playerid: playerId,
-                                            choice: option.id || optionLetter.toLowerCase()
-                                          });
+                                          setPendingVoteChoice({ id: option.id || optionLetter.toLowerCase(), letter: optionLetter, text: option.text });
+                                          setVoteExplanation('');
                                         }}
                                         style={{
                                           padding: '20px 15px',
@@ -1900,6 +2351,54 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     );
                                   })}
                                 </div>
+                                  </>
+                                )}
+
+                                {/* Step 2: Explanation required before confirming vote */}
+                                {pendingVoteChoice && (() => {
+                                  const expWords = voteExplanation.trim().split(/\s+/).filter(Boolean).length;
+                                  return (
+                                    <div style={{ border: '2px solid #3b82f6', borderRadius: '10px', padding: '20px', background: '#eff6ff' }}>
+                                      <h4 style={{ color: '#1e40af', margin: '0 0 8px 0' }}>
+                                        You selected Option {pendingVoteChoice.letter}: {pendingVoteChoice.text.substring(0, 60)}{pendingVoteChoice.text.length > 60 ? '...' : ''}
+                                      </h4>
+                                      <p style={{ color: '#1e40af', fontSize: '0.875rem', margin: '0 0 12px 0' }}>
+                                        Explain your reasoning (minimum 20 words) before confirming your vote:
+                                      </p>
+                                      <textarea
+                                        value={voteExplanation}
+                                        onChange={e => setVoteExplanation(e.target.value)}
+                                        placeholder="Why is this option best for your country's interests? Consider the national position, economic effects, and coalition dynamics..."
+                                        rows={4}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #93c5fd', fontSize: '0.875rem', boxSizing: 'border-box', resize: 'vertical' }}
+                                      />
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                                        <span style={{ fontSize: '0.8rem', color: expWords >= 20 ? '#16a34a' : '#dc2626', fontWeight: 'bold' }}>
+                                          {expWords} / 20 words minimum
+                                        </span>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                          <button
+                                            onClick={() => { setPendingVoteChoice(null); setVoteExplanation(''); }}
+                                            style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
+                                          >
+                                            Back
+                                          </button>
+                                          <button
+                                            disabled={expWords < 20}
+                                            onClick={() => {
+                                              socket.emit('vote', { gameId: currentRoomId, playerid: playerId, choice: pendingVoteChoice.id, explanation: voteExplanation });
+                                              setPendingVoteChoice(null);
+                                              setVoteExplanation('');
+                                            }}
+                                            style={{ padding: '8px 20px', background: expWords >= 20 ? '#2563eb' : '#94a3b8', color: 'white', border: 'none', borderRadius: '6px', cursor: expWords >= 20 ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '0.875rem' }}
+                                          >
+                                            Confirm Vote for Option {pendingVoteChoice.letter}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             ) : (
                               <div style={{
@@ -1924,7 +2423,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     borderRadius: '6px',
                                     marginLeft: '8px'
                                   }}>
-                                    Option {gameState.votes[playerId].toUpperCase()}
+                                    Option {gameState.votes[myPlayerDbId].toUpperCase()}
                                   </strong>
                                 </p>
                                 <p style={{ color: '#166534', marginTop: '15px', fontSize: '0.875rem' }}>
@@ -2040,14 +2539,15 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             return (
                             <div style={{
                               padding: '20px',
-                              background: 'white',
+                              background: myTheme ? myTheme.lighter : 'white',
                               borderRadius: '8px',
-                              marginBottom: '20px'
+                              marginBottom: '20px',
+                              borderLeft: `4px solid ${myTheme?.borderColor || '#3b82f6'}`
                             }}>
-                              <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '5px' }}>
-                                Your Score This Round
+                              <div style={{ fontSize: '0.875rem', color: myTheme?.textMedium || '#64748b', marginBottom: '5px' }}>
+                                {myTheme?.flag} {myTheme?.name} — Score This Round
                               </div>
-                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: myTheme?.textDark || '#3b82f6' }}>
                                 +{gameState.roundScores?.[countryNameForScoring] || 0} pts
                               </div>
                               <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '5px' }}>
@@ -2057,12 +2557,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             );
                           })()}
 
-                          {/* Continue button - only admin can advance */}
-                          {userRole === 'superadmin' && (
+                          {/* Continue button - admin or host can advance */}
+                          {(userRole === 'superadmin' || isRoomHost) && (
                             <button
                               onClick={() => {
                                 socket.emit('advanceRound', {
-                                  roomId: currentRoomId,
+                                  gameId: currentRoomId,
                                   playerId
                                 });
                               }}
@@ -2081,9 +2581,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </button>
                           )}
 
-                          {userRole !== 'superadmin' && (
+                          {userRole !== 'superadmin' && !isRoomHost && (
                             <p style={{ color: '#78350f', fontSize: '0.875rem', fontStyle: 'italic' }}>
-                              Waiting for administrator to advance to next round...
+                              Waiting for host to advance to next round...
                             </p>
                           )}
                         </div>
@@ -2092,36 +2592,55 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         <div className="card">
                           <h3 style={{ marginTop: 0 }}>Current Standings</h3>
                           <div style={{ display: 'grid', gap: '10px' }}>
-                            {Object.entries(gameState.scores || {})
-                              .sort(([,a], [,b]) => b - a)
-                              .map(([country, score], idx) => (
+                            {(() => {
+                              // Deduplicate scores: normalize country names and merge
+                              const normalizeC = (c) => window.CountryUtils ? window.CountryUtils.normalizeCountryName(c) : c;
+                              const activeCountries = new Set(Object.values(gameState.players || {}).map(p => normalizeC(p.country)));
+                              const merged = {};
+                              Object.entries(gameState.scores || {}).forEach(([country, score]) => {
+                                const norm = normalizeC(country);
+                                if (!merged[norm] || score > merged[norm]) merged[norm] = score;
+                              });
+                              // Only show countries with active players (or non-zero scores)
+                              return Object.entries(merged)
+                                .filter(([country]) => activeCountries.has(country) || merged[country] > 0)
+                                .sort(([,a], [,b]) => b - a)
+                                .map(([country, score], idx) => {
+                                  const myNorm = normalizeC(playerCountry);
+                                  const isMe = country === myNorm;
+                                  const rowTheme = getCountryTheme(country);
+                                  return (
                                 <div key={country} style={{
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
                                   padding: '12px',
-                                  background: country === playerCountry ? '#eff6ff' : '#f8fafc',
+                                  background: isMe ? (rowTheme.lighter || '#eff6ff') : '#f8fafc',
                                   borderRadius: '6px',
-                                  borderLeft: '4px solid ' + (idx === 0 ? '#f59e0b' : '#cbd5e1')
+                                  borderLeft: `4px solid ${isMe ? (rowTheme.borderColor || '#3b82f6') : idx === 0 ? '#f59e0b' : '#cbd5e1'}`,
+                                  border: isMe ? `2px solid ${rowTheme.borderColor || '#3b82f6'}` : undefined
                                 }}>
-                                  <div>
-                                    <span style={{ fontWeight: 'bold', marginRight: '10px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>{rowTheme.flag}</span>
+                                    <span style={{ fontWeight: 'bold', marginRight: '4px' }}>
                                       {idx + 1}.
                                     </span>
-                                    <span style={{ fontWeight: 'bold' }}>
+                                    <span style={{ fontWeight: 'bold', color: isMe ? rowTheme.textDark : undefined }}>
                                       {countries[country]?.name || country}
                                     </span>
-                                    {country === playerCountry && (
-                                      <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>
+                                    {isMe && (
+                                      <span style={{ fontSize: '0.8rem', color: rowTheme.textMedium }}>
                                         (You)
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                                  <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: isMe ? rowTheme.textDark : undefined }}>
                                     {score} pts
                                   </div>
                                 </div>
-                              ))}
+                                  );
+                                });
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -2141,7 +2660,9 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       console.log(`   yearlyData keys:`, Object.keys(gameState.phase2?.yearlyData || {}));
                       console.log(`   yearlyData[${currentYear}]=`, gameState.phase2?.yearlyData?.[currentYear]);
                       console.log(`   myData=`, myData);
-                      const hasSubmitted = gameState.readyPlayers?.includes(playerId);
+                      const _readyIds = (gameState.readyPlayers || []).map(String);
+                      const hasSubmitted = _readyIds.includes(String(playerId)) ||
+                        _readyIds.includes(String(gameState.players[playerId]?.id));
 
                       // Use shared normalization for crisis matching
                       const normalizedPlayerCountry = normalizeCountryName(playerCountry);
@@ -2369,7 +2890,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         key={option.id}
                                         onClick={() => {
                                           socket.emit('submitCrisisResponse', {
-                                            roomId: currentRoomId,
+                                            gameId: currentRoomId,
                                             playerid: playerId,
                                             choiceId: option.id,
                                             crisisId: activeCrisis?.id
@@ -2460,7 +2981,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                   <button
                                     onClick={() => {
                                       socket.emit('resolveCrisis', {
-                                        roomId: currentRoomId,
+                                        gameId: currentRoomId,
                                         userId: playerId  // Super admin sends userId
                                       });
                                     }}
@@ -2564,20 +3085,74 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             </div>
                           )}
 
-                          <div style={{
-                            padding: '30px',
-                            background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
-                            borderRadius: '8px',
-                            marginBottom: '20px',
-                            textAlign: 'center'
-                          }}>
-                            <h1 style={{ margin: 0, marginBottom: '10px', color: '#3730a3' }}>
-                              🏛️ Post-War Economic Management
-                            </h1>
-                            <p style={{ fontSize: '1.25rem', color: '#4338ca', margin: 0 }}>
-                              Year {currentYear} ({currentYear - 1945} of 7)
-                            </p>
-                          </div>
+                          {/* Phase 2 Header - Country Themed */}
+                          {userRole !== 'superadmin' && myTheme ? (
+                            <div style={{
+                              borderRadius: '8px',
+                              marginBottom: '20px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                padding: '16px 24px',
+                                background: myTheme.gradient,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                color: 'white'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                  <span style={{ fontSize: '2.5rem' }}>{myTheme.flag}</span>
+                                  <div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '1.3rem' }}>
+                                      {myTheme.name}
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                                      {myTheme.leader} &middot; {myTheme.currency}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                                    {currentYear}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                    Year {currentYear - 1945} of 7
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{
+                                padding: '8px 24px',
+                                background: myTheme.headerGradient,
+                                borderBottom: `2px solid ${myTheme.borderColor}`,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                fontSize: '0.8rem'
+                              }}>
+                                <span style={{ color: myTheme.textDark, fontWeight: '600' }}>
+                                  Post-War Economic Management
+                                </span>
+                                <span style={{ fontWeight: 'bold', color: myTheme.textDark, fontSize: '0.95rem' }}>
+                                  {gameState.scores?.[normalizeCountryName(playerCountry)] || 0} pts
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{
+                              padding: '30px',
+                              background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                              borderRadius: '8px',
+                              marginBottom: '20px',
+                              textAlign: 'center'
+                            }}>
+                              <h1 style={{ margin: 0, marginBottom: '10px', color: '#3730a3' }}>
+                                Post-War Economic Management
+                              </h1>
+                              <p style={{ fontSize: '1.25rem', color: '#4338ca', margin: 0 }}>
+                                Year {currentYear} ({currentYear - 1945} of 7)
+                              </p>
+                            </div>
+                          )}
 
                           {/* Economic Dashboard - Only for Players */}
                           {userRole !== 'superadmin' && (
@@ -2585,10 +3160,11 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               background: 'white',
                               borderRadius: '12px',
                               padding: '24px',
-                              marginBottom: '20px'
+                              marginBottom: '20px',
+                              borderTop: `3px solid ${myTheme?.borderColor || '#6366f1'}`
                             }}>
-                              <h2 style={{ marginTop: 0, marginBottom: '20px' }}>
-                                Economic Indicators - {countries[playerCountry]?.name}
+                              <h2 style={{ marginTop: 0, marginBottom: '20px', color: myTheme?.textDark || '#1e293b' }}>
+                                {myTheme?.flag} Economic Indicators - {countries[playerCountry]?.name}
                               </h2>
                               <div style={{
                                 display: 'grid',
@@ -2773,24 +3349,30 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           ) : !hasSubmitted ? (
                             <>
                               {/* Show Command Economy form for USSR and Communist China */}
-                              {isCommandEconomy(playerCountry, currentYear) ? (
-                              <CommandEconomyPolicyForm 
-                                currentYear={currentYear}
-                                playerId={playerId}
-                                socket={socket}
-                                roomId={currentRoomId}
-                                country={playerCountry}
-                                myData={myData}
-                              />
-                            ) : (
-                              <PolicySubmissionForm
+                              {(() => {
+                                const prevYear = currentYear - 1;
+                                const prevPolicy = gameState.phase2?.policies?.[prevYear]?.[normalizedCountry];
+                                return isCommandEconomy(playerCountry, currentYear) ? (
+                                <CommandEconomyPolicyForm
                                   currentYear={currentYear}
                                   playerId={playerId}
                                   socket={socket}
                                   roomId={currentRoomId}
+                                  country={playerCountry}
                                   myData={myData}
+                                  previousPolicy={prevPolicy}
                                 />
-                              )}
+                              ) : (
+                                <PolicySubmissionForm
+                                    currentYear={currentYear}
+                                    playerId={playerId}
+                                    socket={socket}
+                                    roomId={currentRoomId}
+                                    myData={myData}
+                                    previousPolicy={prevPolicy}
+                                  />
+                                );
+                              })()}
                               <TroopDeploymentInterface 
                                 playerCountry={playerCountry}
                                 gameState={gameState}
@@ -2815,6 +3397,159 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               </p>
                             </div>
                           )}
+
+                          {/* Conference Decisions -- Phase 1 outcomes affecting Phase 2 */}
+                          {gameState.phase1Outcomes && Object.keys(gameState.phase1Outcomes).length > 0 && (
+                            <div style={{
+                              background: 'white',
+                              borderRadius: '12px',
+                              padding: '24px',
+                              marginBottom: '20px',
+                              border: '2px solid #a78bfa'
+                            }}>
+                              <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#6d28d9' }}>🏛️ Conference Decisions (Affecting Economy)</h3>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+                                {gameState.phase1Outcomes.reserveCurrency && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Reserve Currency:</strong>{' '}
+                                    {gameState.phase1Outcomes.reserveCurrency === 'dollar' ? '💵 US Dollar (White Plan)'
+                                      : gameState.phase1Outcomes.reserveCurrency === 'bancor' ? '🌐 Bancor (Keynes Plan)'
+                                      : '🔀 Multiple Currencies'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.exchangeRateSystem && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Exchange Rates:</strong>{' '}
+                                    {gameState.phase1Outcomes.exchangeRateSystem === 'fixed' ? '📌 Fixed Pegs'
+                                      : gameState.phase1Outcomes.exchangeRateSystem === 'adjustable' ? '↔️ Adjustable Pegs'
+                                      : '🏳️ National Sovereignty'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.capitalControls && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Capital Controls:</strong>{' '}
+                                    {gameState.phase1Outcomes.capitalControls === 'free' ? '🔓 Free Movement'
+                                      : gameState.phase1Outcomes.capitalControls === 'transitional' ? '⏳ Transitional Controls'
+                                      : '🔒 Permanent Controls'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.tradeLiberalization && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Trade Policy:</strong>{' '}
+                                    {gameState.phase1Outcomes.tradeLiberalization === 'freeTrade' ? '🌍 Free Trade'
+                                      : gameState.phase1Outcomes.tradeLiberalization === 'imperialPreference' ? '👑 Imperial Preferences'
+                                      : '📉 Gradual Tariff Reduction'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.goldStandard && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Gold Standard:</strong>{' '}
+                                    {gameState.phase1Outcomes.goldStandard === 'fixedPeg' ? '🥇 Fixed $35/oz Peg'
+                                      : gameState.phase1Outcomes.goldStandard === 'flexible' ? '⚖️ Flexible Gold Standard'
+                                      : '❌ Gold Abandoned'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.sovietParticipation && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Soviet Role:</strong>{' '}
+                                    {gameState.phase1Outcomes.sovietParticipation === 'conditional' ? '🤝 Conditional Participation'
+                                      : gameState.phase1Outcomes.sovietParticipation === 'unconditional' ? '✅ Full Participation'
+                                      : '🔀 Separate Eastern System'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.reconstructionFinancing && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>Reconstruction:</strong>{' '}
+                                    {gameState.phase1Outcomes.reconstructionFinancing === 'worldBank' ? '🏦 World Bank (US Conditions)'
+                                      : gameState.phase1Outcomes.reconstructionFinancing === 'unconditional' ? '🎁 Unconditional Grants'
+                                      : gameState.phase1Outcomes.reconstructionFinancing === 'devastated' ? '🏚️ Priority for Most Devastated'
+                                      : '🌾 Include Commodity Exporters'}
+                                  </div>
+                                )}
+                                {gameState.phase1Outcomes.postWarOrder && (
+                                  <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                    <strong>World Order:</strong>{' '}
+                                    {gameState.phase1Outcomes.postWarOrder === 'usLed' ? '🇺🇸 US-Led Liberal Order'
+                                      : gameState.phase1Outcomes.postWarOrder === 'multilateral' ? '🤝 Multilateral Cooperation'
+                                      : '🏴 National Sovereignty'}
+                                  </div>
+                                )}
+                              </div>
+                              <p style={{ fontSize: '0.8rem', color: '#7c3aed', marginTop: '12px', marginBottom: 0, fontStyle: 'italic' }}>
+                                These decisions from the Conference directly influence economic calculations each year.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Phase 2 Running Standings */}
+                          <div style={{
+                            background: 'white',
+                            borderRadius: '12px',
+                            padding: '24px',
+                            marginBottom: '20px',
+                            border: '1px solid #e2e8f0'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                              <h3 style={{ marginTop: 0, marginBottom: 0 }}>Current Standings</h3>
+                              {(() => {
+                                const myNorm = normalizeCountryName(playerCountry);
+                                const myYearScore = gameState.phase2?.yearlyScores?.[currentYear]?.[myNorm];
+                                return myYearScore ? (
+                                  <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                                    +{myYearScore} pts this year
+                                  </span>
+                                ) : null;
+                              })()}
+                            </div>
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                              {(() => {
+                                const normalizeC = (c) => window.CountryUtils ? window.CountryUtils.normalizeCountryName(c) : c;
+                                const activeCountries = new Set(Object.values(gameState.players || {}).map(p => normalizeC(p.country)));
+                                const merged = {};
+                                Object.entries(gameState.scores || {}).forEach(([country, score]) => {
+                                  const norm = normalizeC(country);
+                                  if (!merged[norm] || score > merged[norm]) merged[norm] = score;
+                                });
+                                return Object.entries(merged)
+                                  .filter(([country]) => activeCountries.has(country))
+                                  .sort(([,a], [,b]) => b - a)
+                                  .map(([country, score], idx) => {
+                                    const myNorm = normalizeC(playerCountry);
+                                    const isMe = country === myNorm;
+                                    const rowTheme = getCountryTheme(country);
+                                    const yearScore = gameState.phase2?.yearlyScores?.[currentYear]?.[country];
+                                    return (
+                                      <div key={country} style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '10px 14px',
+                                        background: isMe ? (rowTheme.lighter || '#eff6ff') : '#f8fafc',
+                                        borderRadius: '6px',
+                                        borderLeft: `4px solid ${isMe ? (rowTheme.borderColor || '#3b82f6') : idx === 0 ? '#f59e0b' : '#cbd5e1'}`
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <span style={{ fontSize: '1.1rem' }}>{rowTheme.flag}</span>
+                                          <span style={{ fontWeight: 'bold', minWidth: '22px' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}</span>
+                                          <span style={{ fontWeight: isMe ? 'bold' : 'normal', color: isMe ? rowTheme.textDark : undefined }}>
+                                            {countries[country]?.name || country}
+                                            {isMe && <span style={{ fontSize: '0.8rem', color: rowTheme.textMedium, marginLeft: '4px' }}>(You)</span>}
+                                          </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          {yearScore > 0 && (
+                                            <span style={{ fontSize: '0.8rem', color: '#16a34a' }}>+{yearScore}</span>
+                                          )}
+                                          <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: isMe ? rowTheme.textDark : undefined }}>
+                                            {score} pts
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                              })()}
+                            </div>
+                          </div>
 
                           {/* Historical Events */}
                           <div style={{
@@ -2923,38 +3658,66 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               border: '2px solid #dc2626'
                             }}>
                               <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#dc2626' }}>🛡️ Administrator Controls</h3>
-                              <button
-                                onClick={() => {
-                                  // Super admin sends userId, not playerId (they're not a player)
-                                  socket.emit('advanceYear', { 
-                                    roomId: currentRoomId, 
-                                    userId: playerId  // playerId for superadmin is actually their userId
-                                  });
-                                }}
-                                style={{
-                                  padding: '15px 40px',
-                                  background: '#16a34a',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '8px',
-                                  fontSize: '1.1rem',
-                                  fontWeight: 'bold',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s'
-                                }}
-                                onMouseOver={(e) => e.currentTarget.style.background = '#15803d'}
-                                onMouseOut={(e) => e.currentTarget.style.background = '#16a34a'}
-                              >
-                                🎯 Advance to Year {currentYear + 1}
-                              </button>
+                              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <button
+                                  onClick={() => {
+                                    socket.emit('advanceYear', {
+                                      gameId: currentRoomId,
+                                      userId: playerId
+                                    });
+                                  }}
+                                  style={{
+                                    padding: '15px 40px',
+                                    background: '#16a34a',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseOver={(e) => e.currentTarget.style.background = '#15803d'}
+                                  onMouseOut={(e) => e.currentTarget.style.background = '#16a34a'}
+                                >
+                                  🎯 Advance to Year {currentYear + 1}
+                                </button>
+                                <button
+                                  onClick={() => loadSubmissions(gameState.game_id || currentRoomId, gameState.game_code || currentRoomId)}
+                                  style={{
+                                    padding: '15px 40px',
+                                    background: '#7c3aed',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseOver={(e) => e.currentTarget.style.background = '#6d28d9'}
+                                  onMouseOut={(e) => e.currentTarget.style.background = '#7c3aed'}
+                                >
+                                  📋 View Submissions
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
                       );
                     })()}
 
+                    {/* END-GAME TEST GATE */}
+                    {gameState.gamePhase === 'complete' && userRole !== 'superadmin' && !endTestDone && (
+                      <EndGameTest
+                        socket={socket}
+                        playerId={playerId}
+                        onComplete={() => setEndTestDone(true)}
+                      />
+                    )}
+
                     {/* GAME COMPLETE */}
-                    {gameState.gamePhase === 'complete' && (
+                    {gameState.gamePhase === 'complete' && (userRole === 'superadmin' || endTestDone) && (
                       <div>
                         <div style={{
                           padding: '40px',
@@ -3085,6 +3848,20 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                         {(breakdown.brettonWoods || 0) > 0 ? '+' : ''}{breakdown.brettonWoods || 0} pts
                                       </div>
                                     </div>
+                                    {(breakdown.crisisDiplomacy || 0) !== 0 && (
+                                      <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '3px solid #06b6d4' }}>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '4px' }}>Crisis Diplomacy</div>
+                                        <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: (breakdown.crisisDiplomacy || 0) > 0 ? '#16a34a' : '#dc2626' }}>
+                                          {(breakdown.crisisDiplomacy || 0) > 0 ? '+' : ''}{breakdown.crisisDiplomacy || 0} pts
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div style={{ padding: '12px', background: '#ecfdf5', borderRadius: '6px', borderLeft: '3px solid #059669' }}>
+                                      <div style={{ fontSize: '0.8rem', color: '#065f46', marginBottom: '4px', fontWeight: 'bold' }}>Yearly Economic Performance</div>
+                                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#059669' }}>
+                                        +{breakdown.yearlyTotal || 0} pts
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -3097,15 +3874,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                               fontSize: '0.9rem',
                               color: '#64748b'
                             }}>
-                              <strong>Scoring Categories:</strong>
-                              <ul style={{ marginTop: '8px', marginBottom: 0, lineHeight: '1.6' }}>
-                                <li><strong>GDP Growth:</strong> 10 pts per % average growth (1947-1952)</li>
-                                <li><strong>Inflation Control:</strong> Up to 50 pts for low inflation (&lt;3%)</li>
-                                <li><strong>Employment:</strong> Up to 40 pts for low unemployment (&lt;2%)</li>
-                                <li><strong>Trade Balance:</strong> 8 pts per year with positive balance</li>
-                                <li><strong>Stability:</strong> Up to 30 pts for consistent growth (low variance)</li>
-                                <li><strong>Bretton Woods:</strong> Bonus for voting with majority on trade/loans/IMF issues</li>
-                              </ul>
+                              <strong>Scoring:</strong> Points accumulate each year from economic performance (GDP growth, inflation, employment, trade), plus end-game bonuses for overall stability, Bretton Woods cooperation, and crisis diplomacy.
                             </div>
                           </div>
                         )}
@@ -3115,16 +3884,43 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           <button
                             onClick={() => {
                               console.log('🚪 Leaving completed game...');
-                              const roomToLeave = gameState?.roomId || currentRoomId;
+                              const roomToLeave = gameState?.game_id || currentRoomId;
                               socket.emit('leaveCompletedGame', {
-                                roomId: roomToLeave,
+                                gameId: roomToLeave,
                                 userId: playerId
                               });
                               sessionStorage.removeItem('brettonWoodsGameRoom');
+                          localStorage.removeItem('brettonWoodsGameRoom');
                               sessionStorage.removeItem('brettonWoodsCountry');
                               window.actualRoomId = null;
                               setCurrentRoomId(null);
-                              setTimeout(() => window.location.reload(), 100);
+                              setGameState(null);
+                              setPlayerCountry(null);
+                              setShowGameSelection(true);
+                              setLoadingGames(true);
+
+                              // Navigate to lobby by fetching game lists
+                              if (userRole === 'superadmin') {
+                                socket.emit('getActiveGames', { playerId });
+                                socket.once('activeGamesResult', ({ success, games }) => {
+                                  setLoadingGames(false);
+                                  if (success) setAvailableGames(games || []);
+                                });
+                              } else {
+                                let gotAvailable = false, gotActive = false;
+                                socket.emit('getAvailableGames', { playerId });
+                                socket.emit('getPlayerActiveGames', { playerId });
+                                socket.once('availableGamesResult', ({ success, games }) => {
+                                  gotAvailable = true;
+                                  if (success) setAvailableGames(games || []);
+                                  if (gotActive) setLoadingGames(false);
+                                });
+                                socket.once('playerActiveGamesResult', ({ success, games }) => {
+                                  gotActive = true;
+                                  if (success) setMyActiveGames(games || []);
+                                  if (gotAvailable) setLoadingGames(false);
+                                });
+                              }
                             }}
                             style={{
                               padding: '15px 30px',
@@ -3166,7 +3962,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 onClick={() => {
                                   if (window.confirm('Start a new game? The current game will be marked as complete and a brand new game will be created.')) {
                                     socket.emit('startNewGame', {
-                                      roomId: currentRoomId,
+                                      gameId: currentRoomId,
                                       playerId
                                     });
                                   }
@@ -3225,14 +4021,17 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             opacity: player.disconnected ? 0.7 : 1
                           }}>
                             <div>
+                              <span style={{ fontSize: '1.1rem', marginRight: '6px' }}>
+                                {countries[player.country]?.flag || ''}
+                              </span>
                               <span style={{ fontWeight: 'bold' }}>
                                 {countries[player.country]?.name || player.country}
                               </span>
-                              {player.id === playerId && <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>(You)</span>}
+                              {player.userId === playerId && <span style={{ marginLeft: '8px', fontSize: '0.875rem', color: '#3b82f6' }}>(You)</span>}
                               {player.disconnected && <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#d97706' }}>🔌 Disconnected</span>}
                             </div>
                             <div>
-                              {gameState?.readyPlayers?.includes(player.userId) ? (
+                              {player.ready ? (
                                 <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓ Ready</span>
                               ) : (
                                 <span style={{ color: '#64748b' }}>Not Ready</span>
@@ -3284,19 +4083,26 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             {availableCountries.map(key => {
                               const country = countries[key];
                               if (!country) return null;
+                              const cTheme = getCountryTheme(key);
                               return (
                                 <div
                                   key={key}
-                                  className={`country-card ${country.color}`}
+                                  className="country-card"
                                   onClick={() => handleJoinGame(key)}
-                                  style={{ cursor: 'pointer' }}
+                                  style={{ cursor: 'pointer', background: cTheme.gradient }}
                                 >
-                                  <h3>{country.name}</h3>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '1.8rem' }}>{cTheme.flag}</span>
+                                    <h3 style={{ margin: 0 }}>{country.name}</h3>
+                                  </div>
+                                  <p style={{ fontSize: '0.8rem', marginBottom: '6px', opacity: 0.95 }}>
+                                    {cTheme.leader} &middot; {cTheme.currency}
+                                  </p>
                                   <p style={{ fontSize: '0.875rem', marginBottom: '12px', opacity: '0.9' }}>
                                     {country.economicPosition}
                                   </p>
-                                  <p style={{ fontSize: '0.75rem', opacity: '0.8' }}>
-                                    {country.role}
+                                  <p style={{ fontSize: '0.7rem', opacity: '0.8', fontStyle: 'italic' }}>
+                                    "{cTheme.motto}"
                                   </p>
                                 </div>
                               );
@@ -3323,16 +4129,23 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                       <div>
                         <div style={{
                           padding: '16px',
-                          background: '#eff6ff',
+                          background: myTheme ? myTheme.headerGradient : '#eff6ff',
                           borderRadius: '8px',
-                          marginBottom: '20px'
+                          marginBottom: '20px',
+                          border: `2px solid ${myTheme?.borderColor || '#3b82f6'}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '14px'
                         }}>
-                          <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>
-                            You are playing as: {countries[playerCountry]?.name || playerCountry}
-                          </p>
-                          <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                            You are committed to this country for the game.
-                          </p>
+                          <span style={{ fontSize: '2.5rem' }}>{myTheme?.flag}</span>
+                          <div>
+                            <p style={{ fontWeight: 'bold', marginBottom: '4px', color: myTheme?.textDark || '#1e293b', fontSize: '1.1rem' }}>
+                              Delegation of {countries[playerCountry]?.name || playerCountry}
+                            </p>
+                            <p style={{ fontSize: '0.8rem', color: myTheme?.textMedium || '#64748b', margin: 0 }}>
+                              {myTheme?.leader} &middot; {myTheme?.motto}
+                            </p>
+                          </div>
                         </div>
 
                         <button
@@ -3389,6 +4202,52 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                 </div>
              )}
   
+                {/* SUBMISSIONS MODAL */}
+                {submissionsModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div style={{ background: 'white', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '900px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                        <h2 style={{ margin: 0 }}>📋 Submissions — Game {submissionsModal.gameCode}</h2>
+                        <button onClick={() => setSubmissionsModal(null)} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 14px', cursor: 'pointer', fontWeight: 'bold' }}>✕ Close</button>
+                      </div>
+                      {submissionsModal.loading && <p style={{ textAlign: 'center', color: '#64748b' }}>Loading…</p>}
+                      {submissionsModal.error && <p style={{ color: '#dc2626' }}>Error: {submissionsModal.error}</p>}
+                      {!submissionsModal.loading && !submissionsModal.error && submissionsModal.rows.length === 0 && (
+                        <p style={{ color: '#64748b' }}>No submissions found for this game.</p>
+                      )}
+                      {!submissionsModal.loading && submissionsModal.rows.length > 0 && (
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                            <thead>
+                              <tr style={{ background: '#f1f5f9', position: 'sticky', top: 0 }}>
+                                {['Player', 'Country', 'Type', 'Round', 'Quiz ✓', 'Quiz Score', 'End Test ✓', 'End Score', 'Vote Explanation', 'Policy Explanation'].map(h => (
+                                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {submissionsModal.rows.map((row, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', background: i % 2 === 0 ? 'white' : '#f8fafc' }}>
+                                  <td style={{ padding: '7px 10px' }}>{row.username || row.player_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.country_code || '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.type_name || row.submissions_type_id}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.round_number}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.quiz_completed ? '✅' : '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.quiz_score != null ? `${row.quiz_score}/${row.quiz_total}` : '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.end_test_completed ? '✅' : '—'}</td>
+                                  <td style={{ padding: '7px 10px' }}>{row.end_test_score != null ? row.end_test_score : '—'}</td>
+                                  <td style={{ padding: '7px 10px', maxWidth: '200px', wordBreak: 'break-word' }}>{row.vote_explanation || '—'}</td>
+                                  <td style={{ padding: '7px 10px', maxWidth: '200px', wordBreak: 'break-word' }}>{row.policy_explanation || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* BATTLE MODAL */}
                 {showBattleModal && militaryConflict && battleModalMinimized && (
                   <div
@@ -3438,8 +4297,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                         </h2>
                         <button onClick={() => setBattleModalMinimized(true)} style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap', flexShrink: 0 }}>🗺️ View Map</button>
                       </div>
-                      </h2>
-                      
+
                       <div style={{
                         background: '#fef2f2',
                         borderLeft: '4px solid #dc2626',
@@ -3477,7 +4335,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             onClick={() => {
                               console.log('⚔️ Player chose FIGHT');
                               socket.emit('submitBattleDecision', {
-                                roomId: currentRoomId,
+                                gameId: currentRoomId,
                                 playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
@@ -3507,7 +4365,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             onClick={() => {
                               console.log('🤝 Player chose NEGOTIATE');
                               socket.emit('submitBattleDecision', {
-                                roomId: currentRoomId,
+                                gameId: currentRoomId,
                                 playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
@@ -3537,7 +4395,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                             onClick={() => {
                               console.log('🏃 Player chose RETREAT');
                               socket.emit('submitBattleDecision', {
-                                roomId: currentRoomId,
+                                gameId: currentRoomId,
                                 playerid: playerId,
                                 battleId: militaryConflict.battleId || `${militaryConflict.region}-${militaryConflict.year}`,
                                 region: militaryConflict.region,
@@ -3813,7 +4671,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
 
                             console.log('🤝 Submitting diplomatic stances:', diplomaticStances);
                             socket.emit('submitDiplomaticStance', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               region: diplomaticConflict.region,
                               stances: diplomaticStances
@@ -3923,7 +4781,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           onClick={() => {
                             console.log('⚔️ Player chose ATTACK');
                             socket.emit('submitBattleOption', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               battleId: battleOptionsData.battleId,
                               region: battleOptionsData.region,
@@ -3954,7 +4812,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           onClick={() => {
                             console.log('🤝 Player chose NEGOTIATE');
                             socket.emit('submitBattleOption', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               battleId: battleOptionsData.battleId,
                               region: battleOptionsData.region,
@@ -3985,7 +4843,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                           onClick={() => {
                             console.log('🏃 Player chose RETREAT');
                             socket.emit('submitBattleOption', {
-                              roomId: currentRoomId,
+                              gameId: currentRoomId,
                               playerid: playerId,
                               battleId: battleOptionsData.battleId,
                               region: battleOptionsData.region,
