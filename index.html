@@ -432,6 +432,10 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
               console.log('State updated in React');
             });
 
+            socket.on('crisisResponseError', ({ message }) => {
+              alert('Crisis response error: ' + message);
+            });
+
             socket.on('joinRoomResult', ({ success, roomId: _rId, gameId: _gId, message, role, isHost, reconnected, country, needsCountrySelection }) => {
               if (success) {
                 // Server sends gameId (numeric); fall back to roomId for legacy

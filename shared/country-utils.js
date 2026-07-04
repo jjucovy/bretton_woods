@@ -25,6 +25,7 @@
     'Great Britain': 'UK',
     'United Kingdom': 'UK',
     'Britain': 'UK',
+    'England': 'UK',
     // China variations
     'CHN': 'China',
     'PRC': 'China',

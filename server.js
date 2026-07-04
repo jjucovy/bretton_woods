@@ -258,6 +258,16 @@ let globalState = {
   roomList: [] // { id, name, host, playerCount, maxPlayers, status, createdAt }
 };
 
+// Resolve a gameId that might be a numeric game_id to the actual game_code key
+function resolveGameId(id) {
+  if (!id) return id;
+  if (globalState.games[id]) return id;
+  const found = Object.entries(globalState.games).find(([, r]) =>
+    String(r.gameId) === String(id) || String(r.game_id) === String(id)
+  );
+  return found ? found[0] : id;
+}
+
 // Global userId -> socketId map so broadcasts can always reach known users (esp. admin user_id=1)
 const userSocketMap = {};
 
@@ -3319,7 +3329,7 @@ io.on('connection', (socket) => {
 
         if (dbAssignment && (dbAssignment.country_code || dbAssignment.country_name)) {
           // Player has an existing assignment in database - restore them
-          const assignedCountry = dbAssignment.country_code || dbAssignment.country_name;
+          const assignedCountry = normalizeCountryName(dbAssignment.country_code || dbAssignment.country_name) || dbAssignment.country_code || dbAssignment.country_name;
           console.log(`   ✓ Found player assignment in database: ${assignedCountry}`);
 
           // Add player back to room state
@@ -3665,15 +3675,11 @@ io.on('connection', (socket) => {
   
   // Set ready status
   socket.on('setReady', async ({ gameId: rawGameId, userId, playerid, ready }) => {
-    let gameId = rawGameId;
+    const gameId = resolveGameId(rawGameId);
     let room = globalState.games[gameId];
     if (!room) {
-      const entry = Object.entries(globalState.games).find(([, r]) => r.game_code === rawGameId);
-      if (!entry) {
-        console.log(`❌ setReady: room ${rawGameId} not found`);
-        return;
-      }
-      [gameId, room] = entry;
+      console.log(`❌ setReady: room ${rawGameId} not found`);
+      return;
     }
 
     const socketUserId = userId || playerid;
@@ -3897,7 +3903,7 @@ io.on('connection', (socket) => {
 
   // Vote on current issue
   socket.on('vote', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId, choice, explanation }) => {
-    const gameId = _gId || _rId;
+    const gameId = resolveGameId(_gId || _rId);
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const id = userId || playerId || playerid;
 
@@ -4252,7 +4258,8 @@ io.on('connection', (socket) => {
   });
   
   // Advance to next round (admin only)
-  socket.on('advanceRound', async ({ gameId, playerId, playerid, userId }) => {
+  socket.on('advanceRound', async ({ gameId: rawGameId, playerId, playerid, userId }) => {
+    const gameId = resolveGameId(rawGameId);
     const room = globalState.games[gameId];
     if (!room) return;
 
@@ -4333,7 +4340,7 @@ io.on('connection', (socket) => {
   
   // PHASE 2: Submit economic policy
   socket.on('submitPolicy', async ({ gameId: _gId, roomId: _rId, playerid, policy }) => {
-    const gameId = _gId || _rId;
+    const gameId = resolveGameId(_gId || _rId);
     const room = globalState.games[gameId];
     if (!room || !room.phase2.active) return;
 
@@ -4575,7 +4582,7 @@ io.on('connection', (socket) => {
   // PHASE 2: Advance to next year
   // PLAYER: Deploy troops
   socket.on('deployTroops', ({ gameId: _gId, roomId: _rId, playerid, deployment }) => {
-    const gameId = _gId || _rId;
+    const gameId = resolveGameId(_gId || _rId);
     const room = globalState.games[gameId];
     if (!room) {
       console.log(`❌ deployTroops: room not found for gameId=${_gId} roomId=${_rId}`);
@@ -4752,7 +4759,8 @@ io.on('connection', (socket) => {
   });
 
   // Handle battle decisions
-  socket.on('submitBattleDecision', ({ gameId, playerid, battleId, decision, region, year }) => {
+  socket.on('submitBattleDecision', ({ gameId: rawGameId, playerid, battleId, decision, region, year }) => {
+    const gameId = resolveGameId(rawGameId);
     const room = globalState.games[gameId];
     if (!room || !room.phase2.active) return;
     
@@ -4926,7 +4934,8 @@ io.on('connection', (socket) => {
   });
 
   // DIPLOMATIC STANCE: Submit stance for each country in conflict zone
-  socket.on('submitDiplomaticStance', ({ gameId, playerid, region, stances }) => {
+  socket.on('submitDiplomaticStance', ({ gameId: rawGameId, playerid, region, stances }) => {
+    const gameId = resolveGameId(rawGameId);
     const room = globalState.games[gameId];
     if (!room || !room.phase2?.active) return;
 
@@ -5057,7 +5066,8 @@ io.on('connection', (socket) => {
   }
 
   // BATTLE OPTIONS: Submit attack/retreat/negotiate after stance selection
-  socket.on('submitBattleOption', ({ gameId, playerid, battleId, option, region }) => {
+  socket.on('submitBattleOption', ({ gameId: rawGameId, playerid, battleId, option, region }) => {
+    const gameId = resolveGameId(rawGameId);
     const room = globalState.games[gameId];
     if (!room || !room.phase2?.active) return;
 
@@ -5426,12 +5436,20 @@ io.on('connection', (socket) => {
 
   // CRISIS: Submit response to active crisis
   // Now supports multiple active crises - crisisId identifies which one
-  socket.on('submitCrisisResponse', ({ gameId, playerid, choiceId, crisisId }) => {
+  socket.on('submitCrisisResponse', ({ gameId: rawGameId, playerid, choiceId, crisisId }) => {
+    const gameId = resolveGameId(rawGameId);
+    console.log(`🔔 submitCrisisResponse received: gameId=${gameId} (raw=${rawGameId}), playerid=${playerid}, choiceId=${choiceId}, crisisId=${crisisId}`);
     const room = globalState.games[gameId];
-    if (!room || !room.phase2?.active) return;
+    if (!room || !room.phase2?.active) {
+      console.log(`❌ Crisis response failed: room not found or phase2 not active (room=${!!room}, phase2active=${room?.phase2?.active})`);
+      return;
+    }
 
     const player = room.players[playerid];
-    if (!player) return;
+    if (!player) {
+      console.log(`❌ Crisis response failed: player ${playerid} not found. Room player keys: [${Object.keys(room.players).join(', ')}]`);
+      return;
+    }
 
     // Handle both old single-crisis format and new array format
     let activeCrises = room.phase2.crises.active;
@@ -5557,7 +5575,8 @@ io.on('connection', (socket) => {
 
   // CRISIS: Admin manually resolves crisis (for cases where not all countries responded)
   // crisisId is optional - if not provided, resolves all active crises
-  socket.on('resolveCrisis', async ({ gameId, playerId, playerid, userId, crisisId }) => {
+  socket.on('resolveCrisis', async ({ gameId: rawGameId, playerId, playerid, userId, crisisId }) => {
+    const gameId = resolveGameId(rawGameId);
     const room = globalState.games[gameId];
     if (!room) return;
 
@@ -5625,7 +5644,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('advanceYear', async ({ gameId: _gId, roomId: _rId, playerId, playerid, userId }) => {
-    const gameId = _gId || _rId;
+    const gameId = resolveGameId(_gId || _rId);
     // Support multiple parameter names - prefer userId, then playerId, then playerid
     const checkId = userId || playerId || playerid;
 
@@ -6274,7 +6293,7 @@ async function initializeFromDatabase() {
           roomState.players[player.user_id] = {
             id: player.player_id,
             userId: player.user_id,
-            country: player.country_code,
+            country: normalizeCountryName(player.country_code) || player.country_code,
             ready: false,
             score: (player.phase1_score || 0) + (player.phase2_score || 0),
             phase1_score: player.phase1_score || 0,
