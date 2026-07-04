@@ -969,14 +969,19 @@ function triggerCrisisIfNeeded(roomId, year, options = {}) {
       console.log(`   Reason: ${crisis.triggerReason}`);
     }
 
+    // Merge affectedCountries with any countries that have options defined
+    const optionCountries = Object.keys(crisis.options || {});
+    const allAffected = [...new Set([...crisis.affectedCountries, ...optionCountries])];
+
     room.phase2.crises.active.push({
       ...crisis,
+      affectedCountries: allAffected,
       triggeredAt: Date.now(),
       resolved: false,
-      responses: {} // Track responses per crisis
+      responses: {}
     });
 
-    console.log(`   Affected countries:`, crisis.affectedCountries);
+    console.log(`   Affected countries:`, allAffected);
   }
 
   console.log(`✋ ${triggeredCrises.length} crisis(es) active - waiting for player responses`);
@@ -3891,10 +3896,11 @@ const countryId = countryData?.country_id || null;
     if (crisisId) {
       crisis = activeCrises.find(c => c.id === crisisId);
     } else {
-      // Backwards compatibility: find first crisis this country is affected by
+      // Backwards compatibility: find first crisis this country is affected by or has options for
       const country = player.country;
       const normalizedCountry = normalizeCountryName(country);
       crisis = activeCrises.find(c =>
+        c.options?.[country] || c.options?.[normalizedCountry] ||
         c.affectedCountries.some(ac =>
           ac === country || ac === normalizedCountry || normalizeCountryName(ac) === normalizedCountry
         )
@@ -3909,17 +3915,18 @@ const countryId = countryData?.country_id || null;
     const country = player.country;
     const normalizedCountry = normalizeCountryName(country);
 
-    // Check if this country is affected by the crisis
-    const isAffected = crisis.affectedCountries.some(c =>
-      c === country || c === normalizedCountry || normalizeCountryName(c) === normalizedCountry
-    );
+    // Get the choice - check both raw and normalized country name
+    let countryOptions = crisis.options[country] || crisis.options[normalizedCountry];
+
+    // Check if this country is affected by the crisis (via affectedCountries OR having options)
+    const isAffected = countryOptions ||
+      crisis.affectedCountries.some(c =>
+        c === country || c === normalizedCountry || normalizeCountryName(c) === normalizedCountry
+      );
     if (!isAffected) {
       console.log(`${country} (normalized: ${normalizedCountry}) not affected by crisis: ${crisis.title}`);
       return;
     }
-
-    // Get the choice
-    let countryOptions = crisis.options[country] || crisis.options[normalizedCountry];
     if (!countryOptions) {
       console.log(`No options for ${country} or ${normalizedCountry} in crisis: ${crisis.title}`);
       console.log(`Available option keys: ${Object.keys(crisis.options).join(', ')}`);
