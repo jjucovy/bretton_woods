@@ -2777,7 +2777,8 @@ io.on('connection', (socket) => {
       // Fetch the newly created user to get their user_id
       let userId = result?.user_id || result?.id;
       if (!userId) {
-        const dbUser = await queryDatabase('getUser', { username });
+        const dbUserResult = await queryDatabase('getUser', { username });
+        const dbUser = Array.isArray(dbUserResult) ? dbUserResult[0] : dbUserResult;
         userId = dbUser?.user_id;
       }
 
@@ -2858,11 +2859,11 @@ io.on('connection', (socket) => {
     
     try {
       // Query database for user by username
-      const dbUser = await queryDatabase('getUser', { username });
+      const dbResult = await queryDatabase('getUser', { username });
+      const dbUser = Array.isArray(dbResult) ? dbResult[0] : dbResult;
 
-      // Check for valid user with user_id (reject empty objects, null, undefined)
       if (!dbUser || !dbUser.user_id) {
-        console.log('ERROR: User not found in database or missing user_id:', dbUser);
+        console.log('ERROR: User not found in database or missing user_id:', dbResult);
         socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
         return;
       }
