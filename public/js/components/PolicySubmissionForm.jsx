@@ -20,9 +20,8 @@ const { useState } = React;
           const totalMilitary = armySize + navySize + airForceSize;
 
           const handleSubmit = () => {
-            if (isSubmitting) return; // Prevent double-click
+            if (isSubmitting) return;
             setIsSubmitting(true);
-            console.log('📤 Submitting policy for player:', playerId);
             socket.emit('submitPolicy', {
               gameId: roomId,
               playerid: playerId,
@@ -229,7 +228,6 @@ const { useState } = React;
     e.preventDefault();
     e.stopPropagation();
     if (isSubmitting) return;
-    console.log('🔵 Button click fired!', e);
     handleSubmit();
   }}
   style={{
