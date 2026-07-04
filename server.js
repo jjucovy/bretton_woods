@@ -6293,6 +6293,9 @@ async function initializeFromDatabase() {
       }
       console.log(`   📊 Scores rebuilt from player data:`, roomState.scores);
 
+      // Store in globalState so it's findable by all handlers
+      globalState.games[gameCode] = roomState;
+
       // --- Restore priority: local JSON file → DB snapshot → fresh init ---
       const needsPhase2Data = roomState.phase2 && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0);
       const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
@@ -6351,11 +6354,11 @@ async function initializeFromDatabase() {
   // ONLY prune if the DB query actually succeeded (Array.isArray check).
   // If DB returned 503 or null, skip pruning to avoid wiping all rooms.
   if (Array.isArray(games)) {
-    const dbGameIds = new Set(games.map(g => String(g.game_id)));
+    const dbGameCodes = new Set(games.map(g => g.game_code));
     let pruned = 0;
-    for (const gameId of Object.keys(globalState.games)) {
-      if (!dbGameIds.has(gameId)) {
-        delete globalState.games[gameId];
+    for (const code of Object.keys(globalState.games)) {
+      if (!dbGameCodes.has(code)) {
+        delete globalState.games[code];
         pruned++;
       }
     }
