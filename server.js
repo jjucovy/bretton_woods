@@ -4601,6 +4601,56 @@ const countryId = countryData?.country_id || null;
   });
 });
 
+// Restore a room's full state from a DB snapshot row
+function restoreRoomFromSnapshot(roomState, snapshot) {
+  try {
+    const players = JSON.parse(snapshot.players || '{}');
+    Object.entries(players).forEach(([id, p]) => {
+      roomState.players[id] = { ...roomState.players[id], ...p, ready: false };
+    });
+
+    roomState.scores = JSON.parse(snapshot.scores || '{}');
+    roomState.roundHistory = JSON.parse(snapshot.round_history || '[]');
+    if (snapshot.current_round) roomState.currentRound = snapshot.current_round;
+
+    if (snapshot.phase === 2 || snapshot.current_year) {
+      if (!roomState.phase2) roomState.phase2 = {};
+      roomState.gamePhase = snapshot.phase === 2 ? 'phase2' : roomState.gamePhase;
+      roomState.gameStarted = true;
+      roomState.phase2.currentYear = snapshot.current_year || roomState.phase2.currentYear;
+      roomState.phase2.yearlyData = JSON.parse(snapshot.yearly_data || '{}');
+      roomState.phase2.policies = JSON.parse(snapshot.policies || '{}');
+      roomState.phase2.cumulativeDeployments = JSON.parse(snapshot.deployments || '{}');
+      roomState.phase2.deploymentHistory = JSON.parse(snapshot.deployment_history || '[]');
+      roomState.phase2.crises = JSON.parse(snapshot.crises || '{}');
+      roomState.phase2.battleResults = JSON.parse(snapshot.battle_results || '[]');
+      roomState.phase2.diplomaticPoints = JSON.parse(snapshot.diplomatic_points || '{}');
+      roomState.phase2.active = roomState.gamePhase !== 'complete';
+
+      if (snapshot.full_state) {
+        try {
+          const full = JSON.parse(snapshot.full_state);
+          if (full.phase2?.achievements) roomState.phase2.achievements = full.phase2.achievements;
+          if (full.phase2?.pendingConflictZones) roomState.phase2.pendingConflictZones = full.phase2.pendingConflictZones;
+          if (full.phase2?.activeConflicts) roomState.phase2.activeConflicts = full.phase2.activeConflicts;
+          if (full.phase2?.battleDecisions) roomState.phase2.battleDecisions = full.phase2.battleDecisions;
+          if (full.phase2?.battleOptions) roomState.phase2.battleOptions = full.phase2.battleOptions;
+          if (full.phase2?.diplomaticStances) roomState.phase2.diplomaticStances = full.phase2.diplomaticStances;
+          if (full.phase2?.awaitingDiplomaticResolution) roomState.phase2.awaitingDiplomaticResolution = full.phase2.awaitingDiplomaticResolution;
+          if (full.phase2?.scoreBreakdowns) roomState.phase2.scoreBreakdowns = full.phase2.scoreBreakdowns;
+          if (full.gamePhase) roomState.gamePhase = full.gamePhase;
+        } catch (e) { /* full_state parse failed, non-critical */ }
+      }
+    }
+
+    console.log(`   📸 Restored from DB snapshot (type=${snapshot.snapshot_type}, phase=${snapshot.phase}, round_or_year=${snapshot.round_or_year})`);
+    return true;
+  } catch (err) {
+    console.error(`   ❌ Failed to restore from snapshot:`, err);
+    return false;
+  }
+}
+
 // Load games from database on startup
 async function initializeFromDatabase() {
   console.log('⏳ Loading active games from database...');
@@ -4612,21 +4662,18 @@ async function initializeFromDatabase() {
 
     // Convert DB games to room state
     for (const game of games) {
-      const gameCode = game.game_code; // e.g., "game_39"
+      const gameCode = game.game_code;
 
       console.log(`📋 Loading game: ${gameCode}`);
 
-      // Check if we already have this room from the main state file (with yearlyData etc.)
-      // The main JSON state file is synchronously written, so it's always up-to-date
+      // Check if we already have this room from the main state file
       const existingRoom = globalState.rooms[gameCode];
       if (existingRoom && existingRoom.phase2?.yearlyData && Object.keys(existingRoom.phase2.yearlyData).length > 0) {
         console.log(`   ✅ Using existing state from file (has yearlyData for years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')})`);
 
-        // Merge in any Phase 2 data from per-game file that the main state may be missing
-        // (per-game file has deployment/battle data that main state might not fully capture)
+        // Merge in any data from per-game file that the main state may be missing
         const savedPhase2State = loadGamePhase2State(gameCode);
         if (savedPhase2State && savedPhase2State.savedAt) {
-          // Restore fields that might be missing from the main state file
           if (savedPhase2State.cumulativeDeployments && !existingRoom.phase2.cumulativeDeployments) {
             existingRoom.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments;
           }
@@ -4641,7 +4688,7 @@ async function initializeFromDatabase() {
           }
         }
 
-        // Just update players from database in case they changed
+        // Update players from database in case they changed
         const players = await queryDatabase('getPlayers', { game_id: game.game_id });
         if (players && Array.isArray(players) && players.length > 0) {
           for (const player of players) {
@@ -4656,49 +4703,41 @@ async function initializeFromDatabase() {
             };
           }
         }
-        continue; // Keep existing room state, don't overwrite
+        continue;
       }
 
-      // Create room state from database game (no existing state found)
+      // No local state — build from DB
       const roomState = createGameState(gameCode, `Game ${gameCode}`, game.host_user_id);
       roomState.gameId = game.game_id;
       roomState.status = game.status;
 
-      // Restore game state from database
       if (game.current_round) {
         roomState.currentRound = game.current_round;
       }
 
-      // Determine game phase from database
       if (game.game_status === 'completed') {
         roomState.gamePhase = 'complete';
         roomState.gameStarted = true;
       } else if (game.current_round && game.current_round > 0) {
         roomState.gameStarted = true;
         if (game.current_round > 10) {
-          // Phase 2
           roomState.gamePhase = 'phase2';
           roomState.phase2.active = true;
           if (game.currentYear) {
             roomState.phase2.currentYear = game.currentYear;
           }
         } else {
-          // Phase 1 - assume voting phase by default
           roomState.gamePhase = 'voting';
         }
       }
 
-      console.log(`   Restored state: phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}`);
-
-      // Load players for this game from database
+      // Load players from database
       const players = await queryDatabase('getPlayers', { game_id: game.game_id });
-
       if (players && Array.isArray(players) && players.length > 0) {
         console.log(`   Found ${players.length} player(s) in database`);
         for (const player of players) {
-          // Key by userId for consistency (so client can find them by userId)
           roomState.players[player.user_id] = {
-            id: player.player_id,  // Keep actual player_id for DB operations
+            id: player.player_id,
             userId: player.user_id,
             country: player.country_code,
             ready: false,
@@ -4706,37 +4745,27 @@ async function initializeFromDatabase() {
             phase1_score: player.phase1_score || 0,
             phase2_score: player.phase2_score || 0
           };
-          console.log(`   - Player: user_id=${player.user_id}, player_id=${player.player_id}, country=${player.country_code}`);
         }
-      } else {
-        console.log(`   No players found for game ${gameCode}`);
       }
 
       globalState.rooms[gameCode] = roomState;
 
-      // Try to load Phase 2 state from per-game JSON file
-      // The per-game file is the authoritative source for Phase 2 data because
-      // it's written synchronously and always up-to-date (unlike the async DB)
+      // --- Restore priority: local JSON file → DB snapshot → fresh init ---
       const needsPhase2Data = roomState.phase2 && (!roomState.phase2.yearlyData || Object.keys(roomState.phase2.yearlyData).length === 0);
       const wasInPhase2 = roomState.gamePhase === 'phase2' || roomState.gamePhase === 'complete' || roomState.currentRound >= 11;
+      let restored = false;
 
+      // 1) Try local per-game JSON file first (fastest, most recent)
       if (needsPhase2Data || wasInPhase2) {
-        console.log(`   ⚠️ Phase 2 data needed (phase=${roomState.gamePhase}, round=${roomState.currentRound}) - checking per-game file...`);
-
         const savedPhase2State = loadGamePhase2State(gameCode);
         if (savedPhase2State && savedPhase2State.yearlyData && Object.keys(savedPhase2State.yearlyData).length > 0) {
-          // Restore from per-game file (authoritative source)
-          if (!roomState.phase2) {
-            roomState.phase2 = {};
-          }
-          // Prefer JSON file's currentYear over DB's (JSON is always more recent)
+          if (!roomState.phase2) roomState.phase2 = {};
           roomState.phase2.currentYear = savedPhase2State.currentYear || roomState.phase2.currentYear;
           roomState.phase2.yearlyData = savedPhase2State.yearlyData;
           roomState.phase2.policies = savedPhase2State.policies || {};
           roomState.phase2.achievements = savedPhase2State.achievements || {};
           roomState.phase2.crises = savedPhase2State.crises || { active: null, history: [], responses: {} };
           roomState.phase2.active = savedPhase2State.active !== undefined ? savedPhase2State.active : true;
-          // Restore deployment and battle state
           roomState.phase2.cumulativeDeployments = savedPhase2State.cumulativeDeployments || {};
           roomState.phase2.deploymentHistory = savedPhase2State.deploymentHistory || [];
           roomState.phase2.pendingConflictZones = savedPhase2State.pendingConflictZones || {};
@@ -4748,15 +4777,27 @@ async function initializeFromDatabase() {
           roomState.phase2.diplomaticPoints = savedPhase2State.diplomaticPoints || {};
           roomState.phase2.awaitingDiplomaticResolution = savedPhase2State.awaitingDiplomaticResolution || false;
           roomState.phase2.scoreBreakdowns = savedPhase2State.scoreBreakdowns || {};
-          console.log(`   ✅ Restored Phase 2 state from file (year: ${savedPhase2State.currentYear}, years: ${Object.keys(savedPhase2State.yearlyData).join(', ')}, saved: ${new Date(savedPhase2State.savedAt).toLocaleString()})`);
-        } else if (wasInPhase2) {
-          // Fall back to fresh initialization only if game was supposed to be in Phase 2
-          console.log(`   ⚠️ No saved Phase 2 state found - initializing fresh...`);
-          initializePhase2(gameCode);
+          console.log(`   ✅ Restored from local JSON file (year: ${savedPhase2State.currentYear}, saved: ${new Date(savedPhase2State.savedAt).toLocaleString()})`);
+          restored = true;
         }
       }
 
-      console.log(`  ✅ Loaded game: ${gameCode} with ${Object.keys(roomState.players).length} player(s)`);
+      // 2) If no local file, try DB snapshot (survives server redeployments)
+      if (!restored) {
+        console.log(`   📸 No local file — checking DB snapshots...`);
+        const snapshot = await queryDatabase('getLatestSnapshot', { game_code: gameCode });
+        if (snapshot && snapshot.players) {
+          restored = restoreRoomFromSnapshot(roomState, snapshot);
+        }
+      }
+
+      // 3) If still no data and game was in Phase 2, initialize fresh as last resort
+      if (!restored && wasInPhase2) {
+        console.log(`   ⚠️ No saved state found anywhere — initializing Phase 2 fresh`);
+        initializePhase2(gameCode);
+      }
+
+      console.log(`  ✅ Loaded game: ${gameCode} (phase=${roomState.gamePhase}, round=${roomState.currentRound}, year=${roomState.phase2?.currentYear || 'N/A'}, players=${Object.keys(roomState.players).length})`);
     }
   } else {
     console.log('ℹ️  No active games found in database');

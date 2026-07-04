@@ -1,7 +1,8 @@
 <?php
-// Add this case to the switch($action) block in api.php
-// Handles the 'saveGameSnapshot' action from server.js
+// Add BOTH cases to the switch($action) block in api.php
+// -------------------------------------------------------
 
+// 1) Save a snapshot (called by server.js on every round/year/phase milestone)
 case 'saveGameSnapshot':
     $stmt = $conn->prepare("INSERT INTO game_state_snapshots
         (game_code, game_id, snapshot_type, phase, round_or_year,
@@ -38,5 +39,25 @@ case 'saveGameSnapshot':
         echo json_encode(['success' => false, 'error' => $stmt->error]);
     }
     $stmt->close();
+    break;
+
+// 2) Get the latest snapshot for a game (called on server startup to restore state)
+case 'getLatestSnapshot':
+    $stmt = $conn->prepare("SELECT * FROM game_state_snapshots
+        WHERE game_code = ?
+        ORDER BY id DESC
+        LIMIT 1");
+
+    $stmt->bind_param("s", $data['game_code']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
+
+    if ($row) {
+        echo json_encode(['success' => true, 'data' => $row]);
+    } else {
+        echo json_encode(['success' => true, 'data' => null]);
+    }
     break;
 ?>
