@@ -265,6 +265,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [submissionsModal, setSubmissionsModal] = useState(null); // { gameId, gameCode, rows, loading, error }
           const [crisisMinimized, setCrisisMinimized] = useState(false);
           const [crisisSubmitting, setCrisisSubmitting] = useState(null);
+          const [crisisJustResponded, setCrisisJustResponded] = useState(null);
           const [battleModalMinimized, setBattleModalMinimized] = useState(false);
           const [diplomaticModalMinimized, setDiplomaticModalMinimized] = useState(false);
           const [battleOptionsMinimized, setBattleOptionsMinimized] = useState(false);
@@ -442,8 +443,12 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             socket.on('crisisResponseResult', ({ success, error, crisisId, choiceId }) => {
               if (success) {
                 console.log(`✅ Crisis response accepted: crisis=${crisisId}, choice=${choiceId}`);
+                setCrisisSubmitting(null);
+                setCrisisJustResponded(crisisId);
+                setTimeout(() => setCrisisJustResponded(null), 3000);
               } else {
                 console.error(`❌ Crisis response rejected: ${error}`);
+                setCrisisSubmitting(null);
                 alert('Crisis response failed: ' + error);
               }
             });
@@ -2918,7 +2923,26 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                 </div>
                                 
                                 {/* Player's Options */}
-                                {myCountryOptions.length > 0 && !hasRespondedToCrisis ? (
+                                {crisisJustResponded ? (
+                                  <div style={{
+                                    background: '#d1fae5',
+                                    padding: '40px',
+                                    borderRadius: '12px',
+                                    border: '3px solid #10b981',
+                                    textAlign: 'center',
+                                    marginBottom: '20px'
+                                  }}>
+                                    <div style={{ fontSize: '4rem', marginBottom: '16px' }}>✅</div>
+                                    <h2 style={{ color: '#065f46', marginTop: 0, marginBottom: '12px' }}>
+                                      Response Submitted Successfully!
+                                    </h2>
+                                    <p style={{ color: '#047857', fontSize: '1.1rem', margin: 0 }}>
+                                      {remainingCrises > 0
+                                        ? `Loading next crisis... (${remainingCrises} remaining)`
+                                        : 'Waiting for other countries to respond...'}
+                                    </p>
+                                  </div>
+                                ) : myCountryOptions.length > 0 && !hasRespondedToCrisis ? (
                                   <div>
                                     <h3 style={{ color: '#1e40af', marginBottom: '16px' }}>
                                       Your Options as {countries[playerCountry]?.name}:
