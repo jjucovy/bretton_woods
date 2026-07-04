@@ -560,7 +560,7 @@ async function saveGameToDatabase(gameId) {
 // Save a snapshot of game state to the game_state_snapshots table
 async function saveGameSnapshot(roomId, snapshotType) {
   try {
-    const room = globalState.rooms[roomId];
+    const room = globalState.games[roomId];
     if (!room) return;
 
     if (!room.gameId || room.gameId > 1000000000000) {
@@ -2777,7 +2777,8 @@ io.on('connection', (socket) => {
       // Fetch the newly created user to get their user_id
       let userId = result?.user_id || result?.id;
       if (!userId) {
-        const dbUser = await queryDatabase('getUser', { username });
+        const dbUserResult = await queryDatabase('getUser', { username });
+        const dbUser = Array.isArray(dbUserResult) ? dbUserResult[0] : dbUserResult;
         userId = dbUser?.user_id;
       }
 
@@ -2858,11 +2859,11 @@ io.on('connection', (socket) => {
     
     try {
       // Query database for user by username
-      const dbUser = await queryDatabase('getUser', { username });
+      const dbResult = await queryDatabase('getUser', { username });
+      const dbUser = Array.isArray(dbResult) ? dbResult[0] : dbResult;
 
-      // Check for valid user with user_id (reject empty objects, null, undefined)
       if (!dbUser || !dbUser.user_id) {
-        console.log('ERROR: User not found in database or missing user_id:', dbUser);
+        console.log('ERROR: User not found in database or missing user_id:', dbResult);
         socket.emit('loginResult', { success: false, message: 'Invalid username or password' });
         return;
       }
@@ -6135,10 +6136,10 @@ async function initializeFromDatabase() {
     for (const game of games) {
       const gameCode = game.game_code;
 
-      console.log(`📋 Loading game: ${game_code} (game_id=${game.game_id}, gameId=${gameId})`);
+      console.log(`📋 Loading game: ${gameCode} (game_id=${game.game_id})`);
 
       // Check if we already have this room from the main state file
-      const existingRoom = globalState.rooms[gameCode];
+      const existingRoom = globalState.games[gameCode];
       if (existingRoom && existingRoom.phase2?.yearlyData && Object.keys(existingRoom.phase2.yearlyData).length > 0) {
         console.log(`   ✅ Using existing state from file (has yearlyData for years: ${Object.keys(existingRoom.phase2.yearlyData).join(', ')})`);
 
@@ -6157,8 +6158,6 @@ async function initializeFromDatabase() {
           if (savedPhase2State.diplomaticPoints && !existingRoom.phase2.diplomaticPoints) {
             existingRoom.phase2.diplomaticPoints = savedPhase2State.diplomaticPoints;
           }
-        } catch (err) {
-          console.log(`   ⚠️ Could not check snapshot for ${game_code}: ${err.message}`);
         }
 
         // Ensure hostUserId is set from DB (may be missing from older save files)
@@ -6236,7 +6235,6 @@ async function initializeFromDatabase() {
       const players = await queryDatabase('getPlayers', { game_id: game.game_id });
       if (players && Array.isArray(players) && players.length > 0) {
         console.log(`   Found ${players.length} member(s) in database`);
-        const savedRoom = globalState.games[gameId];
         if (!roomState.members) roomState.members = {};
         for (const player of players) {
           roomState.players[player.user_id] = {
