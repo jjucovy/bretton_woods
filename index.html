@@ -264,6 +264,7 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
           const [tensionAlerts, setTensionAlerts] = useState([]);
           const [submissionsModal, setSubmissionsModal] = useState(null); // { gameId, gameCode, rows, loading, error }
           const [crisisMinimized, setCrisisMinimized] = useState(false);
+          const [crisisSubmitting, setCrisisSubmitting] = useState(null);
           const [battleModalMinimized, setBattleModalMinimized] = useState(false);
           const [diplomaticModalMinimized, setDiplomaticModalMinimized] = useState(false);
           const [battleOptionsMinimized, setBattleOptionsMinimized] = useState(false);
@@ -433,7 +434,17 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
             });
 
             socket.on('crisisResponseError', ({ message }) => {
+              console.error('❌ crisisResponseError:', message);
               alert('Crisis response error: ' + message);
+            });
+
+            socket.on('crisisResponseResult', ({ success, error, crisisId, choiceId }) => {
+              if (success) {
+                console.log(`✅ Crisis response accepted: crisis=${crisisId}, choice=${choiceId}`);
+              } else {
+                console.error(`❌ Crisis response rejected: ${error}`);
+                alert('Crisis response failed: ' + error);
+              }
             });
 
             socket.on('joinRoomResult', ({ success, roomId: _rId, gameId: _gId, message, role, isHost, reconnected, country, needsCountrySelection }) => {
@@ -2891,38 +2902,45 @@ const { normalizeCountryName, isCommandEconomy } = CountryUtils;
                                     
                                     {myCountryOptions.map(option => (
                                       <button
+                                        type="button"
                                         key={option.id}
-                                        onClick={() => {
-                                          console.log('🚨 Crisis button clicked!', { gameId: currentRoomId, playerid: playerId, choiceId: option.id, crisisId: activeCrisis?.id });
+                                        disabled={!!crisisSubmitting}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          if (crisisSubmitting) return;
+                                          console.log('🚨 Crisis button clicked!', { gameId: currentRoomId, playerid: playerId, choiceId: option.id, crisisId: activeCrisis?.id, socketConnected: socket?.connected });
+                                          setCrisisSubmitting(option.id);
                                           socket.emit('submitCrisisResponse', {
                                             gameId: currentRoomId,
                                             playerid: playerId,
                                             choiceId: option.id,
                                             crisisId: activeCrisis?.id
                                           });
+                                          setTimeout(() => setCrisisSubmitting(null), 5000);
                                         }}
                                         style={{
                                           width: '100%',
                                           padding: '20px',
                                           marginBottom: '12px',
-                                          border: '2px solid #d1d5db',
+                                          border: crisisSubmitting === option.id ? '2px solid #16a34a' : '2px solid #d1d5db',
                                           borderRadius: '8px',
-                                          background: 'white',
-                                          cursor: 'pointer',
+                                          background: crisisSubmitting === option.id ? '#d1fae5' : 'white',
+                                          cursor: crisisSubmitting ? 'not-allowed' : 'pointer',
                                           textAlign: 'left',
-                                          transition: 'all 0.2s'
+                                          transition: 'all 0.2s',
+                                          opacity: crisisSubmitting && crisisSubmitting !== option.id ? 0.5 : 1
                                         }}
                                         onMouseEnter={(e) => {
-                                          e.currentTarget.style.borderColor = '#2563eb';
-                                          e.currentTarget.style.background = '#eff6ff';
+                                          if (!crisisSubmitting) { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.background = '#eff6ff'; }
                                         }}
                                         onMouseLeave={(e) => {
                                           e.currentTarget.style.borderColor = '#d1d5db';
                                           e.currentTarget.style.background = 'white';
                                         }}
                                       >
-                                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px', color: '#1e40af' }}>
-                                          {option.text}
+                                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px', color: crisisSubmitting === option.id ? '#16a34a' : '#1e40af' }}>
+                                          {crisisSubmitting === option.id ? '⏳ Submitting... ' : ''}{option.text}
                                         </div>
                                         
                                         {option.cost > 0 && (

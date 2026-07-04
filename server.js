@@ -5447,12 +5447,14 @@ io.on('connection', (socket) => {
     const room = globalState.games[gameId];
     if (!room || !room.phase2?.active) {
       console.log(`❌ Crisis response failed: room not found or phase2 not active (room=${!!room}, phase2active=${room?.phase2?.active})`);
+      socket.emit('crisisResponseResult', { success: false, error: `Room not found (raw=${rawGameId}, resolved=${gameId}) or phase2 not active` });
       return;
     }
 
     const player = room.players[playerid];
     if (!player) {
       console.log(`❌ Crisis response failed: player ${playerid} not found. Room player keys: [${Object.keys(room.players).join(', ')}]`);
+      socket.emit('crisisResponseResult', { success: false, error: `Player ${playerid} not found. Keys: [${Object.keys(room.players).join(', ')}]` });
       return;
     }
 
@@ -5460,6 +5462,7 @@ io.on('connection', (socket) => {
     let activeCrises = room.phase2.crises.active;
     if (!activeCrises || (Array.isArray(activeCrises) && activeCrises.length === 0)) {
       console.log('No active crisis');
+      socket.emit('crisisResponseResult', { success: false, error: 'No active crisis' });
       return;
     }
 
@@ -5485,7 +5488,8 @@ io.on('connection', (socket) => {
     }
 
     if (!crisis) {
-      console.log('Crisis not found or player not affected');
+      console.log(`Crisis not found: crisisId=${crisisId}, active crisis ids=[${activeCrises.map(c=>c.id).join(', ')}]`);
+      socket.emit('crisisResponseResult', { success: false, error: `Crisis ${crisisId} not found in active crises [${activeCrises.map(c=>c.id).join(', ')}]` });
       return;
     }
 
@@ -5498,6 +5502,7 @@ io.on('connection', (socket) => {
     );
     if (!isAffected) {
       console.log(`${country} (normalized: ${normalizedCountry}) not affected by crisis: ${crisis.title}`);
+      socket.emit('crisisResponseResult', { success: false, error: `${normalizedCountry} not affected by ${crisis.title}` });
       return;
     }
 
@@ -5506,12 +5511,14 @@ io.on('connection', (socket) => {
     if (!countryOptions) {
       console.log(`No options for ${country} or ${normalizedCountry} in crisis: ${crisis.title}`);
       console.log(`Available option keys: ${Object.keys(crisis.options).join(', ')}`);
+      socket.emit('crisisResponseResult', { success: false, error: `No options for ${normalizedCountry}. Available: [${Object.keys(crisis.options).join(', ')}]` });
       return;
     }
 
     const choice = countryOptions.find(opt => opt.id === choiceId);
     if (!choice) {
       console.log(`Invalid choice ID: ${choiceId}`);
+      socket.emit('crisisResponseResult', { success: false, error: `Invalid choice: ${choiceId}` });
       return;
     }
 
@@ -5548,9 +5555,7 @@ io.on('connection', (socket) => {
     };
 
     console.log(`${country} (${normalizedCountry}) submitted response to "${crisis.title}": ${choice.text}`);
-
-    // Crisis choices are persisted via game state snapshots (crises JSON field)
-    // Reference option definitions live in the crisis_options table (populated from crisis-events.json)
+    socket.emit('crisisResponseResult', { success: true, crisisId: crisis.id, choiceId });
 
     // Check if all affected countries with active players have responded to THIS crisis
     const affectedCountriesWithPlayers = crisis.affectedCountries.filter(c => {
