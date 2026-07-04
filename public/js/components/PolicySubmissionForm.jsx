@@ -1,12 +1,15 @@
 const { useState } = React;
 
         // Policy Submission Form Component for Phase 2
-        function PolicySubmissionForm({ currentYear, playerId, socket, roomId, myData }) {
-          const [centralBankRate, setCentralBankRate] = useState(3.0);
-          const [exchangeRate, setExchangeRate] = useState(1.0);
-          const [tariffRate, setTariffRate] = useState(10);
-          const [militarySpending, setMilitarySpending] = useState(5); // % of GDP
+        function PolicySubmissionForm({ currentYear, playerId, socket, roomId, myData, previousPolicy }) {
+          const [centralBankRate, setCentralBankRate] = useState(previousPolicy?.centralBankRate ?? 3.0);
+          const [exchangeRate, setExchangeRate] = useState(previousPolicy?.exchangeRate ?? 1.0);
+          const [tariffRate, setTariffRate] = useState(previousPolicy?.tariffRate ?? 10);
+          const [militarySpending, setMilitarySpending] = useState(previousPolicy?.militarySpending ?? 5); // % of GDP
           const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double-submit
+          const [policyExplanation, setPolicyExplanation] = useState('');
+
+          const wordCount = policyExplanation.trim().split(/\s+/).filter(Boolean).length;
 
           // Initialize military branches from previous year's data
           const prevMilitary = myData?.military || { army: 500000, navy: 100000, airForce: 100000 };
@@ -17,11 +20,10 @@ const { useState } = React;
           const totalMilitary = armySize + navySize + airForceSize;
 
           const handleSubmit = () => {
-            if (isSubmitting) return; // Prevent double-click
+            if (isSubmitting) return;
             setIsSubmitting(true);
-            console.log('📤 Submitting policy for player:', playerId);
             socket.emit('submitPolicy', {
-              roomId,
+              gameId: roomId,
               playerid: playerId,
               policy: {
                 centralBankRate,
@@ -31,7 +33,8 @@ const { useState } = React;
                 armySize,
                 navySize,
                 airForceSize,
-                isCommandEconomy: false
+                isCommandEconomy: false,
+                explanation: policyExplanation
               }
             });
           };
@@ -202,36 +205,51 @@ const { useState } = React;
                 </p>
               </div>
 
+              <div style={{ marginBottom: '25px', padding: '15px', background: '#eff6ff', borderRadius: '8px', border: '2px solid #3b82f6' }}>
+                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px' }}>
+                  Explain your policy choices (minimum 30 words required):
+                </label>
+                <textarea
+                  rows={4}
+                  value={policyExplanation}
+                  onChange={(e) => setPolicyExplanation(e.target.value)}
+                  placeholder="Explain the reasoning behind your interest rate, exchange rate, tariff, and military spending choices for this year..."
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #93c5fd', fontSize: '0.95rem', boxSizing: 'border-box', resize: 'vertical' }}
+                />
+                <div style={{ marginTop: '6px', fontSize: '0.875rem', fontWeight: 'bold', color: wordCount >= 30 ? '#16a34a' : '#dc2626' }}>
+                  {wordCount} / 30 words minimum
+                </div>
+              </div>
+
              <button
   type="button"
-  disabled={isSubmitting}
+  disabled={isSubmitting || wordCount < 30}
   onClick={(e) => {
     e.preventDefault();
     e.stopPropagation();
     if (isSubmitting) return;
-    console.log('🔵 Button click fired!', e);
     handleSubmit();
   }}
   style={{
     width: '100%',
     padding: '18px',
-    background: isSubmitting ? '#9ca3af' : '#3b82f6',
+    background: isSubmitting || wordCount < 30 ? '#9ca3af' : '#3b82f6',
     color: 'white',
     border: 'none',
     borderRadius: '8px',
     fontSize: '1.1rem',
     fontWeight: 'bold',
-    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+    cursor: isSubmitting || wordCount < 30 ? 'not-allowed' : 'pointer',
     transition: 'all 0.2s',
     zIndex: 1000,
     position: 'relative',
     pointerEvents: 'auto',
-    opacity: isSubmitting ? 0.7 : 1
+    opacity: isSubmitting || wordCount < 30 ? 0.7 : 1
   }}
-                onMouseOver={(e) => !isSubmitting && (e.currentTarget.style.background = '#2563eb')}
-                onMouseOut={(e) => !isSubmitting && (e.currentTarget.style.background = '#3b82f6')}
+                onMouseOver={(e) => !(isSubmitting || wordCount < 30) && (e.currentTarget.style.background = '#2563eb')}
+                onMouseOut={(e) => !(isSubmitting || wordCount < 30) && (e.currentTarget.style.background = '#3b82f6')}
               >
-                {isSubmitting ? '⏳ Submitting...' : '📊 Submit Economic & Military Policy'}
+                {isSubmitting ? '⏳ Submitting...' : wordCount < 30 ? `Write explanation first (${wordCount}/30 words)` : '📊 Submit Economic & Military Policy'}
               </button>
             </div>
           );

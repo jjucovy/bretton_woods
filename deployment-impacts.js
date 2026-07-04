@@ -92,14 +92,7 @@ const REGIONS = {
     rivals: ['USSR', 'China'],
     requiredForce: { army: 300000 }
   },
-  'South Asia': {
-    tradeValue: 700,
-    resourceValue: 500,
-    strategicImportance: 7,
-    controlBonus: { gdp: 0.4, influence: 12 },
-    rivals: ['UK', 'India', 'China'],
-    requiredForce: { army: 400000 }
-  },
+  // South Asia split into India + Pakistan for historical accuracy
   'Latin America': {
     tradeValue: 800,
     resourceValue: 900,
@@ -115,6 +108,87 @@ const REGIONS = {
     controlBonus: { gdp: 0.4, influence: 12 },
     rivals: ['UK', 'France', 'USA'],
     requiredForce: { army: 250000 }
+  },
+  // --- New regions for historical accuracy (1946-1952) ---
+  'Greece & Turkey': {
+    tradeValue: 600,
+    resourceValue: 300,
+    strategicImportance: 9,      // Truman Doctrine (1947) - critical Cold War flashpoint
+    controlBonus: { gdp: 0.4, influence: 15 },
+    rivals: ['USA', 'UK', 'USSR'],
+    requiredForce: { army: 200000, airForce: 30000 }
+  },
+  'Iran': {
+    tradeValue: 800,
+    resourceValue: 1500,         // Oil reserves
+    strategicImportance: 8,      // Soviet withdrawal crisis 1946, oil nationalization 1951
+    controlBonus: { gdp: 0.6, influence: 15 },
+    rivals: ['USSR', 'UK', 'USA'],
+    requiredForce: { army: 200000 }
+  },
+  'Taiwan': {
+    tradeValue: 400,
+    resourceValue: 200,
+    strategicImportance: 8,      // Nationalist retreat 1949, US defense commitment
+    controlBonus: { gdp: 0.3, influence: 12 },
+    rivals: ['USA', 'China'],
+    requiredForce: { army: 300000, navy: 100000 }
+  },
+  'Pakistan': {
+    tradeValue: 400,
+    resourceValue: 300,
+    strategicImportance: 7,      // Created Aug 1947, First Kashmir War 1947-48
+    controlBonus: { gdp: 0.3, influence: 10 },
+    rivals: ['UK', 'India'],
+    requiredForce: { army: 250000 }
+  },
+  'Berlin': {
+    tradeValue: 200,
+    resourceValue: 100,
+    strategicImportance: 10,     // Berlin Blockade 1948-49, symbolic Cold War prize
+    controlBonus: { gdp: 0.2, influence: 20 },
+    rivals: ['USA', 'UK', 'France', 'USSR'],
+    requiredForce: { army: 50000, airForce: 20000 }
+  },
+  'Germany': {
+    tradeValue: 900,
+    resourceValue: 700,
+    strategicImportance: 9,      // Divided occupation zones
+    controlBonus: { gdp: 0.6, influence: 18 },
+    rivals: ['USA', 'UK', 'France', 'USSR'],
+    requiredForce: { army: 300000 }
+  },
+  'Korea': {
+    tradeValue: 300,
+    resourceValue: 200,
+    strategicImportance: 10,     // Korean War 1950-53
+    controlBonus: { gdp: 0.3, influence: 15 },
+    rivals: ['USA', 'USSR', 'China'],
+    requiredForce: { army: 400000, airForce: 50000 }
+  },
+  'Suez Canal': {
+    tradeValue: 1400,
+    resourceValue: 100,
+    strategicImportance: 9,      // Vital trade chokepoint
+    controlBonus: { gdp: 0.5, influence: 15, tradeBonus: 800 },
+    rivals: ['UK', 'France', 'USA'],
+    requiredForce: { army: 100000, navy: 50000 }
+  },
+  'Indochina': {
+    tradeValue: 500,
+    resourceValue: 400,
+    strategicImportance: 8,      // First Indochina War 1946-54
+    controlBonus: { gdp: 0.3, influence: 12 },
+    rivals: ['France', 'China', 'USA'],
+    requiredForce: { army: 300000 }
+  },
+  'India': {
+    tradeValue: 700,
+    resourceValue: 500,
+    strategicImportance: 7,
+    controlBonus: { gdp: 0.4, influence: 12 },
+    rivals: ['UK', 'India'],
+    requiredForce: { army: 400000 }
   }
 };
 

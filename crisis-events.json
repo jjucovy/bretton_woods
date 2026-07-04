@@ -4,10 +4,10 @@
       "id": "china-civil-war",
       "year": 1946,
       "title": "🇨🇳 Chinese Civil War Intensifies",
-      "description": "Full-scale war erupts between Nationalist (KMT) and Communist (CCP) forces. External powers must choose sides.",
-      "affectedCountries": ["China", "USA", "USSR"],
+      "description": "Full-scale war erupts between Nationalist (KMT) and Communist (CCP) forces. The world's most populous nation hangs in the balance. Every major power must choose a side — or pay the price of inaction.",
+      "affectedCountries": ["China", "USA", "USSR", "UK", "India"],
       "primaryActors": ["China", "USA", "USSR"],
-      "historicalContext": "After WWII, the Chinese Civil War resumes. Nationalists control cities, Communists control countryside. US backs KMT, USSR aids CCP.",
+      "historicalContext": "After WWII, the Chinese Civil War resumes. Nationalists control cities but are riddled with corruption. Communists control the countryside and have peasant support. US backs KMT, USSR aids CCP. The outcome will reshape Asia for decades.",
       "deploymentTrigger": {
         "region": "East Asia",
         "requiredCountries": ["USSR", "USA"],
@@ -27,7 +27,11 @@
               "inflation": 50,
               "unemployment": 2.0
             },
-            "outcome": "If USA provides aid, you hold major cities longer. Without support, offensive fails by 1949."
+            "crossEffects": {
+              "USA": { "diplomaticPoints": -3, "tradeBalance": -400 },
+              "USSR": { "tradeBalance": -200 }
+            },
+            "outcome": "All-out war devastates the economy. Cities change hands repeatedly. Foreign backers are drawn deeper — USA pressured to increase aid shipments, USSR forced to counter-supply CCP. Delays communist victory but destruction is catastrophic."
           },
           {
             "id": "negotiate-coalition",
@@ -35,53 +39,132 @@
             "cost": 0,
             "effects": {
               "gdpGrowth": -0.5,
-              "diplomaticPoints": 5
+              "diplomaticPoints": 8
             },
-            "outcome": "Mao rejects power-sharing. Communists use ceasefire to regroup and prepare final offensive."
+            "crossEffects": {
+              "USA": { "diplomaticPoints": 3 },
+              "India": { "diplomaticPoints": 5 },
+              "UK": { "diplomaticPoints": 3 }
+            },
+            "outcome": "Mao uses ceasefire to consolidate rural bases. But the breathing room lets civilians evacuate cities and foreign observers praise the attempt. India and UK welcome the diplomacy. Communists still prepare their final offensive, but the world sees China tried peace first."
           }
         ],
         "USA": [
           {
             "id": "massive-aid",
-            "text": "💰 Massive Military Aid to Nationalists",
+            "text": "💰 Massive Military Aid to Nationalists ($2B)",
             "cost": 2000,
             "effects": {
               "tradeBalance": -2000,
-              "diplomaticPoints": -5
+              "diplomaticPoints": 10
             },
-            "outcome": "Aid helps but Nationalist corruption means most equipment lost. 'Who lost China?' crisis at home."
+            "crossEffects": {
+              "USSR": { "diplomaticPoints": -8, "tradeBalance": -300 },
+              "UK": { "diplomaticPoints": 5 },
+              "India": { "diplomaticPoints": 5 },
+              "China": { "gdpGrowth": -1.5, "inflation": 10 }
+            },
+            "outcome": "Nationalist corruption wastes much of the aid, but the sheer scale forces Stalin to match it or look weak. Soviet Politburo hawks demand counter-escalation — draining USSR resources. Allied nations are reassured by American resolve. India gains leverage as a non-aligned mediator. The war grinds on longer, devastating China's economy further, but containment credibility is preserved."
           },
           {
             "id": "disengage",
-            "text": "🏳️ Disengage - Accept Communist Victory",
+            "text": "🏳️ Withdraw Support — Accept the Inevitable",
             "cost": 0,
             "effects": {
-              "diplomaticPoints": -10,
-              "globalTension": 5
+              "diplomaticPoints": -15,
+              "gdpGrowth": -1.0
             },
-            "outcome": "Communists win by 1949. Domestic criticism but save resources."
+            "crossEffects": {
+              "USSR": { "diplomaticPoints": 10 },
+              "UK": { "diplomaticPoints": -5 },
+              "India": { "diplomaticPoints": 3 },
+              "China": { "gdpGrowth": 1.0 },
+              "France": { "diplomaticPoints": -3 }
+            },
+            "outcome": "Communists sweep to victory. Washington erupts — 'Who Lost China?' becomes a weapon. McCarthyism accelerates. Every American ally questions US reliability. Britain and France fear they'll be next to be abandoned. The USSR celebrates its greatest ideological victory since 1917. But you saved $2 billion and kept your troops home."
           }
         ],
         "USSR": [
           {
             "id": "aid-ccp",
-            "text": "🚩 Provide Arms to Communist Forces",
+            "text": "🚩 Major Arms Shipments to Communist Forces",
             "cost": 600,
             "militaryRequired": { "army": 500000 },
             "effects": {
               "tradeBalance": -600,
-              "diplomaticPoints": 5
+              "diplomaticPoints": 12
             },
-            "outcome": "Soviet aid helps CCP win by 1949. China becomes communist ally."
+            "crossEffects": {
+              "USA": { "diplomaticPoints": -5 },
+              "China": { "gdpGrowth": -2.0, "inflation": 15 },
+              "UK": { "diplomaticPoints": -3 },
+              "France": { "diplomaticPoints": -3 }
+            },
+            "outcome": "Soviet weapons flood Manchuria. Mao's armies gain decisive firepower advantage. The West watches in alarm — containment is failing. Britain and France worry about communist expansion reaching their colonies. But within the Communist world, Moscow's prestige soars. A grateful Mao signs the Sino-Soviet Treaty."
           },
           {
             "id": "diplomatic-support",
-            "text": "📢 Diplomatic Support Only",
+            "text": "📢 Cautious Diplomatic Support Only",
             "cost": 100,
             "effects": {
-              "diplomaticPoints": 3
+              "diplomaticPoints": 3,
+              "tradeBalance": -100
             },
-            "outcome": "Public support for CCP without major resource commitment. Mao wins anyway but less grateful."
+            "crossEffects": {
+              "China": { "diplomaticPoints": -5 }
+            },
+            "outcome": "Moscow offers speeches but not guns. Mao wins anyway through sheer numbers and peasant support — but he remembers who actually helped. The seeds of the Sino-Soviet split are planted early. China's future communism will be more independent, more unpredictable, and less grateful to Moscow."
+          }
+        ],
+        "UK": [
+          {
+            "id": "protect-hong-kong",
+            "text": "🏰 Reinforce Hong Kong Garrison",
+            "cost": 300,
+            "militaryRequired": { "army": 30000 },
+            "effects": {
+              "tradeBalance": -300,
+              "diplomaticPoints": 5
+            },
+            "crossEffects": {
+              "China": { "diplomaticPoints": -3 }
+            },
+            "outcome": "Station troops in Hong Kong as civil war rages nearby. The colony becomes a refuge for Nationalist elites and their gold. Whoever wins China will remember British gunboats at their doorstep — but Hong Kong's trade position is secured for decades."
+          },
+          {
+            "id": "commercial-neutrality",
+            "text": "🏪 Maintain Commercial Ties with Both Sides",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 200,
+              "diplomaticPoints": -3
+            },
+            "outcome": "Pragmatic British merchants trade with whoever controls the ports. Profits flow but both sides view Britain as unprincipled. Americans are annoyed at the fence-sitting."
+          }
+        ],
+        "India": [
+          {
+            "id": "non-aligned-mediation",
+            "text": "🕊️ Offer Non-Aligned Mediation",
+            "cost": 50,
+            "effects": {
+              "diplomaticPoints": 12
+            },
+            "crossEffects": {
+              "China": { "diplomaticPoints": 3 },
+              "USA": { "diplomaticPoints": 2 },
+              "USSR": { "diplomaticPoints": 2 }
+            },
+            "outcome": "Nehru positions India as the voice of reason between superpowers. Both sides publicly welcome mediation (privately ignoring it). India's prestige as leader of the non-aligned world soars. Everyone owes you a favor."
+          },
+          {
+            "id": "focus-domestic",
+            "text": "🏠 Focus on Domestic Challenges",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 0.5
+            },
+            "outcome": "India has its own problems — partition looms. Stay out of China's civil war and focus scarce resources on building the new nation. A pragmatic choice, but a missed opportunity for diplomatic influence."
           }
         ]
       }
@@ -193,6 +276,16 @@
               "diplomaticPoints": 5
             },
             "outcome": "Accept nationalization with payment. Railways were losing money anyway."
+          },
+          {
+            "id": "protest-nationalization",
+            "text": "📢 Protest Illegal Seizure of British Assets",
+            "cost": 100,
+            "effects": {
+              "tradeBalance": -200,
+              "diplomaticPoints": -8
+            },
+            "outcome": "Demand return of assets. Perón refuses and rallies nationalist support. Anglo-Argentine trade deteriorates. But you've set a precedent against uncompensated nationalization."
           }
         ],
         "USA": [
@@ -288,6 +381,16 @@
               "diplomaticPoints": 10
             },
             "outcome": "Nehru champions anti-colonialism. Leader of non-aligned."
+          },
+          {
+            "id": "quiet-diplomacy",
+            "text": "🤫 Quiet Diplomacy — Avoid Antagonizing France",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": -2,
+              "tradeBalance": 100
+            },
+            "outcome": "India has just gained independence and needs trade partners. Publicly neutral, privately sympathetic to Ho Chi Minh. France continues purchasing Indian goods. But the non-aligned movement loses a champion."
           }
         ],
         "USSR": [
@@ -444,6 +547,16 @@
               "diplomaticPoints": 25
             },
             "outcome": "Western Europe recovers. Win Cold War economically."
+          },
+          {
+            "id": "reduced-marshall",
+            "text": "📉 Reduced Aid Package - $5B",
+            "cost": 1250,
+            "effects": {
+              "tradeBalance": -1250,
+              "diplomaticPoints": 10
+            },
+            "outcome": "Enough to prevent European collapse but not enough for full recovery. Congress is happier. Europe recovers slowly — some nations turn to Soviet trade to fill the gap. Containment is partial."
           }
         ],
         "UK": [
@@ -456,6 +569,17 @@
               "tradeBalance": 1200
             },
             "outcome": "Receive $3.2B. Economy recovers."
+          },
+          {
+            "id": "accept-with-conditions",
+            "text": "🏛️ Accept Aid but Protect Imperial Preference",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 1.0,
+              "tradeBalance": 600,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Accept aid but insist on preserving Commonwealth trade preferences. Less American money flows in, but Britain keeps its trade bloc intact. Washington is irritated by British exceptionalism."
           }
         ],
         "France": [
@@ -469,6 +593,17 @@
               "inflation": -5.0
             },
             "outcome": "Receive $2.7B. Inflation controlled. Boom into 1960s."
+          },
+          {
+            "id": "accept-with-autonomy",
+            "text": "🇫🇷 Accept Aid but Assert French Economic Sovereignty",
+            "cost": 0,
+            "effects": {
+              "gdpGrowth": 1.5,
+              "tradeBalance": 600,
+              "diplomaticPoints": 3
+            },
+            "outcome": "Accept aid on French terms — direct it toward French industrial planning (Monnet Plan) rather than American free-market prescriptions. Less total aid received but greater national control. Seeds of Gaullist independence."
           }
         ],
         "USSR": [
@@ -477,9 +612,20 @@
             "text": "🚫 Forbid Satellites from Accepting",
             "cost": 0,
             "effects": {
-              "globalTension": 15
+              "globalTension": 15,
+              "diplomaticPoints": -10
             },
-            "outcome": "Iron Curtain descends. East-West split solidifies."
+            "outcome": "Iron Curtain descends. East-West split solidifies. Eastern European nations resent being cut off from Western aid."
+          },
+          {
+            "id": "counter-offer",
+            "text": "🔴 Launch Molotov Plan — Soviet Counter-Aid",
+            "cost": 800,
+            "effects": {
+              "tradeBalance": -800,
+              "diplomaticPoints": 8
+            },
+            "outcome": "Create COMECON to rival Marshall Plan. Subsidize Eastern European economies with Soviet resources. Costly but prevents satellites from looking westward. The socialist economic bloc takes shape."
           }
         ]
       }
@@ -554,9 +700,22 @@
             "cost": 1500,
             "effects": {
               "gdpGrowth": -3.0,
-              "tradeBalance": -1500
+              "tradeBalance": -1500,
+              "diplomaticPoints": 10
             },
             "outcome": "Human wave attacks. Push USA back. Massive casualties but prove China major power."
+          },
+          {
+            "id": "border-defense",
+            "text": "🛡️ Defensive Posture — Protect Border Only",
+            "militaryRequired": { "army": 300000 },
+            "cost": 400,
+            "effects": {
+              "gdpGrowth": -0.5,
+              "tradeBalance": -400,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Mass troops at the Yalu but don't cross. If USA stays south of the 38th parallel, China stays out. Avoid catastrophic casualties but appear weak to Moscow. North Korea may fall. Mao's prestige within the Communist world suffers — but the Chinese economy is spared."
           }
         ],
         "India": [
@@ -568,6 +727,20 @@
               "diplomaticPoints": 15
             },
             "outcome": "Establish India as neutral mediator."
+          },
+          {
+            "id": "condemn-aggression",
+            "text": "📢 Condemn North Korean Aggression at UN",
+            "cost": 0,
+            "effects": {
+              "diplomaticPoints": 5,
+              "tradeBalance": 200
+            },
+            "crossEffects": {
+              "USA": { "diplomaticPoints": 3 },
+              "USSR": { "diplomaticPoints": -5 }
+            },
+            "outcome": "Side with the Western position at the UN Security Council. Gain American goodwill and trade access, but alienate the Soviet bloc and damage India's non-aligned credentials. Nehru faces domestic criticism from the left."
           }
         ],
         "Argentina": [
@@ -579,6 +752,16 @@
               "diplomaticPoints": 3
             },
             "outcome": "Distant conflict. Focus on domestic issues."
+          },
+          {
+            "id": "sell-supplies",
+            "text": "🌾 Sell Food and Supplies to UN Forces",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 500,
+              "diplomaticPoints": 5
+            },
+            "outcome": "War means hungry armies. Argentine beef and grain flow to UN supply lines at premium prices. Profitable neutrality — everyone's friend, nobody's ally. Perón's Third Position in action."
           }
         ],
         "USSR": [
@@ -811,6 +994,17 @@
               "diplomaticPoints": 5
             },
             "outcome": "Wine and culture for beef and grain. Mutual respect."
+          },
+          {
+            "id": "colonial-agriculture",
+            "text": "🌍 Expand Colonial Agricultural Production",
+            "cost": 300,
+            "effects": {
+              "tradeBalance": 200,
+              "gdpGrowth": 0.5,
+              "diplomaticPoints": -5
+            },
+            "outcome": "Intensify food production in North Africa and Indochina. Reduce dependency on Argentine imports. Colonial subjects bear the cost — forced labor quotas increase. Effective but morally costly, and fuels independence movements."
           }
         ],
         "India": [
@@ -822,6 +1016,17 @@
               "diplomaticPoints": 8
             },
             "outcome": "Developing nations should control their resources! Third World unity."
+          },
+          {
+            "id": "export-competition",
+            "text": "🌾 Compete as Alternative Grain Exporter",
+            "cost": 200,
+            "effects": {
+              "tradeBalance": 400,
+              "gdpGrowth": 0.5,
+              "diplomaticPoints": 3
+            },
+            "outcome": "India has vast farmland. Redirect some domestic production to export at prices below Argentina's. European buyers welcome the competition. Indian farmers earn more, but domestic food security tightens."
           }
         ]
       }
@@ -896,13 +1101,23 @@
         "UK": [
           {
             "id": "return-favor",
-            "text": "🍞 Return the Favor - Send Food to Argentina",
+            "text": "🍞 Return the Favor — Send Food to Argentina",
             "cost": 300,
             "effects": {
               "tradeBalance": -300,
               "diplomaticPoints": 12
             },
             "outcome": "Remember when Argentina fed us? Time to repay. Relations healed."
+          },
+          {
+            "id": "exploit-leverage",
+            "text": "📊 Use Argentine Weakness to Renegotiate Trade Terms",
+            "cost": 0,
+            "effects": {
+              "tradeBalance": 300,
+              "diplomaticPoints": -10
+            },
+            "outcome": "Argentina is desperate — demand better terms on beef and grain contracts. Short-term profits, but Perón will remember this betrayal. Future Anglo-Argentine trade suffers."
           }
         ]
       }
@@ -958,6 +1173,16 @@
               "diplomaticPoints": 5
             },
             "outcome": "Diplomatic gesture. Maybe relations can improve now."
+          },
+          {
+            "id": "exploit-instability",
+            "text": "🕵️ Quietly Cultivate Anti-Perón Opposition",
+            "cost": 200,
+            "effects": {
+              "diplomaticPoints": -8,
+              "tradeBalance": -200
+            },
+            "outcome": "With Evita gone, Perón's coalition may fracture. CIA contacts Argentine military officers and business leaders. If discovered, relations collapse entirely. But if it works, Argentina may realign toward Washington within a few years."
           }
         ],
         "UK": [
@@ -969,6 +1194,16 @@
               "diplomaticPoints": 5
             },
             "outcome": "Even former enemies respect grief. Relations warming."
+          },
+          {
+            "id": "trade-overture",
+            "text": "🤝 Propose New Anglo-Argentine Trade Agreement",
+            "cost": 100,
+            "effects": {
+              "tradeBalance": 300,
+              "diplomaticPoints": 3
+            },
+            "outcome": "With Evita's populist fire gone, Perón may be more pragmatic. Propose comprehensive trade deal while the political landscape shifts. Argentine beef for British manufactures — rebuild the old commercial relationship."
           }
         ]
       }

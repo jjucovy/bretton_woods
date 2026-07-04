@@ -1,0 +1,140 @@
+{
+  "assignments": [
+    {
+      "id": 1,
+      "title": "Historical Context Quiz",
+      "type": "quiz",
+      "description": "Test your knowledge of the 1944 Bretton Woods Conference and the post-war international economic order before entering the simulation.",
+      "passingScore": 3,
+      "questions": [
+        {
+          "id": "q1",
+          "text": "The Bretton Woods Conference took place in:",
+          "options": [
+            { "id": "a", "text": "1939, before the war began" },
+            { "id": "b", "text": "1944, near the end of World War II" },
+            { "id": "c", "text": "1948, after the Marshall Plan" },
+            { "id": "d", "text": "1952, during the Korean War" }
+          ],
+          "correct": "b",
+          "explanation": "The conference was held in July 1944 at Bretton Woods, New Hampshire, while WWII was still ongoing but Allied victory was in sight."
+        },
+        {
+          "id": "q2",
+          "text": "British economist John Maynard Keynes proposed an alternative to the US Dollar plan called:",
+          "options": [
+            { "id": "a", "text": "The Sterling Standard" },
+            { "id": "b", "text": "The Gold Exchange System" },
+            { "id": "c", "text": "The Bancor — a supranational reserve currency" },
+            { "id": "d", "text": "The Pound-Dollar Peg" }
+          ],
+          "correct": "c",
+          "explanation": "Keynes proposed 'Bancor,' a new international currency managed by a clearing union, designed so no single nation (especially the US) would dominate global finance."
+        },
+        {
+          "id": "q3",
+          "text": "Under the Bretton Woods system, currencies were pegged to:",
+          "options": [
+            { "id": "a", "text": "The British Pound at a fixed rate" },
+            { "id": "b", "text": "A basket of major currencies" },
+            { "id": "c", "text": "Gold directly at $35/ounce" },
+            { "id": "d", "text": "The US Dollar, which was convertible to gold at $35/oz" }
+          ],
+          "correct": "d",
+          "explanation": "Currencies were pegged to the US Dollar, and the Dollar was convertible to gold at $35 per ounce — creating a 'gold-exchange standard' rather than a direct gold standard."
+        },
+        {
+          "id": "q4",
+          "text": "Which institution was NOT created directly at the Bretton Woods Conference?",
+          "options": [
+            { "id": "a", "text": "The International Monetary Fund (IMF)" },
+            { "id": "b", "text": "The World Bank (International Bank for Reconstruction and Development)" },
+            { "id": "c", "text": "The World Trade Organization (WTO)" },
+            { "id": "d", "text": "The International Finance Corporation" }
+          ],
+          "correct": "c",
+          "explanation": "The WTO was not created at Bretton Woods. The IMF and World Bank were. The General Agreement on Tariffs and Trade (GATT) was created in 1947 as a separate process; the WTO didn't exist until 1995."
+        },
+        {
+          "id": "q5",
+          "text": "The Bretton Woods fixed exchange rate system collapsed in:",
+          "options": [
+            { "id": "a", "text": "1952, after the Korean War" },
+            { "id": "b", "text": "1961, when the UK devalued the Pound" },
+            { "id": "c", "text": "1971, when Nixon suspended gold convertibility" },
+            { "id": "d", "text": "1985, with the Plaza Accord" }
+          ],
+          "correct": "c",
+          "explanation": "In August 1971, President Nixon unilaterally suspended the US Dollar's convertibility to gold ('Nixon Shock'), effectively ending the Bretton Woods system and beginning the era of floating exchange rates."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Country Analysis Worksheet",
+      "type": "short_answer",
+      "description": "Analyze the economic situation and interests of your assigned country at the end of World War II. Use your country briefing and any outside research.",
+      "questions": [
+        {
+          "id": "q1",
+          "text": "Describe your country's economic situation at the end of WWII (1944–1945). Consider: war damage, inflation, unemployment, and dependence on foreign trade or aid.",
+          "placeholder": "e.g., France experienced near-hyperinflation at 52%, significant industrial destruction from German occupation, and depended on American loans to stabilize the franc...",
+          "minWords": 60
+        },
+        {
+          "id": "q2",
+          "text": "What does your country stand to gain or lose from a US Dollar-based reserve currency system (the White Plan)? From Keynes' Bancor plan?",
+          "placeholder": "e.g., As the UK, a Dollar-based system would reduce Sterling's role as a reserve currency and cost us influence. The Bancor would be more neutral and prevent American dominance...",
+          "minWords": 60
+        },
+        {
+          "id": "q3",
+          "text": "Identify one country whose interests most closely align with yours at the conference, and one whose interests conflict. Explain why in each case.",
+          "placeholder": "e.g., France's interests align with ours because both need reconstruction financing without US political conditions. The USSR's interests conflict because...",
+          "minWords": 60
+        },
+        {
+          "id": "q4",
+          "text": "What is the single most important conference outcome for your country, and why? (Refer to a specific issue from the simulation.)",
+          "placeholder": "e.g., For India, the most important issue is Reconstruction Financing. As a newly independent nation with a colonial economy, we need aid without conditionality...",
+          "minWords": 40
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Strategic Position Paper",
+      "type": "essay",
+      "description": "Write a strategic position paper as a delegate representing your country. This will inform your voting strategy in Phase 1 of the simulation.",
+      "prompt": "You are a senior economic advisor to your country's head of state, preparing a briefing memo for the Bretton Woods Conference delegation.\n\nIn 150–400 words, address:\n1. Your country's top 3 priorities at the conference (refer to specific issues)\n2. Which voting options you plan to support and why (consider national interest vs. global stability)\n3. What concessions your country is willing to make to build coalitions\n4. Any risks your country faces if its preferred outcomes do NOT pass",
+      "minWords": 150,
+      "maxWords": 400
+    },
+    {
+      "id": 4,
+      "title": "Economic Policy Preview",
+      "type": "short_answer",
+      "description": "Before Phase 2 begins, outline the economic policies you plan to pursue from 1946–1952. This assignment will be revisited after the simulation to compare planned vs. actual decisions.",
+      "questions": [
+        {
+          "id": "q1",
+          "text": "What interest rate and exchange rate policy will you pursue in the early years (1946–1948), and why? How do the Phase 1 conference outcomes affect your choices?",
+          "placeholder": "e.g., I plan to keep interest rates low (around 2-3%) to stimulate post-war reconstruction, but if the fixed exchange rate system was adopted I'll need to maintain the peg...",
+          "minWords": 50
+        },
+        {
+          "id": "q2",
+          "text": "How will you balance military spending against economic investment? What level of military spending (% of GDP) do you plan to maintain and why?",
+          "placeholder": "e.g., As France, I'll maintain ~6% military spending to project power in colonial territories while still rebuilding. If the USSR adopts aggressive postures, I may need to increase...",
+          "minWords": 50
+        },
+        {
+          "id": "q3",
+          "text": "What is your country's biggest economic vulnerability in Phase 2, and what policy specifically addresses it? (e.g., high inflation, trade deficit, gold reserve shortage, military overstretch)",
+          "placeholder": "e.g., China's biggest vulnerability is hyperinflation at 230%. My first policy will aggressively raise interest rates and reduce money supply even at the cost of short-term growth...",
+          "minWords": 50
+        }
+      ]
+    }
+  ]
+}
