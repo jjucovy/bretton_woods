@@ -2894,14 +2894,17 @@ io.on('connection', (socket) => {
 
         console.log('getPlayerActiveGame result:', JSON.stringify(gameResult));
 
-        // Handle both array and single object responses
+        // Handle array of strings, array of objects, or single object
         const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
-        for (const game of games) {
+        for (const rawGame of games) {
+          // getPlayerActiveGame may return plain strings (game_codes) or objects
+          const game = typeof rawGame === 'string' ? { game_code: rawGame } : rawGame;
           if (game && game.game_code) {
-            // PHP may omit game_id — derive it from in-memory room keyed by game_code
             const resolvedGameId = game.game_id
               ? String(game.game_id)
-              : Object.keys(globalState.games).find(k => globalState.games[k].game_code === game.game_code);
+              : Object.keys(globalState.games).find(k =>
+                  globalState.games[k].game_code === game.game_code || k === game.game_code
+                ) || game.game_code;
 
             const roomState = globalState.games[resolvedGameId] || globalState.games[game.game_code];
             const isCompleted = game.status === 'completed' ||
@@ -3073,16 +3076,30 @@ io.on('connection', (socket) => {
 
     let gameId = _gameId || _roomId;
 
+    // Resolve numeric game_id to game_code key
+    if (gameId && !globalState.games[gameId]) {
+      const found = Object.entries(globalState.games).find(([, r]) =>
+        String(r.gameId) === String(gameId) || String(r.game_id) === String(gameId)
+      );
+      if (found) {
+        console.log(`🔍 joinRoom: resolved numeric gameId=${gameId} → room key ${found[0]}`);
+        gameId = found[0];
+      }
+    }
+
     // If gameId is absent/undefined, look up the player's active game by userId
     if (!gameId && userId) {
       const activeResult = await queryDatabase('getPlayerActiveGame', { userId });
       const activeGames = Array.isArray(activeResult) ? activeResult : (activeResult ? [activeResult] : []);
-      if (activeGames.length > 0 && activeGames[0].game_code) {
+      if (activeGames.length > 0) {
         const ag = activeGames[0];
-        gameId = ag.game_id
-          ? String(ag.game_id)
-          : Object.keys(globalState.games).find(k => globalState.games[k].game_code === ag.game_code);
-        console.log(`🔍 joinRoom: resolved gameId=${gameId} for userId=${userId} via active game lookup`);
+        const gameCode = typeof ag === 'string' ? ag : ag.game_code;
+        if (gameCode) {
+          gameId = globalState.games[gameCode] ? gameCode
+            : Object.keys(globalState.games).find(k => globalState.games[k].game_code === gameCode)
+              || gameCode;
+          console.log(`🔍 joinRoom: resolved gameId=${gameId} for userId=${userId} via active game lookup`);
+        }
       }
     }
 
@@ -3153,7 +3170,8 @@ io.on('connection', (socket) => {
             });
           }
 
-          // 4. Load Phase 2 state from saved file if it exists
+          // 4. Load Phase 2 state: try local file, then DB snapshot
+          let phase2Restored = false;
           const gameStateFile = `/tmp/bretton-woods-phase2-${gameId}.json`;
           if (fs.existsSync(gameStateFile)) {
             try {
@@ -3167,14 +3185,27 @@ io.on('connection', (socket) => {
                 achievements: phase2Data.achievements || {},
                 crises: phase2Data.crises || restoredRoom.phase2.crises
               };
-              console.log(`   ✅ Restored Phase 2 state: year=${restoredRoom.phase2.currentYear}, active=${restoredRoom.phase2.active}`);
+              console.log(`   ✅ Restored Phase 2 state from file: year=${restoredRoom.phase2.currentYear}`);
+              phase2Restored = true;
             } catch (err) {
               console.error(`   ❌ Error loading Phase 2 state file:`, err.message);
             }
           }
 
-          // 5. Store in memory
-          globalState.games[gameId] = restoredRoom;
+          if (!phase2Restored) {
+            const snapshot = await queryDatabase('getLatestSnapshot', { game_code: gameData.game_code });
+            if (snapshot && snapshot.players) {
+              restoreRoomFromSnapshot(restoredRoom, snapshot);
+              phase2Restored = true;
+            }
+          }
+
+          // 5. Store in memory — key by game_code so lookups are consistent
+          const roomKey = gameData.game_code || gameId;
+          globalState.games[roomKey] = restoredRoom;
+          if (roomKey !== gameId) {
+            gameId = roomKey;
+          }
           console.log(`   ✅ Room ${gameId} reconstructed in memory with ${Object.keys(restoredRoom.players).length} players`);
           saveState();
         } else {
@@ -5925,11 +5956,14 @@ io.on('connection', (socket) => {
       const games = Array.isArray(gameResult) ? gameResult : (gameResult ? [gameResult] : []);
       
 
-      for (const game of games) {
+      for (const rawGame of games) {
+        const game = typeof rawGame === 'string' ? { game_code: rawGame } : rawGame;
         if (game && game.game_code) {
           const resolvedGameId = game.game_id
             ? String(game.game_id)
-            : Object.keys(globalState.games).find(k => globalState.games[k].game_code === game.game_code);
+            : Object.keys(globalState.games).find(k =>
+                globalState.games[k].game_code === game.game_code || k === game.game_code
+              ) || game.game_code;
 
           const roomState = globalState.games[resolvedGameId] || globalState.games[game.game_code];
           const isCompleted = game.status === 'completed' ||
