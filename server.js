@@ -361,6 +361,77 @@ async function saveGameToDatabase(roomId) {
   }
 }
 
+// Save a snapshot of game state to the game_state_snapshots table
+async function saveGameSnapshot(roomId, snapshotType) {
+  try {
+    const room = globalState.rooms[roomId];
+    if (!room) return;
+
+    if (!room.gameId || room.gameId > 1000000000000) {
+      console.log(`⚠️ Invalid game_id for ${roomId}, skipping snapshot`);
+      return;
+    }
+
+    const phase = room.gamePhase === 'phase2' || room.gamePhase === 'complete' ? 2 : 1;
+    const roundOrYear = phase === 2
+      ? (room.phase2?.currentYear || 1946)
+      : (room.currentRound || 0);
+
+    const snapshotData = {
+      game_code: roomId,
+      game_id: parseInt(room.gameId),
+      snapshot_type: snapshotType,
+      phase: phase,
+      round_or_year: roundOrYear,
+      players: JSON.stringify(
+        Object.fromEntries(
+          Object.entries(room.players || {}).map(([id, p]) => [id, {
+            userId: p.userId,
+            country: p.country,
+            score: p.score,
+            phase1_score: p.phase1_score,
+            phase2_score: p.phase2_score
+          }])
+        )
+      ),
+      scores: JSON.stringify(room.scores || {}),
+      round_history: JSON.stringify(room.roundHistory || []),
+      current_round: room.currentRound || 0,
+      current_year: room.phase2?.currentYear || null,
+      yearly_data: JSON.stringify(room.phase2?.yearlyData || {}),
+      policies: JSON.stringify(room.phase2?.policies || {}),
+      deployments: JSON.stringify(room.phase2?.cumulativeDeployments || {}),
+      deployment_history: JSON.stringify(room.phase2?.deploymentHistory || []),
+      crises: JSON.stringify(room.phase2?.crises || {}),
+      battle_results: JSON.stringify(room.phase2?.battleResults || []),
+      diplomatic_points: JSON.stringify(room.phase2?.diplomaticPoints || {}),
+      player_count: Object.keys(room.players || {}).length
+    };
+
+    // Build full_state separately — omit if it would exceed ~1MB
+    const fullState = JSON.stringify({
+      gamePhase: room.gamePhase,
+      gameStarted: room.gameStarted,
+      currentRound: room.currentRound,
+      scores: room.scores,
+      roundHistory: room.roundHistory,
+      phase2: room.phase2
+    });
+    if (fullState.length < 1000000) {
+      snapshotData.full_state = fullState;
+    }
+
+    const result = await queryDatabase('saveGameSnapshot', snapshotData);
+    if (result) {
+      console.log(`📸 Snapshot saved: ${snapshotType} for ${roomId} (phase ${phase}, ${phase === 2 ? 'year ' + roundOrYear : 'round ' + roundOrYear})`);
+    } else {
+      console.log(`⚠️ Snapshot save returned no result for ${roomId}`);
+    }
+  } catch (err) {
+    console.error(`❌ Error saving snapshot for ${roomId}:`, err);
+  }
+}
+
 // Enhanced saveState that also saves to database
 function saveStateWithDB(roomId) {
   saveState(); // Save to JSON file
@@ -2671,6 +2742,7 @@ const countryId = countryData?.country_id || null;
       console.log('🚀 Skipping Phase 1 - Starting directly in Phase 2');
       initializePhase2(roomId);
       room.currentRound = 11; // Mark Phase 1 as "complete"
+      saveGameSnapshot(roomId, 'phase_transition');
       console.log('✅ Phase 2 initialized - Economic management (1946-1952)');
     } else {
       room.gamePhase = 'voting';
@@ -2967,6 +3039,8 @@ const countryId = countryData?.country_id || null;
            Please log in to advance to the next round.`,
           roomId
         );
+
+        saveGameSnapshot(roomId, 'round_end');
       }
     }
 
@@ -3030,6 +3104,7 @@ const countryId = countryData?.country_id || null;
     // Check if Phase 1 is complete - start Phase 2
     if (room.currentRound > 10) {
       initializePhase2(roomId);
+      saveGameSnapshot(roomId, 'phase_transition');
       console.log('Phase 1 complete! Starting Phase 2: Post-war economic management');
     } else {
       room.gamePhase = 'voting';
@@ -3189,6 +3264,7 @@ const countryId = countryData?.country_id || null;
             saveState();
             saveGamePhase2State(roomId);
             saveGameToDatabase(roomId); // Handles DB update with correct status
+            saveGameSnapshot(roomId, 'phase_transition');
             return;
           }
 
@@ -3214,6 +3290,7 @@ const countryId = countryData?.country_id || null;
           saveState();
           saveGamePhase2State(roomId);
           saveGameToDatabase(roomId); // Handles DB update
+          saveGameSnapshot(roomId, 'year_end');
         } catch (err) {
           console.error('❌ Auto-advance failed:', err);
         }
@@ -3838,6 +3915,7 @@ const countryId = countryData?.country_id || null;
           room.gamePhase = 'complete';
           room.phase2.active = false;
           console.log('Phase 2 complete! Final scores calculated.');
+          saveGameSnapshot(roomId, 'phase_transition');
         } else {
           // Calculate economics
           calculateYearEconomics(roomId);
@@ -3851,6 +3929,7 @@ const countryId = countryData?.country_id || null;
           triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
 
           console.log(`✅ Advanced to year ${room.phase2.currentYear} after battle resolution`);
+          saveGameSnapshot(roomId, 'year_end');
         }
 
         broadcastToRoom(roomId);
@@ -4172,9 +4251,10 @@ const countryId = countryData?.country_id || null;
       saveState();
       saveGamePhase2State(roomId);
       saveGameToDatabase(roomId); // Handles DB update with completed status
+      saveGameSnapshot(roomId, 'phase_transition');
       return;
     }
-    
+
     // Calculate this year's economics (this creates data for next year)
     try {
       console.log('Calculating year economics...');
@@ -4187,17 +4267,17 @@ const countryId = countryData?.country_id || null;
       });
       return;
     }
-    
+
     // Advance year and round
     room.phase2.currentYear++;
     room.currentRound++; // Track Phase 2 progress in DB (11=1946, 12=1947, etc.)
     room.readyPlayers = [];
-    
+
     // Check for crisis events this year
     triggerCrisisIfNeeded(roomId, room.phase2.currentYear);
-    
+
     console.log(`✅ Advanced to year ${room.phase2.currentYear}`);
-    
+
     // Check if we've reached the final year
     if (room.phase2.currentYear >= 1952) {
       console.log('Reached final year 1952. Next advance will complete Phase 2.');
@@ -4208,6 +4288,7 @@ const countryId = countryData?.country_id || null;
     saveState();
     saveGamePhase2State(roomId); // Save Phase 2 state to per-game file
     saveGameToDatabase(roomId); // Save game state to database
+    saveGameSnapshot(roomId, 'year_end');
     console.log('✅ Year advancement complete');
   });
 
